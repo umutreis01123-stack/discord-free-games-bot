@@ -222,8 +222,16 @@ server.listen(process.env.PORT || 3000, () => {
 });
 
 // Botu başlat
-client.login(process.env.DISCORD_TOKEN).then(() => {
-    console.log('Bot başlatıldı!');
+const token = process.env.DISCORD_TOKEN;
+if (!token) {
+    console.error('❌ DISCORD_TOKEN bulunamadı! .env dosyasını kontrol et.');
+    process.exit(1);
+}
+
+client.login(token).then(() => {
+    console.log('✅ Bot başlatıldı!');
+    console.log(`🤖 Bot: ${client.user.tag}`);
+    console.log(`🔗 Invite link: https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands`);
 }).catch(err => {
-    console.error('Bot giriş hatası:', err);
+    console.error('❌ Bot giriş hatası:', err.message);
 });
