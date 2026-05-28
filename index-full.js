@@ -38,7 +38,7 @@ if (fs.existsSync(configPath)) {
         logChannels: {},
         rules: {},
         warningRoles: {},
-        admins: ['umutpapa123u'], // Sadece bu kullanıcı yetkili ekleyebilir
+        admins: ['umutpapa123'], // Sadece bu kullanıcı yetkili ekleyebilir
         moderators: []
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -481,10 +481,10 @@ async function handleWarningRoles(interaction, options) {
 }
 
 async function handleAddModerator(interaction, options, user) {
-    // Sadece umutpapa123u ekleyebilir
-    if (user.username !== 'umutpapa123u') {
+    // Sadece umutpapa123 ekleyebilir
+    if (user.username !== 'umutpapa123') {
         await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
             ephemeral: true
         });
         return;
