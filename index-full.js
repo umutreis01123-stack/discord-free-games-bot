@@ -36,8 +36,20 @@ if (fs.existsSync(configPath)) {
     config = {
         gameChannels: {},
         logChannels: {},
-        rules: {},
+        ruleChannels: {}, // Kurallar kanalı
         warningRoles: {},
+        allowedDomains: [ // Varsayılan izinli domainler
+            'youtube.com', 'youtu.be',
+            'twitch.tv',
+            'discord.com', 'discord.gg',
+            'github.com',
+            'steampowered.com',
+            'epicgames.com',
+            'spotify.com',
+            'netflix.com'
+        ],
+        bannedDomains: [], // Yasaklı domainler
+        gifControl: true, // GIF kontrolü aktif mi?
         admins: ['umutpapa123'], // Sadece bu kullanıcı yetkili ekleyebilir
         moderators: []
     };
@@ -109,8 +121,18 @@ const commands = [
         ),
 
     new SlashCommandBuilder()
+        .setName('kurallarkanalıayarla')
+        .setDescription('Sunucu kurallarının olduğu kanalı belirler')
+        .addChannelOption(option =>
+            option.setName('kanal')
+                .setDescription('Kuralların olduğu kanal')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)
+        ),
+
+    new SlashCommandBuilder()
         .setName('sunucukuralları')
-        .setDescription('Sunucu kurallarını gösterir'),
+        .setDescription('Sunucu kurallarını gösterir (otomatik okur)'),
 
     new SlashCommandBuilder()
         .setName('kuralihlalirol')
@@ -133,7 +155,7 @@ const commands = [
 
     new SlashCommandBuilder()
         .setName('yetkiliekle')
-        .setDescription('Yetkili ekler (sadece umutpapa123u)')
+        .setDescription('Yetkili ekler (sadece umutpapa123)')
         .addUserOption(option =>
             option.setName('kullanıcı')
                 .setDescription('Yetkili eklenecek kullanıcı')
@@ -160,6 +182,34 @@ const commands = [
         .addUserOption(option =>
             option.setName('kullanıcı')
                 .setDescription('Uyarıları temizlenecek kullanıcı')
+                .setRequired(true)
+        ),
+
+    // KURAL AYARLARI
+    new SlashCommandBuilder()
+        .setName('linkizniver')
+        .setDescription('Link için izin verilen domain ekler')
+        .addStringOption(option =>
+            option.setName('domain')
+                .setDescription('İzin verilecek domain (örn: youtube.com)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('linkyasakla')
+        .setDescription('Link için yasaklı domain ekler')
+        .addStringOption(option =>
+            option.setName('domain')
+                .setDescription('Yasaklanacak domain')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('gifikontrolü')
+        .setDescription('GIF kontrolünü aç/kapat')
+        .addBooleanOption(option =>
+            option.setName('aktif')
+                .setDescription('GIF kontrolü aktif mi?')
                 .setRequired(true)
         )
 ];
@@ -193,6 +243,8 @@ client.on('interactionCreate', async interaction => {
         // MODERASYON KOMUTLARI
         } else if (commandName === 'logayarla') {
             await handleLogChannelSet(interaction, options);
+        } else if (commandName === 'kurallarkanalıayarla') {
+            await handleRuleChannelSet(interaction, options);
         } else if (commandName === 'sunucukuralları') {
             await handleShowRules(interaction);
         } else if (commandName === 'kuralihlalirol') {
@@ -203,6 +255,12 @@ client.on('interactionCreate', async interaction => {
             await handleWarnUser(interaction, options);
         } else if (commandName === 'uyarılarıtemizle') {
             await handleClearWarnings(interaction, options);
+        } else if (commandName === 'linkizniver') {
+            await handleAllowDomain(interaction, options);
+        } else if (commandName === 'linkyasakla') {
+            await handleBanDomain(interaction, options);
+        } else if (commandName === 'gifikontrolü') {
+            await handleGifControl(interaction, options);
         }
     } catch (error) {
         console.error('Komut hatası:', error);
@@ -273,8 +331,8 @@ client.on('messageCreate', async message => {
         }
     }
     
-    // GIF kontrolü (basit)
-    if (message.content.includes('.gif') || message.attachments.some(a => a.url.includes('.gif'))) {
+    // GIF kontrolü
+    if (config.gifControl && (message.content.includes('.gif') || message.attachments.some(a => a.url.includes('.gif')))) {
         if (logChannelId) {
             const logChannel = await client.channels.fetch(logChannelId);
             if (logChannel) {
@@ -426,24 +484,32 @@ async function handleLogChannelSet(interaction, options) {
 }
 
 async function handleShowRules(interaction) {
-    const rules = `
-**📜 SUNUCU KURALLARI 📜**
-
-1. **Küfür ve hakaret yasaktır**
-2. **Spam yapmak yasaktır**
-3. **Kötü link paylaşımı yasaktır**
-4. **Reklam yapmak yasaktır**
-5. **Diğer üyelere saygılı olun**
-
-**⚠️ UYARI SİSTEMİ:**
+    const guildId = interaction.guildId;
+    
+    // Sunucu kurallarını oku
+    const serverRules = await readServerRules(guildId);
+    
+    let rulesText = '';
+    
+    if (serverRules) {
+        rulesText = `**📜 SUNUCU KURALLARI (OTOMATİK OKUNDU) 📜**\n\n${serverRules}\n`;
+    } else {
+        rulesText = `**📜 SUNUCU KURALLARI 📜**\n\nKurallar kanalı ayarlanmamış. \`/kurallarkanalıayarla\` komutu ile kurallar kanalını belirleyin.\n\n`;
+    }
+    
+    rulesText += `
+**⚠️ BOT UYARI SİSTEMİ:**
 • 1. Uyarı: Uyarı rolü
 • 2. Uyarı: 2. uyarı rolü  
 • 3. Uyarı: 30 dakika mute
 
 **🔗 İZİNLİ LİNKLER:**
-• YouTube, Twitch, Discord
-• GitHub, Steam, Epic Games
-• Spotify, Netflix
+${config.allowedDomains.map(d => `• ${d}`).join('\n')}
+
+**🚫 YASAKLI LİNKLER:**
+${config.bannedDomains.length > 0 ? config.bannedDomains.map(d => `• ${d}`).join('\n') : '• Henüz yasaklı domain yok'}
+
+**🎬 GIF KONTROLÜ:** ${config.gifControl ? '✅ Açık' : '❌ Kapalı'}
 
 Kurallara uymayanlar otomatik olarak uyarılacak ve yetkililere bildirilecektir.
     `;
@@ -451,7 +517,10 @@ Kurallara uymayanlar otomatik olarak uyarılacak ve yetkililere bildirilecektir.
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('📜 SUNUCU KURALLARI')
-        .setDescription(rules)
+        .setDescription(rulesText)
+        .addFields(
+            { name: '📊 İstatistikler', value: `İzinli Domain: ${config.allowedDomains.length}\nYasaklı Domain: ${config.bannedDomains.length}`, inline: true }
+        )
         .setTimestamp();
     
     await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -635,6 +704,102 @@ async function giveWarning(guildId, userId, reason) {
     return warningCount;
 }
 
+// Yeni moderasyon fonksiyonları
+async function handleRuleChannelSet(interaction, options) {
+    const channel = options.getChannel('kanal');
+    const guildId = interaction.guildId;
+    
+    config.ruleChannels[guildId] = channel.id;
+    saveConfig();
+    
+    await interaction.reply({
+        content: `✅ Kurallar kanalı ${channel} olarak ayarlandı! Bot bu kanaldan kuralları okuyacak.`,
+        ephemeral: true
+    });
+}
+
+async function handleAllowDomain(interaction, options) {
+    const domain = options.getString('domain').toLowerCase();
+    const guildId = interaction.guildId;
+    
+    if (!config.allowedDomains.includes(domain)) {
+        config.allowedDomains.push(domain);
+        saveConfig();
+        
+        await interaction.reply({
+            content: `✅ ${domain} izinli domainlere eklendi!`,
+            ephemeral: true
+        });
+    } else {
+        await interaction.reply({
+            content: `❌ ${domain} zaten izinli!`,
+            ephemeral: true
+        });
+    }
+}
+
+async function handleBanDomain(interaction, options) {
+    const domain = options.getString('domain').toLowerCase();
+    const guildId = interaction.guildId;
+    
+    if (!config.bannedDomains.includes(domain)) {
+        config.bannedDomains.push(domain);
+        saveConfig();
+        
+        await interaction.reply({
+            content: `✅ ${domain} yasaklı domainlere eklendi!`,
+            ephemeral: true
+        });
+    } else {
+        await interaction.reply({
+            content: `❌ ${domain} zaten yasaklı!`,
+            ephemeral: true
+        });
+    }
+}
+
+async function handleGifControl(interaction, options) {
+    const active = options.getBoolean('aktif');
+    const guildId = interaction.guildId;
+    
+    config.gifControl = active;
+    saveConfig();
+    
+    await interaction.reply({
+        content: `✅ GIF kontrolü ${active ? 'açıldı' : 'kapatıldı'}!`,
+        ephemeral: true
+    });
+}
+
+// Sunucu kurallarını oku
+async function readServerRules(guildId) {
+    const ruleChannelId = config.ruleChannels[guildId];
+    if (!ruleChannelId) return null;
+    
+    try {
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return null;
+        
+        const ruleChannel = await guild.channels.fetch(ruleChannelId);
+        if (!ruleChannel) return null;
+        
+        // Son 50 mesajı al
+        const messages = await ruleChannel.messages.fetch({ limit: 50 });
+        let rulesText = '';
+        
+        messages.forEach(msg => {
+            if (!msg.author.bot) {
+                rulesText += msg.content + '\n\n';
+            }
+        });
+        
+        return rulesText || 'Kurallar bulunamadı.';
+    } catch (error) {
+        console.error('Kurallar okunurken hata:', error);
+        return null;
+    }
+}
+
 async function notifyModerators(guild, message) {
     for (const modId of config.moderators) {
         try {
@@ -648,22 +813,30 @@ async function notifyModerators(guild, message) {
     }
 }
 
-// Link kontrolü
+// Link kontrolü - GÜNCELLENMİŞ
 function extractLinks(text) {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     return text.match(urlRegex) || [];
 }
 
 function isBadLink(url) {
-    const domain = new URL(url).hostname.toLowerCase();
-    
-    // İzinli domain kontrolü
-    const isAllowed = ALLOWED_DOMAINS.some(allowed => domain.includes(allowed));
-    if (isAllowed) return false;
-    
-    // Kötü pattern kontrolü
-    const isBad = BAD_PATTERNS.some(pattern => url.match(pattern));
-    return isBad;
+    try {
+        const domain = new URL(url).hostname.toLowerCase();
+        
+        // Yasaklı domain kontrolü
+        const isBanned = config.bannedDomains.some(banned => domain.includes(banned));
+        if (isBanned) return true;
+        
+        // İzinli domain kontrolü
+        const isAllowed = config.allowedDomains.some(allowed => domain.includes(allowed));
+        if (isAllowed) return false;
+        
+        // Kötü pattern kontrolü
+        const isBad = BAD_PATTERNS.some(pattern => url.match(pattern));
+        return isBad;
+    } catch (e) {
+        return false;
+    }
 }
 
 // Oyun fonksiyonları (aynı)
