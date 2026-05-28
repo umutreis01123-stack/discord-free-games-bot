@@ -2,10 +2,12 @@
   "name": "discord-ucretsiz-oyun-botu",
   "version": "1.0.0",
   "description": "Discord'da ücretsiz oyunları paylaşan bot",
-  "main": "index-simple.js",
+  "main": "index-full.js",
   "scripts": {
-    "start": "node index-simple.js",
-    "dev": "nodemon index-simple.js"
+    "start": "node index-full.js",
+    "dev": "nodemon index-full.js",
+    "simple": "node index-simple.js",
+    "full": "node index-full.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
