@@ -1,0 +1,26 @@
+{
+  "name": "discord-ucretsiz-oyun-botu",
+  "version": "1.0.0",
+  "description": "Discord'da ücretsiz oyunları paylaşan bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "keep-alive": "node keep-alive.js",
+    "both": "concurrently \"npm run start\" \"npm run keep-alive\""
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.19.2",
+    "concurrently": "^8.2.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "keywords": ["discord", "bot", "oyun", "ücretsiz"],
+  "author": "",
+  "license": "MIT"
+}
