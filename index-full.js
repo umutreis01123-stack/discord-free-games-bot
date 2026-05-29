@@ -497,11 +497,21 @@ async function handleTicketOpen(interaction, ticketType) {
             { name: '🕐 Açılma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
             { name: '📊 Durum', value: '🔓 Açık', inline: true }
         )
-        .setDescription(`**Lütfen aşağıdaki talimatları izleyin:**\n\n` +
-                       `1. **Şikayet** türündeyseniz: Rahatsız olduğunuz kişiyi ve kanıtınızı (SS) gönderin\n` +
-                       `2. **Yardım** türündeyseniz: Sorununuzu detaylı açıklayın\n` +
-                       `3. **Diğer** türündeyseniz: Konunuzu belirtin\n\n` +
-                       `**Önemli:** Bot otomatik olarak SS'leri inceleyip sunucu kurallarına uygunluğunu kontrol edecek.`)
+        .setDescription(`**📋 TALİMATLAR:**\n\n` +
+                       `**🛑 ŞİKAYET İÇİN:**\n` +
+                       `1. SS (ekran görüntüsü) atın\n` +
+                       `2. Mesaj olarak yazın: "@kullanıcı bu küfürü etti"\n` +
+                       `3. **ÖNEMLİ:** Hem SS hem mesaj gereklidir!\n\n` +
+                       `**❓ YARDIM İÇİN:**\n` +
+                       `Sorununuzu detaylı yazın\n\n` +
+                       `**📝 DİĞER İÇİN:**\n` +
+                       `Konunuzu belirtin\n\n` +
+                       `**⚠️ BOT OTOMATİK KONTROL EDECEK:**\n` +
+                       `• SS + mesaj varsa → Küfür kontrolü yapar\n` +
+                       `• Sadece SS varsa → "Lütfen mesaj olarak da yazın"\n` +
+                       `• Sadece mesaj varsa → "Kanıt olarak SS de lazım"\n` +
+                       `• Küfür bulunursa → 30dk timeout + "Dediğiniz kanıtlandı"\n` +
+                       `• Küfür yoksa → "Dediğiniz doğrulanmadı"`)
         .setTimestamp();
     
     const closeButton = new ActionRowBuilder()
@@ -554,139 +564,198 @@ async function handleTicketClose(interaction, customId) {
     const ticketChannel = await interaction.guild.channels.fetch(ticket.channelId).catch(() => null);
     
     if (ticketChannel) {
-        // Ticket mesajlarını kontrol et (SS inceleniyor)
         try {
             const messages = await ticketChannel.messages.fetch({ limit: 50 });
-            let hasEvidence = false;
+            let hasSS = false;
+            let hasMessage = false;
             let hasRuleViolation = false;
             let violationReason = '';
             let reportedUser = null;
-            let evidenceText = '';
+            let userMessage = '';
+            let ssInfo = '';
             
+            // Tüm mesajları analiz et
             messages.forEach(msg => {
                 if (!msg.author.bot) {
-                    // SS veya kanıt kontrolü
-                    if (msg.attachments.size > 0 || msg.content.toLowerCase().includes('ss') || 
-                        msg.content.toLowerCase().includes('ekran') || msg.content.includes('http')) {
-                        hasEvidence = true;
+                    // SS kontrolü (attachment veya SS yazısı)
+                    if (msg.attachments.size > 0 || 
+                        msg.content.toLowerCase().includes('ss') || 
+                        msg.content.toLowerCase().includes('ekran') ||
+                        msg.content.toLowerCase().includes('screenshot')) {
+                        hasSS = true;
+                        ssInfo = `📸 **SS var:** ${msg.author.tag} tarafından gönderildi`;
                         
-                        // SS'de kural ihlali kontrolü
-                        if (ticket.type === 'Şikayet' && hasEvidence) {
-                            const ruleViolation = checkRuleViolation(msg.content, guildId);
-                            if (ruleViolation.found) {
+                        // SS'de küfür kontrolü
+                        if (msg.content) {
+                            const ruleCheck = checkRuleViolation(msg.content, guildId);
+                            if (ruleCheck.found) {
                                 hasRuleViolation = true;
-                                violationReason = ruleViolation.reason;
-                                
-                                // Şikayet edilen kullanıcıyı bul
-                                const userMention = msg.content.match(/<@!?(\d+)>/);
-                                if (userMention) {
-                                    reportedUser = userMention[1];
-                                }
+                                violationReason = ruleCheck.reason;
                             }
                         }
                     }
                     
-                    // Kullanıcı adı kontrolü
-                    const userMention = msg.content.match(/<@!?(\d+)>/);
-                    if (userMention && !reportedUser) {
-                        reportedUser = userMention[1];
+                    // Mesaj kontrolü (küfür veya şikayet içeriği)
+                    if (msg.content && msg.content.length > 5 && 
+                        !msg.content.toLowerCase().includes('ss') &&
+                        !msg.content.toLowerCase().includes('ekran')) {
+                        hasMessage = true;
+                        userMessage = msg.content;
+                        
+                        // Mesajda küfür kontrolü
+                        const ruleCheck = checkRuleViolation(msg.content, guildId);
+                        if (ruleCheck.found) {
+                            hasRuleViolation = true;
+                            violationReason = ruleCheck.reason;
+                        }
+                        
+                        // Şikayet edilen kullanıcıyı bul
+                        const userMention = msg.content.match(/<@!?(\d+)>/);
+                        if (userMention) {
+                            reportedUser = userMention[1];
+                        }
                     }
                 }
             });
             
-            // Kapatma mesajı
-            const closeEmbed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle(`🔒 TICKET KAPATILDI #${ticketId}`)
-                .addFields(
-                    { name: '👤 Açan', value: `<@${ticket.userId}>`, inline: true },
-                    { name: '👮 Kapatan', value: `${interaction.user.tag}`, inline: true },
-                    { name: '📌 Tür', value: ticket.type, inline: true },
-                    { name: '🕐 Açılma', value: `<t:${Math.floor(ticket.createdAt / 1000)}:R>`, inline: true },
-                    { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-                    { name: '🔍 Kanıt Durumu', value: hasEvidence ? '✅ Var' : '❌ Yok', inline: true },
-                    { name: '⚠️ Kural İhlali', value: hasRuleViolation ? '🚨 Bulundu' : '✅ Yok', inline: true }
-                )
-                .setTimestamp();
+            // 1. SS VAR ama MESAJ YOKSA
+            if (hasSS && !hasMessage) {
+                await ticketChannel.send(`❌ **Lütfen mesaj olarak da yazın!**\n` +
+                                       `SS attınız ama ne olduğunu yazmadınız.\n` +
+                                       `Örnek: "@kullanıcı bu küfürü etti" şeklinde yazın.\n` +
+                                       `**Ticket 10 saniye sonra kapanacak...**`);
+                
+                setTimeout(async () => {
+                    try {
+                        await ticketChannel.delete('Ticket: SS var ama mesaj yok');
+                    } catch (e) {
+                        console.error('Kanal silinemedi:', e);
+                    }
+                }, 10000);
+            }
             
-            await ticketChannel.send({ embeds: [closeEmbed] });
+            // 2. MESAJ VAR ama SS YOKSA (Şikayet türünde)
+            else if (hasMessage && !hasSS && ticket.type === 'Şikayet') {
+                await ticketChannel.send(`❌ **Kanıt olarak SS de lazım!**\n` +
+                                       `Mesaj yazdınız ama SS (ekran görüntüsü) atmadınız.\n` +
+                                       `Şikayetlerde kanıt (SS) zorunludur.\n` +
+                                       `**Ticket 10 saniye sonra kapanacak...**`);
+                
+                setTimeout(async () => {
+                    try {
+                        await ticketChannel.delete('Ticket: Mesaj var ama SS yok');
+                    } catch (e) {
+                        console.error('Kanal silinemedi:', e);
+                    }
+                }, 10000);
+            }
             
-            // Kural ihlali varsa işlem yap
-            if (hasRuleViolation && reportedUser && isModerator) {
-                try {
-                    const member = await interaction.guild.members.fetch(reportedUser);
-                    // 30 dakika timeout
-                    await member.timeout(30 * 60 * 1000, `Ticket: ${violationReason}`);
+            // 3. HEM SS HEM MESAJ VARSA
+            else if (hasSS && hasMessage) {
+                // Kural ihlali VARSA
+                if (hasRuleViolation && reportedUser) {
+                    try {
+                        const member = await interaction.guild.members.fetch(reportedUser);
+                        
+                        // Detaylı rapor oluştur
+                        const reportText = `🔍 **TICKET ANALİZ RAPORU**\n` +
+                                         `**Ticket ID:** ${ticketId}\n` +
+                                         `**Şikayet Eden:** <@${ticket.userId}>\n` +
+                                         `**Şikayet Edilen:** ${member.user.tag} (${reportedUser})\n` +
+                                         `**İhlal Türü:** ${violationReason}\n` +
+                                         `**Mesaj:** "${userMessage.substring(0, 100)}${userMessage.length > 100 ? '...' : ''}"\n` +
+                                         `**SS Durumu:** ✅ Var\n` +
+                                         `**Sonuç:** ⚠️ **${member.user.tag} kişisi bu küfürü etti!**`;
+                        
+                        await ticketChannel.send(reportText);
+                        
+                        // 30 dakika timeout
+                        await member.timeout(30 * 60 * 1000, `Ticket #${ticketId}: ${violationReason}`);
+                        
+                        // Ticket sahibine bildir
+                        await ticketChannel.send(`✅ **Dediğiniz kanıtlandı!**\n` +
+                                               `**${member.user.tag}** kullanıcısına 30 dakika timeout verildi.\n` +
+                                               `**Sebep:** Sunucu kurallarına aykırı içerik (${violationReason})\n` +
+                                               `**Ticket kapanıyor...**`);
+                        
+                        // Yetkililere bildir
+                        for (const modId of config.ticketModerators) {
+                            try {
+                                const mod = await interaction.guild.members.fetch(modId);
+                                if (mod) {
+                                    await mod.send(`🔔 **TICKET SONUCU: KANITLANDI!**\n` +
+                                                 reportText + `\n` +
+                                                 `**Ceza:** 30 dakika timeout\n` +
+                                                 `**Durum:** ✅ Dediğiniz kanıtlandı, ticket kapanıyor`);
+                                }
+                            } catch (e) {
+                                console.log('Moderatöre DM gönderilemedi:', modId);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Timeout hatası:', e);
+                        await ticketChannel.send(`❌ Hata: ${e.message}\nTicket kapanıyor...`);
+                    }
+                }
+                // Kural ihlali YOKSA
+                else {
+                    await ticketChannel.send(`❌ **Dediğiniz doğrulanmadı!**\n` +
+                                           `SS ve mesajınız incelendi ancak sunucu kurallarına aykırı bir içerik bulunamadı.\n` +
+                                           `**Ticket kapanıyor...**`);
                     
                     // Yetkililere bildir
                     for (const modId of config.ticketModerators) {
                         try {
                             const mod = await interaction.guild.members.fetch(modId);
                             if (mod) {
-                                await mod.send(`🔔 **TICKET SONUCU: KURAL İHLALİ BULUNDU!**\n` +
-                                             `Ticket ID: ${ticketId}\n` +
-                                             `Şikayet Eden: <@${ticket.userId}>\n` +
-                                             `Şikayet Edilen: ${member.user.tag}\n` +
-                                             `Sebep: ${violationReason}\n` +
-                                             `Ceza: 30 dakika timeout\n` +
-                                             `✅ **Evet dediğin şey bulundu, hemen ilgileniliyor!**`);
+                                await mod.send(`🔔 **TICKET SONUCU: DOĞRULANMADI!**\n` +
+                                             `**Ticket ID:** ${ticketId}\n` +
+                                             `**Kullanıcı:** <@${ticket.userId}>\n` +
+                                             `**İnceleme:** SS ve mesaj var ama kural ihlali yok\n` +
+                                             `**Durum:** ❌ Dediğiniz doğrulanmadı, ticket kapanıyor`);
                             }
                         } catch (e) {
                             console.log('Moderatöre DM gönderilemedi:', modId);
                         }
                     }
-                    
-                    // Ticket sahibine mesaj
-                    await ticketChannel.send(`✅ **Evet dediğin şey bulundu!**\n` +
-                                           `**${member.user.tag}** kullanıcısına 30 dakika timeout verildi.\n` +
-                                           `**Sebep:** ${violationReason}\n` +
-                                           `**Sorununu bildirdiğin için teşekkürler!** 🎉\n` +
-                                           `Ticket kapatılıyor...`);
-                } catch (e) {
-                    console.error('Timeout hatası:', e);
-                    await ticketChannel.send(`❌ Kural ihlali bulundu ama timeout verilemedi: ${e.message}`);
                 }
-            } 
-            // Kanıt yoksa veya kural ihlali yoksa
-            else if (ticket.type === 'Şikayet' && (!hasEvidence || !hasRuleViolation)) {
-                await ticketChannel.send(`❌ **Attığın SS'de şikayet ettiğin şey yok!**\n` +
-                                       `Sunucu kurallarında belirtilen bir ihlal bulunamadı.\n` +
-                                       `Ticket otomatik olarak kapatılıyor...`);
+                
+                // 10 saniye sonra kanalı sil
+                setTimeout(async () => {
+                    try {
+                        await ticketChannel.delete('Ticket kapatıldı');
+                    } catch (e) {
+                        console.error('Kanal silinemedi:', e);
+                    }
+                }, 10000);
             }
-            // Yardım veya Diğer türünde
+            
+            // 4. HİÇBİR ŞEY YOKSA (Yardım/Diğer türünde olabilir)
             else {
                 await ticketChannel.send(`✅ **Teşekkürler!**\n` +
                                        `Sorununuz/sorunuz yetkililere iletildi.\n` +
-                                       `Ticket kapatılıyor...`);
+                                       `**Ticket 10 saniye sonra kapanacak...**`);
                 
-                // Yetkililere bildir
-                for (const modId of config.ticketModerators) {
+                setTimeout(async () => {
                     try {
-                        const mod = await interaction.guild.members.fetch(modId);
-                        if (mod) {
-                            await mod.send(`🔔 **YENİ TICKET SONUÇLANDI!**\n` +
-                                         `Ticket ID: ${ticketId}\n` +
-                                         `Kullanıcı: <@${ticket.userId}>\n` +
-                                         `Tür: ${ticket.type}\n` +
-                                         `Durum: Tamamlandı`);
-                        }
+                        await ticketChannel.delete('Ticket kapatıldı');
                     } catch (e) {
-                        console.log('Moderatöre DM gönderilemedi:', modId);
+                        console.error('Kanal silinemedi:', e);
                     }
-                }
+                }, 10000);
             }
-            
-            // 10 saniye sonra kanalı sil
-            setTimeout(async () => {
-                try {
-                    await ticketChannel.delete('Ticket kapatıldı');
-                } catch (e) {
-                    console.error('Kanal silinemedi:', e);
-                }
-            }, 10000);
             
         } catch (e) {
             console.error('Ticket mesaj kontrol hatası:', e);
+            await ticketChannel.send(`❌ Hata oluştu: ${e.message}\nTicket kapanıyor...`);
+            
+            setTimeout(async () => {
+                try {
+                    await ticketChannel.delete('Ticket: Hata');
+                } catch (e) {
+                    console.error('Kanal silinemedi:', e);
+                }
+            }, 5000);
         }
     }
     
@@ -695,7 +764,7 @@ async function handleTicketClose(interaction, customId) {
     saveConfig();
     
     await interaction.reply({
-        content: `✅ Ticket #${ticketId} kapatıldı! Kanal 10 saniye sonra silinecek.`,
+        content: `✅ Ticket #${ticketId} kapatıldı!`,
         ephemeral: true
     });
 }
