@@ -35,26 +35,10 @@ if (fs.existsSync(configPath)) {
 } else {
     config = {
         gameChannels: {},
-        logChannels: {},
         ruleChannels: {}, // Kurallar kanalı
-        warningRoles: {},
-        allowedDomains: [ // Varsayılan izinli domainler
-            'youtube.com', 'youtu.be',
-            'twitch.tv',
-            'discord.com', 'discord.gg',
-            'github.com',
-            'steampowered.com',
-            'epicgames.com',
-            'spotify.com',
-            'netflix.com'
-        ],
-        bannedDomains: [], // Yasaklı domainler
-        gifControl: true, // GIF kontrolü aktif mi?
-        ticketChannels: {}, // Ticket kanalları
-        activeTickets: {}, // Aktif ticketlar { ticketId: { userId, channelId, subject, proof } }
-        giveaways: {}, // Aktif giveaway'lar
-        admins: ['umutpapa123'], // Sadece bu kullanıcı yetkili ekleyebilir
-        moderators: []
+        ticketChannels: {}, // Ticket kanalı
+        ticketModerators: [], // Ticket yetkilileri
+        activeTickets: {} // Aktif ticketlar { ticketId: { userId, channelId, type, proof, status } }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -62,34 +46,6 @@ if (fs.existsSync(configPath)) {
 function saveConfig() {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
-
-// Uyarı sistemi
-const warnings = new Collection(); // { guildId: { userId: { count: number, lastWarning: timestamp } } }
-
-// İzinli linkler
-const ALLOWED_DOMAINS = [
-    'youtube.com', 'youtu.be',
-    'twitch.tv',
-    'discord.com', 'discord.gg',
-    'github.com',
-    'steampowered.com',
-    'epicgames.com',
-    'spotify.com',
-    'netflix.com'
-];
-
-// Kötü link pattern'leri
-const BAD_PATTERNS = [
-    /porn/i,
-    /xxx/i,
-    /nsfw/i,
-    /hack/i,
-    /cheat/i,
-    /crack/i,
-    /virus/i,
-    /malware/i,
-    /phishing/i
-];
 
 // ========== KOMUTLAR ==========
 const commands = [
@@ -112,252 +68,39 @@ const commands = [
         .setName('bütünücretsizoyunlarıpaylaş')
         .setDescription('Tüm platformlardaki ücretsiz oyunları paylaşır'),
 
-    // MODERASYON KOMUTLARI
+    // TICKET KOMUTLARI
     new SlashCommandBuilder()
-        .setName('logayarla')
-        .setDescription('Log kanalını belirler')
+        .setName('ticketkur')
+        .setDescription('Ticket sistemini kurar (butonlu)')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Logların gönderileceği kanal')
+                .setDescription('Ticket butonlarının gösterileceği kanal')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
         ),
 
     new SlashCommandBuilder()
-        .setName('kurallarkanalıayarla')
-        .setDescription('Sunucu kurallarının olduğu kanalı belirler')
+        .setName('sunucukurallarıoku')
+        .setDescription('Sunucu kurallarını okur ve kaydeder')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Kuralların olduğu kanal')
+                .setDescription('Kuralların yazılı olduğu kanal')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
         ),
 
     new SlashCommandBuilder()
-        .setName('sunucukurallarımod')
-        .setDescription('Kurallar kanalını ayarlar ve moderatör ekler')
-        .addChannelOption(option =>
-            option.setName('kanal')
-                .setDescription('Kuralların olduğu kanal')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildText)
-        )
-        .addUserOption(option =>
-            option.setName('moderatör')
-                .setDescription('Moderatör ekle (opsiyonel)')
-                .setRequired(false)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('sunucukuralları')
-        .setDescription('Sunucu kurallarını gösterir (otomatik okur)'),
-
-    new SlashCommandBuilder()
-        .setName('kuralihlalirol')
-        .setDescription('Kural ihlali rollerini ayarlar')
-        .addRoleOption(option =>
-            option.setName('birinciuyarı')
-                .setDescription('1. uyarı rolü')
-                .setRequired(true)
-        )
-        .addRoleOption(option =>
-            option.setName('ikinciuyarı')
-                .setDescription('2. uyarı rolü')
-                .setRequired(true)
-        )
-        .addRoleOption(option =>
-            option.setName('üçüncüuyarı')
-                .setDescription('3. uyarı rolü (30 dakika mute)')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('yetkiliekle')
-        .setDescription('Yetkili ekler (sadece umutpapa123)')
+        .setName('ticketyetkili')
+        .setDescription('Ticket yetkilisi ekler/çıkarır')
         .addUserOption(option =>
             option.setName('kullanıcı')
-                .setDescription('Yetkili eklenecek kullanıcı')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('uyarıver')
-        .setDescription('Kullanıcıya uyarı verir')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Uyarı verilecek kullanıcı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('sebep')
-                .setDescription('Uyarı sebebi')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('uyarılarıtemizle')
-        .setDescription('Kullanıcının uyarılarını temizler')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Uyarıları temizlenecek kullanıcı')
-                .setRequired(true)
-        ),
-
-    // KURAL AYARLARI
-    new SlashCommandBuilder()
-        .setName('linkizniver')
-        .setDescription('Link için izin verilen domain ekler')
-        .addStringOption(option =>
-            option.setName('domain')
-                .setDescription('İzin verilecek domain (örn: youtube.com)')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('linkyasakla')
-        .setDescription('Link için yasaklı domain ekler')
-        .addStringOption(option =>
-            option.setName('domain')
-                .setDescription('Yasaklanacak domain')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('gifikontrolü')
-        .setDescription('GIF kontrolünü aç/kapat')
-        .addBooleanOption(option =>
-            option.setName('aktif')
-                .setDescription('GIF kontrolü aktif mi?')
-                .setRequired(true)
-        ),
-
-    // YENİ KOMUTLAR
-    new SlashCommandBuilder()
-        .setName('restart')
-        .setDescription('Botu yeniden başlatır (sadece umutpapa123)'),
-
-    new SlashCommandBuilder()
-        .setName('ticketkanalıayarla')
-        .setDescription('Ticket kanalını belirler')
-        .addChannelOption(option =>
-            option.setName('kanal')
-                .setDescription('Ticket açma kanalı')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildText)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('ticketaç')
-        .setDescription('Yeni ticket açar')
-        .addStringOption(option =>
-            option.setName('konu')
-                .setDescription('Ticket konusu')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('açıklama')
-                .setDescription('Detaylı açıklama')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('ticketkapat')
-        .setDescription('Ticketı kapatır')
-        .addStringOption(option =>
-            option.setName('ticketid')
-                .setDescription('Kapatılacak ticket ID')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('giveawaybaşlat')
-        .setDescription('Giveaway başlatır')
-        .addStringOption(option =>
-            option.setName('ödül')
-                .setDescription('Giveaway ödülü')
-                .setRequired(true)
-        )
-        .addIntegerOption(option =>
-            option.setName('kazanan')
-                .setDescription('Kaç kazanan olacak?')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(10)
-        )
-        .addIntegerOption(option =>
-            option.setName('süre')
-                .setDescription('Süre (dakika)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(10080) // 7 gün
-        ),
-
-    // KULLANICI TAKİP KOMUTLARI
-    new SlashCommandBuilder()
-        .setName('yetkiliayarla')
-        .setDescription('Kullanıcı takip yetkilisi ekler/çıkarır')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Yetkili eklenecek/çıkarılacak kullanıcı')
+                .setDescription('Yetkili olacak kullanıcı')
                 .setRequired(true)
         )
         .addBooleanOption(option =>
             option.setName('ekle')
-                .setDescription('Ekle (true) veya çıkar (false)')
+                .setDescription('Ekleme mi çıkarma mı?')
                 .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('takipkanalıayarla')
-        .setDescription('Kullanıcı takip kanalını belirler')
-        .addChannelOption(option =>
-            option.setName('kanal')
-                .setDescription('Takip verilerinin gönderileceği kanal')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildText)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('oyuncuizle')
-        .setDescription('Kullanıcıyı takip etmeye başlar/durdurur')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Takip edilecek kullanıcı')
-                .setRequired(true)
-        )
-        .addBooleanOption(option =>
-            option.setName('aktif')
-                .setDescription('Takibi başlat (true) veya durdur (false)')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('oyuncudata')
-        .setDescription('Kullanıcının tüm verilerini gösterir')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Verileri görüntülenecek kullanıcı')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('oyuncurapor')
-        .setDescription('Kullanıcı için detaylı rapor oluşturur')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Rapor oluşturulacak kullanıcı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('tür')
-                .setDescription('Rapor türü')
-                .setRequired(false)
-                .addChoices(
-                    { name: 'Günlük', value: 'daily' },
-                    { name: 'Haftalık', value: 'weekly' },
-                    { name: 'Aylık', value: 'monthly' },
-                    { name: 'Tüm Zamanlar', value: 'all' }
-                )
         )
 ];
 
@@ -386,52 +129,20 @@ client.on('interactionCreate', async interaction => {
             await handleGameChannelRemove(interaction);
         } else if (commandName === 'bütünücretsizoyunlarıpaylaş') {
             await handleShareAllGames(interaction);
-
-        // MODERASYON KOMUTLARI
-        } else if (commandName === 'logayarla') {
-            await handleLogChannelSet(interaction, options);
-        } else if (commandName === 'kurallarkanalıayarla') {
-            await handleRuleChannelSet(interaction, options);
-        } else if (commandName === 'sunucukurallarımod') {
-            await handleRulesMod(interaction, options, user);
-        } else if (commandName === 'sunucukuralları') {
-            await handleShowRules(interaction);
-        } else if (commandName === 'kuralihlalirol') {
-            await handleWarningRoles(interaction, options);
-        } else if (commandName === 'yetkiliekle') {
-            await handleAddModerator(interaction, options, user);
-        } else if (commandName === 'uyarıver') {
-            await handleWarnUser(interaction, options);
-        } else if (commandName === 'uyarılarıtemizle') {
-            await handleClearWarnings(interaction, options);
-        } else if (commandName === 'linkizniver') {
-            await handleAllowDomain(interaction, options);
-        } else if (commandName === 'linkyasakla') {
-            await handleBanDomain(interaction, options);
-        } else if (commandName === 'gifikontrolü') {
-            await handleGifControl(interaction, options);
-        } else if (commandName === 'restart') {
-            await handleRestart(interaction, user);
-        } else if (commandName === 'ticketkanalıayarla') {
-            await handleTicketChannelSet(interaction, options);
-        } else if (commandName === 'ticketaç') {
-            await handleTicketOpen(interaction, options);
-        } else if (commandName === 'ticketkapat') {
-            await handleTicketClose(interaction, options);
-        } else if (commandName === 'giveawaybaşlat') {
-            await handleGiveawayStart(interaction, options);
+        }
         
-        // KULLANICI TAKİP KOMUTLARI
-        } else if (commandName === 'yetkiliayarla') {
-            await handleTrackingModerator(interaction, options, user);
-        } else if (commandName === 'takipkanalıayarla') {
-            await handleTrackingChannelSet(interaction, options);
-        } else if (commandName === 'oyuncuizle') {
-            await handleTrackUser(interaction, options);
-        } else if (commandName === 'oyuncudata') {
-            await handleUserData(interaction, options);
-        } else if (commandName === 'oyuncurapor') {
-            await handleUserReport(interaction, options);
+        // TICKET KOMUTLARI
+        else if (commandName === 'ticketkur') {
+            await handleTicketSetup(interaction, options);
+        } else if (commandName === 'sunucukurallarıoku') {
+            await handleReadRules(interaction, options);
+        } else if (commandName === 'ticketyetkili') {
+            await handleTicketModerator(interaction, options, user);
+        } else {
+            await interaction.reply({ 
+                content: '❌ Bu komut şu anda kullanılamıyor!', 
+                ephemeral: true 
+            });
         }
     } catch (error) {
         console.error('Komut hatası:', error);
@@ -442,131 +153,34 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// ========== MESAJ FİLTRELEME ==========
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-    
-    const guildId = message.guild.id;
-    const logChannelId = config.logChannels[guildId];
-    
-    // Link kontrolü
-    const links = extractLinks(message.content);
-    if (links.length > 0) {
-        const badLinks = links.filter(link => isBadLink(link));
+// ========== BUTON İNTERAKSİYONLARI ==========
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isButton()) return;
+
+    const { customId, guildId, user } = interaction;
+
+    try {
+        // Ticket açma butonları
+        if (customId === 'ticket_sikayet' || customId === 'ticket_yardim' || customId === 'ticket_diger') {
+            await handleTicketOpen(interaction, customId);
+        }
         
-        if (badLinks.length > 0) {
-            // Kötü link bulundu
-            await message.delete();
-            await message.channel.send(`${message.author}, kötü link paylaşımı yasak!`);
-            
-            // Uyarı ver
-            await giveWarning(message.guild.id, message.author.id, 'Kötü link paylaşımı');
-            
-            // Log'a yaz
-            if (logChannelId) {
-                const logChannel = await client.channels.fetch(logChannelId);
-                if (logChannel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setTitle('🚨 KÖTÜ LİNK TESPİT EDİLDİ')
-                        .addFields(
-                            { name: 'Kullanıcı', value: `${message.author.tag} (${message.author.id})`, inline: true },
-                            { name: 'Kanal', value: `${message.channel.name}`, inline: true },
-                            { name: 'Link', value: badLinks.join(', '), inline: false },
-                            { name: 'İşlem', value: 'Mesaj silindi + Uyarı verildi', inline: true }
-                        )
-                        .setTimestamp();
-                    await logChannel.send({ embeds: [embed] });
-                }
-            }
-            
-            // Yetkililere bildir
-            await notifyModerators(message.guild, `${message.author.tag} kötü link paylaştı: ${badLinks.join(', ')}`);
-        } else {
-            // İzinli link, log'a yaz
-            if (logChannelId) {
-                const logChannel = await client.channels.fetch(logChannelId);
-                if (logChannel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setTitle('🔗 LİNK PAYLAŞIMI')
-                        .addFields(
-                            { name: 'Kullanıcı', value: `${message.author.tag}`, inline: true },
-                            { name: 'Kanal', value: `${message.channel.name}`, inline: true },
-                            { name: 'Link', value: links.join(', '), inline: false }
-                        )
-                        .setTimestamp();
-                    await logChannel.send({ embeds: [embed] });
-                }
-            }
+        // Ticket kapatma butonu
+        else if (customId.startsWith('close_ticket_')) {
+            await handleTicketClose(interaction, customId);
         }
-    }
-    
-    // GIF kontrolü
-    if (config.gifControl && (message.content.includes('.gif') || message.attachments.some(a => a.url.includes('.gif')))) {
-        if (logChannelId) {
-            const logChannel = await client.channels.fetch(logChannelId);
-            if (logChannel) {
-                const embed = new EmbedBuilder()
-                    .setColor(0xFFFF00)
-                    .setTitle('🎬 GIF PAYLAŞIMI')
-                    .addFields(
-                        { name: 'Kullanıcı', value: `${message.author.tag}`, inline: true },
-                        { name: 'Kanal', value: `${message.channel.name}`, inline: true }
-                    )
-                    .setTimestamp();
-                await logChannel.send({ embeds: [embed] });
-            }
-        }
-    }
-});
-
-// ========== OYUNCU GİRİŞ/ÇIKIŞ ==========
-client.on('guildMemberAdd', async member => {
-    const guildId = member.guild.id;
-    const logChannelId = config.logChannels[guildId];
-    
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setColor(0x00FF00)
-                .setTitle('✅ YENİ ÜYE')
-                .addFields(
-                    { name: 'Kullanıcı', value: `${member.user.tag} (${member.user.id})`, inline: true },
-                    { name: 'Hesap Oluşturulma', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true }
-                )
-                .setThumbnail(member.user.displayAvatarURL())
-                .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
-        }
-    }
-});
-
-client.on('guildMemberRemove', async member => {
-    const guildId = member.guild.id;
-    const logChannelId = config.logChannels[guildId];
-    
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('❌ ÜYE AYRILDI')
-                .addFields(
-                    { name: 'Kullanıcı', value: `${member.user.tag} (${member.user.id})`, inline: true },
-                    { name: 'Katılma Tarihi', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true }
-                )
-                .setThumbnail(member.user.displayAvatarURL())
-                .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
-        }
+    } catch (error) {
+        console.error('Button hatası:', error);
+        await interaction.reply({
+            content: '❌ İşlem sırasında hata!',
+            ephemeral: true
+        });
     }
 });
 
 // ========== FONKSİYONLAR ==========
 
-// Oyun komutları
+// OYUN FONKSİYONLARI
 async function handleGameChannelSet(interaction, options) {
     const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
@@ -640,439 +254,132 @@ async function handleShareAllGames(interaction) {
     });
 }
 
-// Moderasyon komutları
-async function handleLogChannelSet(interaction, options) {
-    const channel = options.getChannel('kanal');
-    const guildId = interaction.guildId;
-    
-    config.logChannels[guildId] = channel.id;
-    saveConfig();
-    
-    await interaction.reply({
-        content: `✅ Log kanalı ${channel} olarak ayarlandı!`,
-        ephemeral: true
-    });
-}
-
-async function handleShowRules(interaction) {
-    const guildId = interaction.guildId;
-    
-    // Sunucu kurallarını oku
-    const serverRules = await readServerRules(guildId);
-    
-    let rulesText = '';
-    
-    if (serverRules) {
-        rulesText = `**📜 SUNUCU KURALLARI (OTOMATİK OKUNDU) 📜**\n\n${serverRules}\n`;
-    } else {
-        rulesText = `**📜 SUNUCU KURALLARI 📜**\n\nKurallar kanalı ayarlanmamış. \`/kurallarkanalıayarla\` komutu ile kurallar kanalını belirleyin.\n\n`;
-    }
-    
-    rulesText += `
-**⚠️ BOT UYARI SİSTEMİ:**
-• 1. Uyarı: Uyarı rolü
-• 2. Uyarı: 2. uyarı rolü  
-• 3. Uyarı: 30 dakika mute
-
-**🔗 İZİNLİ LİNKLER:**
-${config.allowedDomains.map(d => `• ${d}`).join('\n')}
-
-**🚫 YASAKLI LİNKLER:**
-${config.bannedDomains.length > 0 ? config.bannedDomains.map(d => `• ${d}`).join('\n') : '• Henüz yasaklı domain yok'}
-
-**🎬 GIF KONTROLÜ:** ${config.gifControl ? '✅ Açık' : '❌ Kapalı'}
-
-Kurallara uymayanlar otomatik olarak uyarılacak ve yetkililere bildirilecektir.
-    `;
-    
-    const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle('📜 SUNUCU KURALLARI')
-        .setDescription(rulesText)
-        .addFields(
-            { name: '📊 İstatistikler', value: `İzinli Domain: ${config.allowedDomains.length}\nYasaklı Domain: ${config.bannedDomains.length}`, inline: true }
-        )
-        .setTimestamp();
-    
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-}
-
-async function handleWarningRoles(interaction, options) {
-    const firstRole = options.getRole('birinciuyarı');
-    const secondRole = options.getRole('ikinciuyarı');
-    const thirdRole = options.getRole('üçüncüuyarı');
-    const guildId = interaction.guildId;
-    
-    if (!config.warningRoles[guildId]) {
-        config.warningRoles[guildId] = {};
-    }
-    
-    config.warningRoles[guildId] = {
-        first: firstRole.id,
-        second: secondRole.id,
-        third: thirdRole.id
-    };
-    saveConfig();
-    
-    await interaction.reply({
-        content: `✅ Uyarı roller ayarlandı:\n1. ${firstRole.name}\n2. ${secondRole.name}\n3. ${thirdRole.name} (30dk mute)`,
-        ephemeral: true
-    });
-}
-
-async function handleAddModerator(interaction, options, user) {
-    // Sadece umutpapa123 ekleyebilir
-    if (user.username !== 'umutpapa123') {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const targetUser = options.getUser('kullanıcı');
-    
-    if (!config.moderators.includes(targetUser.id)) {
-        config.moderators.push(targetUser.id);
-        saveConfig();
-        
-        await interaction.reply({
-            content: `✅ ${targetUser.tag} yetkili olarak eklendi!`,
-            ephemeral: true
-        });
-    } else {
-        await interaction.reply({
-            content: `❌ ${targetUser.tag} zaten yetkili!`,
-            ephemeral: true
-        });
-    }
-}
-
-async function handleWarnUser(interaction, options) {
-    const targetUser = options.getUser('kullanıcı');
-    const reason = options.getString('sebep');
-    const guildId = interaction.guildId;
-    
-    // Uyarı ver
-    const warningCount = await giveWarning(guildId, targetUser.id, reason);
-    
-    // Kullanıcıya DM
-    try {
-        await targetUser.send(`⚠️ **UYARI ALDIN!**\nSunucu: ${interaction.guild.name}\nSebep: ${reason}\nToplam uyarı: ${warningCount}/3`);
-    } catch (e) {
-        console.log('DM gönderilemedi');
-    }
-    
-    // Log
-    const logChannelId = config.logChannels[guildId];
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const embed = new EmbedBuilder()
-                .setColor(0xFFA500)
-                .setTitle('⚠️ UYARI VERİLDİ')
-                .addFields(
-                    { name: 'Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-                    { name: 'Yetkili', value: `${interaction.user.tag}`, inline: true },
-                    { name: 'Sebep', value: reason, inline: false },
-                    { name: 'Toplam Uyarı', value: `${warningCount}/3`, inline: true }
-                )
-                .setTimestamp();
-            await logChannel.send({ embeds: [embed] });
-        }
-    }
-    
-    // Uyarıyı kullanıcı aktivitesine kaydet
-    logUserActivity(guildId, targetUser.id, {
-        type: 'warning',
-        reason: reason,
-        moderator: interaction.user.id
-    });
-    
-    await interaction.reply({
-        content: `✅ ${targetUser.tag} uyarıldı! (${warningCount}/3)`,
-        ephemeral: true
-    });
-}
-
-async function handleClearWarnings(interaction, options) {
-    const targetUser = options.getUser('kullanıcı');
-    const guildId = interaction.guildId;
-    
-    if (!warnings.has(guildId)) {
-        warnings.set(guildId, {});
-    }
-    
-    const guildWarnings = warnings.get(guildId);
-    delete guildWarnings[targetUser.id];
-    
-    // Rolleri temizle
-    const member = await interaction.guild.members.fetch(targetUser.id);
-    const warningRoles = config.warningRoles[guildId];
-    
-    if (warningRoles) {
-        if (warningRoles.first) await member.roles.remove(warningRoles.first).catch(() => {});
-        if (warningRoles.second) await member.roles.remove(warningRoles.second).catch(() => {});
-        if (warningRoles.third) await member.roles.remove(warningRoles.third).catch(() => {});
-    }
-    
-    await interaction.reply({
-        content: `✅ ${targetUser.tag} uyarıları temizlendi!`,
-        ephemeral: true
-    });
-}
-
-// Uyarı sistemi
-async function giveWarning(guildId, userId, reason) {
-    if (!warnings.has(guildId)) {
-        warnings.set(guildId, {});
-    }
-    
-    const guildWarnings = warnings.get(guildId);
-    
-    if (!guildWarnings[userId]) {
-        guildWarnings[userId] = { count: 0, lastWarning: Date.now() };
-    }
-    
-    guildWarnings[userId].count++;
-    guildWarnings[userId].lastWarning = Date.now();
-    
-    const warningCount = guildWarnings[userId].count;
-    
-    // Rol uygula
-    const guild = client.guilds.cache.get(guildId);
-    if (guild) {
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (member) {
-            const warningRoles = config.warningRoles[guildId];
-            
-            if (warningCount === 1 && warningRoles?.first) {
-                await member.roles.add(warningRoles.first);
-            } else if (warningCount === 2 && warningRoles?.second) {
-                await member.roles.add(warningRoles.second);
-                await member.roles.remove(warningRoles.first).catch(() => {});
-            } else if (warningCount >= 3 && warningRoles?.third) {
-                await member.roles.add(warningRoles.third);
-                await member.roles.remove(warningRoles.second).catch(() => {});
-                
-                // 30 dakika mute
-                await member.timeout(30 * 60 * 1000, '3. uyarı - otomatik mute');
-                
-                // 30 dakika sonra rolü kaldır
-                setTimeout(async () => {
-                    try {
-                        await member.roles.remove(warningRoles.third);
-                        guildWarnings[userId].count = 0;
-                    } catch (e) {
-                        console.error('Rol kaldırma hatası:', e);
-                    }
-                }, 30 * 60 * 1000);
-            }
-        }
-    }
-    
-    // Yetkililere bildir
-    if (warningCount >= 2) {
-        const guild = client.guilds.cache.get(guildId);
-        if (guild) {
-            await notifyModerators(guild, `${userId} kullanıcısı ${warningCount}. uyarısını aldı! Sebep: ${reason}`);
-        }
-    }
-    
-    return warningCount;
-}
-
-// Sunucu kuralları mod komutu
-async function handleRulesMod(interaction, options, user) {
-    // Sadece umutpapa123 yapabilir
-    if (user.username !== 'umutpapa123') {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const channel = options.getChannel('kanal');
-    const moderatorUser = options.getUser('moderatör');
-    const guildId = interaction.guildId;
-    
-    // Kurallar kanalını ayarla
-    config.ruleChannels[guildId] = channel.id;
-    
-    // Moderator ekle
-    if (moderatorUser) {
-        if (!config.moderators.includes(moderatorUser.id)) {
-            config.moderators.push(moderatorUser.id);
-        }
-    }
-    
-    saveConfig();
-    
-    // Kuralları oku
-    const rules = await readServerRules(guildId);
-    
-    let response = `✅ Kurallar kanalı ${channel} olarak ayarlandı!`;
-    if (moderatorUser) {
-        response += `\n✅ ${moderatorUser.tag} moderatör olarak eklendi!`;
-    }
-    
-    if (rules && rules !== 'Kurallar bulunamadı.') {
-        response += `\n📜 **Kurallar okundu:** ${rules.substring(0, 100)}...`;
-    } else {
-        response += `\n⚠️ **Uyarı:** Kurallar kanalında kurallar bulunamadı!`;
-    }
-    
-    await interaction.reply({
-        content: response,
-        ephemeral: true
-    });
-}
-
-// Yeni moderasyon fonksiyonları
-async function handleRuleChannelSet(interaction, options) {
-    const channel = options.getChannel('kanal');
-    const guildId = interaction.guildId;
-    
-    config.ruleChannels[guildId] = channel.id;
-    saveConfig();
-    
-    await interaction.reply({
-        content: `✅ Kurallar kanalı ${channel} olarak ayarlandı! Bot bu kanaldan kuralları okuyacak.`,
-        ephemeral: true
-    });
-}
-
-async function handleAllowDomain(interaction, options) {
-    const domain = options.getString('domain').toLowerCase();
-    const guildId = interaction.guildId;
-    
-    if (!config.allowedDomains.includes(domain)) {
-        config.allowedDomains.push(domain);
-        saveConfig();
-        
-        await interaction.reply({
-            content: `✅ ${domain} izinli domainlere eklendi!`,
-            ephemeral: true
-        });
-    } else {
-        await interaction.reply({
-            content: `❌ ${domain} zaten izinli!`,
-            ephemeral: true
-        });
-    }
-}
-
-async function handleBanDomain(interaction, options) {
-    const domain = options.getString('domain').toLowerCase();
-    const guildId = interaction.guildId;
-    
-    if (!config.bannedDomains.includes(domain)) {
-        config.bannedDomains.push(domain);
-        saveConfig();
-        
-        await interaction.reply({
-            content: `✅ ${domain} yasaklı domainlere eklendi!`,
-            ephemeral: true
-        });
-    } else {
-        await interaction.reply({
-            content: `❌ ${domain} zaten yasaklı!`,
-            ephemeral: true
-        });
-    }
-}
-
-async function handleGifControl(interaction, options) {
-    const active = options.getBoolean('aktif');
-    const guildId = interaction.guildId;
-    
-    config.gifControl = active;
-    saveConfig();
-    
-    await interaction.reply({
-        content: `✅ GIF kontrolü ${active ? 'açıldı' : 'kapatıldı'}!`,
-        ephemeral: true
-    });
-}
-
-// ========== YENİ FONKSİYONLAR ==========
-
-// Restart komutu
-async function handleRestart(interaction, user) {
-    // Sadece umutpapa123 yapabilir
-    if (user.username !== 'umutpapa123') {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    await interaction.reply({
-        content: '🔄 Bot yeniden başlatılıyor...',
-        ephemeral: true
-    });
-    
-    console.log(`Bot ${user.tag} tarafından yeniden başlatıldı.`);
-    
-    // 3 saniye bekle ve process'i yeniden başlat
-    setTimeout(() => {
-        process.exit(0);
-    }, 3000);
-}
-
-// Ticket kanalı ayarla
-async function handleTicketChannelSet(interaction, options) {
+// TICKET FONKSİYONLARI
+async function handleTicketSetup(interaction, options) {
     const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
     
     config.ticketChannels[guildId] = channel.id;
     saveConfig();
     
-    // Ticket açma butonu oluştur
+    // Ticket butonları oluştur
     const row = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('open_ticket')
-                .setLabel('🎫 Ticket Aç')
-                .setStyle(ButtonStyle.Primary)
+                .setCustomId('ticket_sikayet')
+                .setLabel('🛑 Şikayet')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId('ticket_yardim')
+                .setLabel('❓ Yardım')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('ticket_diger')
+                .setLabel('📝 Diğer')
+                .setStyle(ButtonStyle.Secondary)
         );
     
     const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle('🎫 TICKET SİSTEMİ')
-        .setDescription('Bir sorununuz mu var? Şikayetiniz mi var? Aşağıdaki butona tıklayarak ticket açabilirsiniz.\n\n**Önemli:** Lütfen kanıtlarınızı (ekran görüntüsü, video, link) ticket açarken ekleyin.')
+        .setDescription('Bir sorununuz mu var? Şikayetiniz mi var? Aşağıdaki butonlardan birine tıklayarak ticket açabilirsiniz.\n\n**Önemli:** Şikayetlerde lütfen kanıt (SS) ekleyin!')
         .addFields(
-            { name: '📋 Ticket Türleri', value: '• Şikayet\n• Sorun\n• Öneri\n• Diğer', inline: true },
-            { name: '⏱️ Yanıt Süresi', value: '24 saat içinde', inline: true }
+            { name: '🛑 Şikayet', value: 'Bir kullanıcı hakkında şikayet', inline: true },
+            { name: '❓ Yardım', value: 'Yardıma ihtiyacınız var', inline: true },
+            { name: '📝 Diğer', value: 'Diğer konular', inline: true }
         )
+        .setFooter({ text: 'Bot otomatik olarak SS\'leri inceleyip kurallara uygunluğunu kontrol edecek' })
         .setTimestamp();
     
     await channel.send({ embeds: [embed], components: [row] });
     
     await interaction.reply({
-        content: `✅ Ticket kanalı ${channel} olarak ayarlandı ve buton eklendi!`,
+        content: `✅ Ticket sistemi ${channel} kanalında kuruldu!`,
         ephemeral: true
     });
 }
 
-// Ticket aç
-async function handleTicketOpen(interaction, options) {
-    const subject = options.getString('konu');
-    const description = options.getString('açıklama');
+async function handleReadRules(interaction, options) {
+    const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
-    const userId = interaction.user.id;
     
-    // Ticket kanalı var mı?
-    const ticketChannelId = config.ticketChannels[guildId];
-    if (!ticketChannelId) {
+    config.ruleChannels[guildId] = channel.id;
+    saveConfig();
+    
+    // Kuralları oku
+    const rules = await readServerRules(guildId);
+    
+    if (rules && rules !== 'Kurallar bulunamadı.') {
         await interaction.reply({
-            content: '❌ Önce ticket kanalı ayarlayın! `/ticketkanalıayarla`',
+            content: `✅ Kurallar kanalı ${channel} olarak ayarlandı!\n📜 **Kurallar okundu:** ${rules.substring(0, 150)}...`,
+            ephemeral: true
+        });
+    } else {
+        await interaction.reply({
+            content: `✅ Kurallar kanalı ${channel} olarak ayarlandı!\n⚠️ **Uyarı:** Kurallar kanalında kurallar bulunamadı!`,
+            ephemeral: true
+        });
+    }
+}
+
+async function handleTicketModerator(interaction, options, user) {
+    const targetUser = options.getUser('kullanıcı');
+    const add = options.getBoolean('ekle');
+    const guildId = interaction.guildId;
+    
+    // Sadece sunucu sahibi veya admin yapabilir
+    const member = await interaction.guild.members.fetch(user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
             ephemeral: true
         });
         return;
     }
+    
+    if (add) {
+        if (!config.ticketModerators.includes(targetUser.id)) {
+            config.ticketModerators.push(targetUser.id);
+            saveConfig();
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} ticket yetkilisi olarak eklendi!`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} zaten ticket yetkilisi!`,
+                ephemeral: true
+            });
+        }
+    } else {
+        const index = config.ticketModerators.indexOf(targetUser.id);
+        if (index > -1) {
+            config.ticketModerators.splice(index, 1);
+            saveConfig();
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} ticket yetkilisi olarak çıkarıldı!`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} ticket yetkilisi değil!`,
+                ephemeral: true
+            });
+        }
+    }
+}
+
+async function handleTicketOpen(interaction, ticketType) {
+    const guildId = interaction.guildId;
+    const userId = interaction.user.id;
+    
+    // Ticket türünü belirle
+    let typeName = '';
+    if (ticketType === 'ticket_sikayet') typeName = 'Şikayet';
+    else if (ticketType === 'ticket_yardim') typeName = 'Yardım';
+    else typeName = 'Diğer';
     
     // Ticket ID oluştur
     const ticketId = `TICKET-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
@@ -1096,7 +403,7 @@ async function handleTicketOpen(interaction, options) {
             },
             {
                 id: userId,
-                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles]
             },
             {
                 id: client.user.id,
@@ -1105,11 +412,12 @@ async function handleTicketOpen(interaction, options) {
         ]
     });
     
-    // Moderator'ları ekle
-    for (const modId of config.moderators) {
+    // Yetkilileri ekle
+    for (const modId of config.ticketModerators) {
         await ticketChannel.permissionOverwrites.create(modId, {
             ViewChannel: true,
-            SendMessages: true
+            SendMessages: true,
+            AttachFiles: true
         });
     }
     
@@ -1121,10 +429,10 @@ async function handleTicketOpen(interaction, options) {
     config.activeTickets[guildId][ticketId] = {
         userId: userId,
         channelId: ticketChannel.id,
-        subject: subject,
-        description: description,
-        createdAt: Date.now(),
-        status: 'open'
+        type: typeName,
+        proof: null,
+        status: 'open',
+        createdAt: Date.now()
     };
     saveConfig();
     
@@ -1133,13 +441,16 @@ async function handleTicketOpen(interaction, options) {
         .setColor(0x0099FF)
         .setTitle(`🎫 TICKET #${ticketId}`)
         .addFields(
-            { name: '👤 Açan', value: `${interaction.user.tag} (${userId})`, inline: true },
-            { name: '📌 Konu', value: subject, inline: true },
-            { name: '📝 Açıklama', value: description, inline: false },
+            { name: '👤 Açan', value: `${interaction.user.tag}`, inline: true },
+            { name: '📌 Tür', value: typeName, inline: true },
             { name: '🕐 Açılma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
             { name: '📊 Durum', value: '🔓 Açık', inline: true }
         )
-        .setFooter({ text: 'Lütfen kanıtlarınızı bu kanala gönderin' })
+        .setDescription(`**Lütfen aşağıdaki talimatları izleyin:**\n\n` +
+                       `1. **Şikayet** türündeyseniz: Rahatsız olduğunuz kişiyi ve kanıtınızı (SS) gönderin\n` +
+                       `2. **Yardım** türündeyseniz: Sorununuzu detaylı açıklayın\n` +
+                       `3. **Diğer** türündeyseniz: Konunuzu belirtin\n\n` +
+                       `**Önemli:** Bot otomatik olarak SS'leri inceleyip sunucu kurallarına uygunluğunu kontrol edecek.`)
         .setTimestamp();
     
     const closeButton = new ActionRowBuilder()
@@ -1151,41 +462,10 @@ async function handleTicketOpen(interaction, options) {
         );
     
     await ticketChannel.send({ 
-        content: `${interaction.user} hoş geldin! Yetkililer yakında ilgilenecek.\n\n**Yetkililer:** ${config.moderators.map(id => `<@${id}>`).join(' ')}`,
+        content: `${interaction.user} hoş geldin!\n\n**Yetkililer:** ${config.ticketModerators.map(id => `<@${id}>`).join(' ')}`,
         embeds: [embed],
         components: [closeButton]
     });
-    
-    // Log kanalına bildir
-    const logChannelId = config.logChannels[guildId];
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle('🎫 YENİ TICKET AÇILDI')
-                .addFields(
-                    { name: 'Ticket ID', value: ticketId, inline: true },
-                    { name: 'Kullanıcı', value: `${interaction.user.tag}`, inline: true },
-                    { name: 'Konu', value: subject, inline: false },
-                    { name: 'Kanal', value: `${ticketChannel}`, inline: true }
-                )
-                .setTimestamp();
-            await logChannel.send({ embeds: [logEmbed] });
-        }
-    }
-    
-    // Yetkililere DM
-    for (const modId of config.moderators) {
-        try {
-            const mod = await guild.members.fetch(modId);
-            if (mod) {
-                await mod.send(`🔔 **YENİ TICKET!**\nTicket ID: ${ticketId}\nKullanıcı: ${interaction.user.tag}\nKonu: ${subject}\nKanal: ${ticketChannel}`);
-            }
-        } catch (e) {
-            console.log('Moderatöre DM gönderilemedi:', modId);
-        }
-    }
     
     await interaction.reply({
         content: `✅ Ticket açıldı! Kanal: ${ticketChannel}\n**Ticket ID:** ${ticketId}`,
@@ -1193,9 +473,8 @@ async function handleTicketOpen(interaction, options) {
     });
 }
 
-// Ticket kapat
-async function handleTicketClose(interaction, options) {
-    const ticketId = options.getString('ticketid');
+async function handleTicketClose(interaction, customId) {
+    const ticketId = customId.replace('close_ticket_', '');
     const guildId = interaction.guildId;
     
     if (!config.activeTickets[guildId] || !config.activeTickets[guildId][ticketId]) {
@@ -1209,7 +488,7 @@ async function handleTicketClose(interaction, options) {
     const ticket = config.activeTickets[guildId][ticketId];
     
     // Sadece yetkili veya ticket sahibi kapatabilir
-    const isModerator = config.moderators.includes(interaction.user.id);
+    const isModerator = config.ticketModerators.includes(interaction.user.id);
     const isOwner = ticket.userId === interaction.user.id;
     
     if (!isModerator && !isOwner) {
@@ -1228,266 +507,146 @@ async function handleTicketClose(interaction, options) {
         try {
             const messages = await ticketChannel.messages.fetch({ limit: 50 });
             let hasEvidence = false;
-            let hasBadContent = false;
+            let hasRuleViolation = false;
+            let violationReason = '';
+            let reportedUser = null;
             let evidenceText = '';
             
             messages.forEach(msg => {
                 if (!msg.author.bot) {
                     // SS veya kanıt kontrolü
-                    if (msg.attachments.size > 0 || msg.content.includes('http') || msg.content.toLowerCase().includes('ss') || msg.content.toLowerCase().includes('ekran')) {
+                    if (msg.attachments.size > 0 || msg.content.toLowerCase().includes('ss') || 
+                        msg.content.toLowerCase().includes('ekran') || msg.content.includes('http')) {
                         hasEvidence = true;
-                        evidenceText += `**${msg.author.tag}:** ${msg.content || 'Ekran görüntüsü/kanıt'}\n`;
+                        
+                        // SS'de kural ihlali kontrolü
+                        if (ticket.type === 'Şikayet' && hasEvidence) {
+                            const ruleViolation = checkRuleViolation(msg.content, guildId);
+                            if (ruleViolation.found) {
+                                hasRuleViolation = true;
+                                violationReason = ruleViolation.reason;
+                                
+                                // Şikayet edilen kullanıcıyı bul
+                                const userMention = msg.content.match(/<@!?(\d+)>/);
+                                if (userMention) {
+                                    reportedUser = userMention[1];
+                                }
+                            }
+                        }
                     }
                     
-                    // Kötü içerik kontrolü
-                    const badWords = ['küfür', 'hakaret', 'kötü', 'yasak', 'uyuşturucu', 'porno', 'nsfw'];
-                    const lowerContent = msg.content.toLowerCase();
-                    if (badWords.some(word => lowerContent.includes(word))) {
-                        hasBadContent = true;
+                    // Kullanıcı adı kontrolü
+                    const userMention = msg.content.match(/<@!?(\d+)>/);
+                    if (userMention && !reportedUser) {
+                        reportedUser = userMention[1];
                     }
                 }
             });
             
-        // Kapatma mesajı
-        const closeEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle(`🔒 TICKET KAPATILDI #${ticketId}`)
-            .addFields(
-                { name: '👤 Açan', value: `<@${ticket.userId}>`, inline: true },
-                { name: '👮 Kapatan', value: `${interaction.user.tag}`, inline: true },
-                { name: '📌 Konu', value: ticket.subject, inline: false },
-                { name: '🕐 Açılma', value: `<t:${Math.floor(ticket.createdAt / 1000)}:R>`, inline: true },
-                { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-                { name: '🔍 Kanıt Durumu', value: hasEvidence ? '✅ Var' : '❌ Yok', inline: true },
-                { name: '⚠️ İçerik Durumu', value: hasBadContent ? '🚨 Kötü içerik' : '✅ Temiz', inline: true }
-            )
-            .setTimestamp();
-        
-        await ticketChannel.send({ embeds: [closeEmbed] });
-        
-        // Kötü içerik varsa uyarı ver
-        if (hasBadContent && isModerator) {
-            try {
-                const member = await interaction.guild.members.fetch(ticket.userId);
-                // 30 dakika timeout
-                await member.timeout(30 * 60 * 1000, 'Ticket: Kötü içerik paylaşımı');
-                
-                // Uyarı kaydı
-                logUserActivity(guildId, ticket.userId, {
-                    type: 'warning',
-                    reason: 'Ticket: Kötü içerik paylaşımı',
-                    moderator: interaction.user.id
-                });
-                
-                await ticketChannel.send(`⚠️ **${member.user.tag}** 30 dakika timeout verildi (Kötü içerik)`);
-            } catch (e) {
-                console.error('Timeout hatası:', e);
+            // Kapatma mesajı
+            const closeEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle(`🔒 TICKET KAPATILDI #${ticketId}`)
+                .addFields(
+                    { name: '👤 Açan', value: `<@${ticket.userId}>`, inline: true },
+                    { name: '👮 Kapatan', value: `${interaction.user.tag}`, inline: true },
+                    { name: '📌 Tür', value: ticket.type, inline: true },
+                    { name: '🕐 Açılma', value: `<t:${Math.floor(ticket.createdAt / 1000)}:R>`, inline: true },
+                    { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                    { name: '🔍 Kanıt Durumu', value: hasEvidence ? '✅ Var' : '❌ Yok', inline: true },
+                    { name: '⚠️ Kural İhlali', value: hasRuleViolation ? '🚨 Bulundu' : '✅ Yok', inline: true }
+                )
+                .setTimestamp();
+            
+            await ticketChannel.send({ embeds: [closeEmbed] });
+            
+            // Kural ihlali varsa işlem yap
+            if (hasRuleViolation && reportedUser && isModerator) {
+                try {
+                    const member = await interaction.guild.members.fetch(reportedUser);
+                    // 30 dakika timeout
+                    await member.timeout(30 * 60 * 1000, `Ticket: ${violationReason}`);
+                    
+                    // Yetkililere bildir
+                    for (const modId of config.ticketModerators) {
+                        try {
+                            const mod = await interaction.guild.members.fetch(modId);
+                            if (mod) {
+                                await mod.send(`🔔 **TICKET SONUCU: KURAL İHLALİ BULUNDU!**\n` +
+                                             `Ticket ID: ${ticketId}\n` +
+                                             `Şikayet Eden: <@${ticket.userId}>\n` +
+                                             `Şikayet Edilen: ${member.user.tag}\n` +
+                                             `Sebep: ${violationReason}\n` +
+                                             `Ceza: 30 dakika timeout\n` +
+                                             `✅ **Evet dediğin şey bulundu, hemen ilgileniliyor!**`);
+                            }
+                        } catch (e) {
+                            console.log('Moderatöre DM gönderilemedi:', modId);
+                        }
+                    }
+                    
+                    // Ticket sahibine mesaj
+                    await ticketChannel.send(`✅ **Evet dediğin şey bulundu!**\n` +
+                                           `**${member.user.tag}** kullanıcısına 30 dakika timeout verildi.\n` +
+                                           `**Sebep:** ${violationReason}\n` +
+                                           `**Sorununu bildirdiğin için teşekkürler!** 🎉\n` +
+                                           `Ticket kapatılıyor...`);
+                } catch (e) {
+                    console.error('Timeout hatası:', e);
+                    await ticketChannel.send(`❌ Kural ihlali bulundu ama timeout verilemedi: ${e.message}`);
+                }
+            } 
+            // Kanıt yoksa veya kural ihlali yoksa
+            else if (ticket.type === 'Şikayet' && (!hasEvidence || !hasRuleViolation)) {
+                await ticketChannel.send(`❌ **Attığın SS'de şikayet ettiğin şey yok!**\n` +
+                                       `Sunucu kurallarında belirtilen bir ihlal bulunamadı.\n` +
+                                       `Ticket otomatik olarak kapatılıyor...`);
             }
-        }
-        
+            // Yardım veya Diğer türünde
+            else {
+                await ticketChannel.send(`✅ **Teşekkürler!**\n` +
+                                       `Sorununuz/sorunuz yetkililere iletildi.\n` +
+                                       `Ticket kapatılıyor...`);
+                
+                // Yetkililere bildir
+                for (const modId of config.ticketModerators) {
+                    try {
+                        const mod = await interaction.guild.members.fetch(modId);
+                        if (mod) {
+                            await mod.send(`🔔 **YENİ TICKET SONUÇLANDI!**\n` +
+                                         `Ticket ID: ${ticketId}\n` +
+                                         `Kullanıcı: <@${ticket.userId}>\n` +
+                                         `Tür: ${ticket.type}\n` +
+                                         `Durum: Tamamlandı`);
+                        }
+                    } catch (e) {
+                        console.log('Moderatöre DM gönderilemedi:', modId);
+                    }
+                }
+            }
+            
+            // 10 saniye sonra kanalı sil
+            setTimeout(async () => {
+                try {
+                    await ticketChannel.delete('Ticket kapatıldı');
+                } catch (e) {
+                    console.error('Kanal silinemedi:', e);
+                }
+            }, 10000);
+            
         } catch (e) {
             console.error('Ticket mesaj kontrol hatası:', e);
         }
-        
-        // 5 saniye sonra kanalı sil
-        setTimeout(async () => {
-            try {
-                await ticketChannel.delete('Ticket kapatıldı');
-            } catch (e) {
-                console.error('Kanal silinemedi:', e);
-            }
-        }, 5000);
     }
     
     // Ticket'ı sil
     delete config.activeTickets[guildId][ticketId];
     saveConfig();
     
-    // Log
-    const logChannelId = config.logChannels[guildId];
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setColor(0xFF0000)
-                .setTitle('🔒 TICKET KAPATILDI')
-                .addFields(
-                    { name: 'Ticket ID', value: ticketId, inline: true },
-                    { name: 'Kullanıcı', value: `<@${ticket.userId}>`, inline: true },
-                    { name: 'Kapatan', value: `${interaction.user.tag}`, inline: true },
-                    { name: 'Süre', value: `${Math.floor((Date.now() - ticket.createdAt) / 60000)} dakika`, inline: true }
-                )
-                .setTimestamp();
-            await logChannel.send({ embeds: [logEmbed] });
-        }
-    }
-    
     await interaction.reply({
-        content: `✅ Ticket #${ticketId} kapatıldı! Kanal 5 saniye sonra silinecek.`,
+        content: `✅ Ticket #${ticketId} kapatıldı! Kanal 10 saniye sonra silinecek.`,
         ephemeral: true
     });
-}
-
-// Giveaway başlat
-async function handleGiveawayStart(interaction, options) {
-    const prize = options.getString('ödül');
-    const winners = options.getInteger('kazanan');
-    const duration = options.getInteger('süre'); // dakika
-    
-    const guildId = interaction.guildId;
-    const giveawayId = `GIVEAWAY-${Date.now()}`;
-    
-    const endTime = Date.now() + (duration * 60 * 1000);
-    
-    // Giveaway'ı kaydet
-    if (!config.giveaways[guildId]) {
-        config.giveaways[guildId] = {};
-    }
-    
-    config.giveaways[guildId][giveawayId] = {
-        prize: prize,
-        winners: winners,
-        endTime: endTime,
-        participants: [],
-        creator: interaction.user.id,
-        channelId: interaction.channelId,
-        messageId: null
-    };
-    saveConfig();
-    
-    // Giveaway embed'i
-    const embed = new EmbedBuilder()
-        .setColor(0xFFD700)
-        .setTitle('🎉 GIVEAWAY BAŞLADI! 🎉')
-        .setDescription(`**Ödül:** ${prize}\n**Kazanan Sayısı:** ${winners}\n**Süre:** ${duration} dakika`)
-        .addFields(
-            { name: '🎁 Katılımcılar', value: '0 kişi', inline: true },
-            { name: '⏱️ Bitiş', value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true }
-        )
-        .setFooter({ text: 'Katılmak için 🎉 emojisine tıklayın!' })
-        .setTimestamp();
-    
-    const joinButton = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`join_giveaway_${giveawayId}`)
-                .setLabel('🎉 Katıl')
-                .setStyle(ButtonStyle.Success)
-        );
-    
-    const message = await interaction.reply({ 
-        content: '@everyone 🎉 **YENİ GIVEAWAY!** 🎉',
-        embeds: [embed],
-        components: [joinButton],
-        fetchReply: true 
-    });
-    
-    // Message ID'yi kaydet
-    config.giveaways[guildId][giveawayId].messageId = message.id;
-    saveConfig();
-    
-    // Giveaway bitiş zamanlayıcısı
-    setTimeout(async () => {
-        await endGiveaway(guildId, giveawayId);
-    }, duration * 60 * 1000);
-    
-    // Log
-    const logChannelId = config.logChannels[guildId];
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setColor(0xFFD700)
-                .setTitle('🎉 YENİ GIVEAWAY')
-                .addFields(
-                    { name: 'Ödül', value: prize, inline: true },
-                    { name: 'Kazanan', value: `${winners} kişi`, inline: true },
-                    { name: 'Süre', value: `${duration} dakika`, inline: true },
-                    { name: 'Başlatan', value: `${interaction.user.tag}`, inline: true },
-                    { name: 'Giveaway ID', value: giveawayId, inline: true }
-                )
-                .setTimestamp();
-            await logChannel.send({ embeds: [logEmbed] });
-        }
-    }
-}
-
-// Giveaway bitir
-async function endGiveaway(guildId, giveawayId) {
-    const giveaway = config.giveaways[guildId]?.[giveawayId];
-    if (!giveaway) return;
-    
-    const participants = giveaway.participants;
-    
-    // Kazananları seç
-    let winners = [];
-    if (participants.length > 0) {
-        const shuffled = [...participants].sort(() => 0.5 - Math.random());
-        winners = shuffled.slice(0, Math.min(giveaway.winners, participants.length));
-    }
-    
-    // Mesajı güncelle
-    try {
-        const channel = await client.channels.fetch(giveaway.channelId);
-        if (channel) {
-            const message = await channel.messages.fetch(giveaway.messageId);
-            
-            const resultEmbed = new EmbedBuilder()
-                .setColor(winners.length > 0 ? 0x00FF00 : 0xFF0000)
-                .setTitle('🎉 GIVEAWAY SONA ERDİ! 🎉')
-                .setDescription(`**Ödül:** ${giveaway.prize}\n**Katılımcı Sayısı:** ${participants.length}`)
-                .addFields(
-                    { name: '🏆 Kazananlar', value: winners.length > 0 ? winners.map(id => `<@${id}>`).join('\n') : 'Kazanan yok!', inline: false }
-                )
-                .setFooter({ text: 'Giveaway sona erdi' })
-                .setTimestamp();
-            
-            await message.edit({ 
-                embeds: [resultEmbed],
-                components: [] // Butonlar�� kaldır
-            });
-            
-            // Kazananlara bildir
-            for (const winnerId of winners) {
-                try {
-                    const winner = await channel.guild.members.fetch(winnerId);
-                    await winner.send(`🎉 **TEBRİKLER!** Giveaway kazandınız!\n**Ödül:** ${giveaway.prize}\n**Sunucu:** ${channel.guild.name}`);
-                } catch (e) {
-                    console.log('Kazana DM gönderilemedi:', winnerId);
-                }
-            }
-            
-            // Kazananları kanalda duyur
-            if (winners.length > 0) {
-                await channel.send(`🎉 **GIVEAWAY SONUÇLARI!**\nÖdül: ${giveaway.prize}\nKazananlar: ${winners.map(id => `<@${id}>`).join(', ')}\nTebrikler! 🎁`);
-            }
-        }
-    } catch (e) {
-        console.error('Giveaway sonlandırma hatası:', e);
-    }
-    
-    // Giveaway'ı sil
-    delete config.giveaways[guildId][giveawayId];
-    saveConfig();
-    
-    // Log
-    const logChannelId = config.logChannels[guildId];
-    if (logChannelId) {
-        const logChannel = await client.channels.fetch(logChannelId);
-        if (logChannel) {
-            const logEmbed = new EmbedBuilder()
-                .setColor(0x00FF00)
-                .setTitle('🎉 GIVEAWAY SONA ERDİ')
-                .addFields(
-                    { name: 'Ödül', value: giveaway.prize, inline: true },
-                    { name: 'Katılımcı', value: `${participants.length} kişi`, inline: true },
-                    { name: 'Kazanan', value: `${winners.length} kişi`, inline: true },
-                    { name: 'Giveaway ID', value: giveawayId, inline: true }
-                )
-                .setTimestamp();
-            await logChannel.send({ embeds: [logEmbed] });
-        }
-    }
 }
 
 // Sunucu kurallarını oku
@@ -1519,212 +678,37 @@ async function readServerRules(guildId) {
     }
 }
 
-async function notifyModerators(guild, message) {
-    for (const modId of config.moderators) {
-        try {
-            const mod = await guild.members.fetch(modId);
-            if (mod) {
-                await mod.send(`🔔 **MODERASYON BİLDİRİMİ**\nSunucu: ${guild.name}\n${message}`);
-            }
-        } catch (e) {
-            console.log('Moderatöre DM gönderilemedi:', modId);
-        }
-    }
-}
-
-// ========== BUTON İNTERAKSİYONLARI ==========
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
+// Kural ihlali kontrolü
+function checkRuleViolation(content, guildId) {
+    // Bu fonksiyon sunucu kurallarını okuyup içerikte kural ihlali olup olmadığını kontrol eder
+    // Basit bir örnek: Küfür kontrolü
     
-    const { customId, guildId, user } = interaction;
+    const badWords = [
+        'küfür', 'sövme', 'hakaret', 'kötü söz', 'argo',
+        'amk', 'aq', 'sg', 'siktir', 'orospu', 'piç'
+    ];
     
-    try {
-        // Ticket açma butonu
-        if (customId === 'open_ticket') {
-            // Modal göster
-            // (Discord.js v14'te modal desteği var ama basit tutalım)
-            await interaction.reply({
-                content: 'Ticket açmak için `/ticketaç` komutunu kullanın!',
-                ephemeral: true
-            });
+    const lowerContent = content.toLowerCase();
+    
+    for (const word of badWords) {
+        if (lowerContent.includes(word)) {
+            return {
+                found: true,
+                reason: `Küfür/hakaret: "${word}"`
+            };
         }
-        
-        // Ticket kapatma butonu
-        else if (customId.startsWith('close_ticket_')) {
-            const ticketId = customId.replace('close_ticket_', '');
-            
-            if (!config.activeTickets[guildId] || !config.activeTickets[guildId][ticketId]) {
-                await interaction.reply({
-                    content: '❌ Ticket bulunamadı!',
-                    ephemeral: true
-                });
-                return;
-            }
-            
-            const ticket = config.activeTickets[guildId][ticketId];
-            
-            // Sadece yetkili veya ticket sahibi kapatabilir
-            const isModerator = config.moderators.includes(interaction.user.id);
-            const isOwner = ticket.userId === interaction.user.id;
-            
-            if (!isModerator && !isOwner) {
-                await interaction.reply({
-                    content: '❌ Bu ticketı kapatma yetkiniz yok!',
-                    ephemeral: true
-                });
-                return;
-            }
-            
-            // Ticket kanalını bul
-            const ticketChannel = await interaction.guild.channels.fetch(ticket.channelId).catch(() => null);
-            
-            if (ticketChannel) {
-                // Kapatma mesajı
-                const closeEmbed = new EmbedBuilder()
-                    .setColor(0xFF0000)
-                    .setTitle(`🔒 TICKET KAPATILDI #${ticketId}`)
-                    .addFields(
-                        { name: '👤 Açan', value: `<@${ticket.userId}>`, inline: true },
-                        { name: '👮 Kapatan', value: `${interaction.user.tag}`, inline: true },
-                        { name: '📌 Konu', value: ticket.subject, inline: false },
-                        { name: '🕐 Açılma', value: `<t:${Math.floor(ticket.createdAt / 1000)}:R>`, inline: true },
-                        { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
-                    )
-                    .setTimestamp();
-                
-                await ticketChannel.send({ embeds: [closeEmbed] });
-                
-                // 10 saniye sonra kanalı sil
-                setTimeout(async () => {
-                    try {
-                        await ticketChannel.delete('Ticket kapatıldı');
-                    } catch (e) {
-                        console.error('Kanal silinemedi:', e);
-                    }
-                }, 10000);
-            }
-            
-            // Ticket'ı sil
-            delete config.activeTickets[guildId][ticketId];
-            saveConfig();
-            
-            // Log
-            const logChannelId = config.logChannels[guildId];
-            if (logChannelId) {
-                const logChannel = await client.channels.fetch(logChannelId);
-                if (logChannel) {
-                    const logEmbed = new EmbedBuilder()
-                        .setColor(0xFF0000)
-                        .setTitle('🔒 TICKET KAPATILDI')
-                        .addFields(
-                            { name: 'Ticket ID', value: ticketId, inline: true },
-                            { name: 'Kullanıcı', value: `<@${ticket.userId}>`, inline: true },
-                            { name: 'Kapatan', value: `${interaction.user.tag}`, inline: true },
-                            { name: 'Süre', value: `${Math.floor((Date.now() - ticket.createdAt) / 60000)} dakika`, inline: true }
-                        )
-                        .setTimestamp();
-                    await logChannel.send({ embeds: [logEmbed] });
-                }
-            }
-            
-            await interaction.reply({
-                content: `✅ Ticket #${ticketId} kapatıldı! Kanal 10 saniye sonra silinecek.`,
-                ephemeral: true
-            });
-        }
-        
-        // Giveaway katılma butonu
-        else if (customId.startsWith('join_giveaway_')) {
-            const giveawayId = customId.replace('join_giveaway_', '');
-            const giveaway = config.giveaways[guildId]?.[giveawayId];
-            
-            if (!giveaway) {
-                await interaction.reply({
-                    content: '❌ Giveaway bulunamadı!',
-                    ephemeral: true
-                });
-                return;
-            }
-            
-            if (giveaway.endTime < Date.now()) {
-                await interaction.reply({
-                    content: '❌ Giveaway sona ermiş!',
-                    ephemeral: true
-                });
-                return;
-            }
-            
-            if (!giveaway.participants.includes(user.id)) {
-                giveaway.participants.push(user.id);
-                saveConfig();
-                
-                // Katılımcı sayısını güncelle
-                try {
-                    const channel = await client.channels.fetch(giveaway.channelId);
-                    if (channel) {
-                        const message = await channel.messages.fetch(giveaway.messageId);
-                        const embed = message.embeds[0];
-                        
-                        const newEmbed = EmbedBuilder.from(embed)
-                            .spliceFields(0, 1, { 
-                                name: '🎁 Katılımcılar', 
-                                value: `${giveaway.participants.length} kişi`, 
-                                inline: true 
-                            });
-                        
-                        await message.edit({ embeds: [newEmbed] });
-                    }
-                } catch (e) {
-                    console.error('Giveaway güncelleme hatası:', e);
-                }
-                
-                await interaction.reply({
-                    content: '✅ Giveaway\'a katıldınız! 🎉',
-                    ephemeral: true
-                });
-            } else {
-                await interaction.reply({
-                    content: '❌ Zaten giveaway\'a katıldınız!',
-                    ephemeral: true
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Button hatası:', error);
-        await interaction.reply({
-            content: '❌ İşlem sırasında hata!',
-            ephemeral: true
-        });
     }
-});
-
-// Link kontrolü - GÜNCELLENMİŞ
-function extractLinks(text) {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.match(urlRegex) || [];
+    
+    // Daha gelişmiş kurallar buraya eklenebilir
+    // Örneğin: spam, reklam, ırkçılık vs.
+    
+    return {
+        found: false,
+        reason: ''
+    };
 }
 
-function isBadLink(url) {
-    try {
-        const domain = new URL(url).hostname.toLowerCase();
-        
-        // Yasaklı domain kontrolü
-        const isBanned = config.bannedDomains.some(banned => domain.includes(banned));
-        if (isBanned) return true;
-        
-        // İzinli domain kontrolü
-        const isAllowed = config.allowedDomains.some(allowed => domain.includes(allowed));
-        if (isAllowed) return false;
-        
-        // Kötü pattern kontrolü
-        const isBad = BAD_PATTERNS.some(pattern => url.match(pattern));
-        return isBad;
-    } catch (e) {
-        return false;
-    }
-}
-
-// Oyun fonksiyonları (aynı)
+// Oyun fonksiyonları
 async function getSteamFreeGames() {
     try {
         const response = await axios.get('https://store.steampowered.com/search/?maxprice=free&specials=1', {
@@ -1786,452 +770,6 @@ async function getSteamFreeGames() {
     }
 }
 
-// ========== KULLANICI TAKİP FONKSİYONLARI ==========
-
-// Kullanıcı aktivitesini kaydet
-function logUserActivity(guildId, userId, activity) {
-    if (!config.userActivity[guildId]) {
-        config.userActivity[guildId] = {};
-    }
-    
-    if (!config.userActivity[guildId][userId]) {
-        config.userActivity[guildId][userId] = {
-            messages: [],
-            links: [],
-            gifs: [],
-            commands: [],
-            warnings: [],
-            joinTime: Date.now(),
-            lastActivity: Date.now()
-        };
-    }
-    
-    const userData = config.userActivity[guildId][userId];
-    userData.lastActivity = Date.now();
-    
-    // Aktivite türüne göre kaydet
-    if (activity.type === 'message') {
-        userData.messages.push({
-            content: activity.content,
-            channelId: activity.channelId,
-            timestamp: Date.now()
-        });
-        // Son 100 mesajı tut
-        if (userData.messages.length > 100) {
-            userData.messages = userData.messages.slice(-100);
-        }
-    } else if (activity.type === 'link') {
-        userData.links.push({
-            url: activity.url,
-            channelId: activity.channelId,
-            timestamp: Date.now()
-        });
-        if (userData.links.length > 50) {
-            userData.links = userData.links.slice(-50);
-        }
-    } else if (activity.type === 'gif') {
-        userData.gifs.push({
-            channelId: activity.channelId,
-            timestamp: Date.now()
-        });
-        if (userData.gifs.length > 30) {
-            userData.gifs = userData.gifs.slice(-30);
-        }
-    } else if (activity.type === 'command') {
-        userData.commands.push({
-            command: activity.command,
-            timestamp: Date.now()
-        });
-        if (userData.commands.length > 50) {
-            userData.commands = userData.commands.slice(-50);
-        }
-    } else if (activity.type === 'warning') {
-        userData.warnings.push({
-            reason: activity.reason,
-            moderator: activity.moderator,
-            timestamp: Date.now()
-        });
-    }
-    
-    saveConfig();
-}
-
-// Takip yetkilisi ayarla
-async function handleTrackingModerator(interaction, options, user) {
-    // Sadece umutpapa123 yapabilir
-    if (user.username !== 'umutpapa123') {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const targetUser = options.getUser('kullanıcı');
-    const add = options.getBoolean('ekle');
-    const guildId = interaction.guildId;
-    
-    if (!config.userTracking[guildId]) {
-        config.userTracking[guildId] = {
-            moderators: [],
-            trackedUsers: []
-        };
-    }
-    
-    const tracking = config.userTracking[guildId];
-    
-    if (add) {
-        if (!tracking.moderators.includes(targetUser.id)) {
-            tracking.moderators.push(targetUser.id);
-            saveConfig();
-            
-            await interaction.reply({
-                content: `✅ ${targetUser.tag} takip yetkilisi olarak eklendi!`,
-                ephemeral: true
-            });
-        } else {
-            await interaction.reply({
-                content: `❌ ${targetUser.tag} zaten takip yetkilisi!`,
-                ephemeral: true
-            });
-        }
-    } else {
-        const index = tracking.moderators.indexOf(targetUser.id);
-        if (index > -1) {
-            tracking.moderators.splice(index, 1);
-            saveConfig();
-            
-            await interaction.reply({
-                content: `✅ ${targetUser.tag} takip yetkilisi olarak çıkarıldı!`,
-                ephemeral: true
-            });
-        } else {
-            await interaction.reply({
-                content: `❌ ${targetUser.tag} takip yetkilisi değil!`,
-                ephemeral: true
-            });
-        }
-    }
-}
-
-// Takip kanalı ayarla
-async function handleTrackingChannelSet(interaction, options) {
-    const channel = options.getChannel('kanal');
-    const guildId = interaction.guildId;
-    
-    config.trackingChannels[guildId] = channel.id;
-    saveConfig();
-    
-    await interaction.reply({
-        content: `✅ Takip kanalı ${channel} olarak ayarlandı!`,
-        ephemeral: true
-    });
-}
-
-// Kullanıcı takip et/durdur
-async function handleTrackUser(interaction, options) {
-    const targetUser = options.getUser('kullanıcı');
-    const active = options.getBoolean('aktif');
-    const guildId = interaction.guildId;
-    
-    if (!config.userTracking[guildId]) {
-        config.userTracking[guildId] = {
-            moderators: [],
-            trackedUsers: []
-        };
-    }
-    
-    const tracking = config.userTracking[guildId];
-    
-    // Sadece takip yetkilileri yapabilir
-    if (!tracking.moderators.includes(interaction.user.id)) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    if (active) {
-        if (!tracking.trackedUsers.includes(targetUser.id)) {
-            tracking.trackedUsers.push(targetUser.id);
-            saveConfig();
-            
-            // Takip kanalına bildir
-            const trackingChannelId = config.trackingChannels[guildId];
-            if (trackingChannelId) {
-                const trackingChannel = await client.channels.fetch(trackingChannelId);
-                if (trackingChannel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(0x00FF00)
-                        .setTitle('👤 KULLANICI TAKİBE ALINDI')
-                        .addFields(
-                            { name: 'Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-                            { name: 'Yetkili', value: `${interaction.user.tag}`, inline: true },
-                            { name: 'Başlangıç', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
-                        )
-                        .setTimestamp();
-                    await trackingChannel.send({ embeds: [embed] });
-                }
-            }
-            
-            await interaction.reply({
-                content: `✅ ${targetUser.tag} takibe alındı! Tüm aktiviteleri kaydedilecek.`,
-                ephemeral: true
-            });
-        } else {
-            await interaction.reply({
-                content: `❌ ${targetUser.tag} zaten takip ediliyor!`,
-                ephemeral: true
-            });
-        }
-    } else {
-        const index = tracking.trackedUsers.indexOf(targetUser.id);
-        if (index > -1) {
-            tracking.trackedUsers.splice(index, 1);
-            saveConfig();
-            
-            await interaction.reply({
-                content: `✅ ${targetUser.tag} takibi durduruldu!`,
-                ephemeral: true
-            });
-        } else {
-            await interaction.reply({
-                content: `❌ ${targetUser.tag} takip edilmiyor!`,
-                ephemeral: true
-            });
-        }
-    }
-}
-
-// Kullanıcı verilerini göster
-async function handleUserData(interaction, options) {
-    const targetUser = options.getUser('kullanıcı');
-    const guildId = interaction.guildId;
-    
-    if (!config.userTracking[guildId]) {
-        config.userTracking[guildId] = {
-            moderators: [],
-            trackedUsers: []
-        };
-    }
-    
-    const tracking = config.userTracking[guildId];
-    
-    // Sadece takip yetkilileri yapabilir
-    if (!tracking.moderators.includes(interaction.user.id)) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const userData = config.userActivity[guildId]?.[targetUser.id];
-    
-    if (!userData) {
-        await interaction.reply({
-            content: `❌ ${targetUser.tag} için veri bulunamadı!`,
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`📊 ${targetUser.tag} VERİLERİ`)
-        .addFields(
-            { name: '👤 Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-            { name: '📅 Katılma', value: `<t:${Math.floor(userData.joinTime / 1000)}:R>`, inline: true },
-            { name: '⏱️ Son Aktivite', value: `<t:${Math.floor(userData.lastActivity / 1000)}:R>`, inline: true },
-            { name: '💬 Mesaj Sayısı', value: `${userData.messages.length}`, inline: true },
-            { name: '🔗 Link Sayısı', value: `${userData.links.length}`, inline: true },
-            { name: '🎬 GIF Sayısı', value: `${userData.gifs.length}`, inline: true },
-            { name: '⚡ Komut Sayısı', value: `${userData.commands.length}`, inline: true },
-            { name: '⚠️ Uyarı Sayısı', value: `${userData.warnings.length}`, inline: true }
-        )
-        .setTimestamp();
-    
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-}
-
-// Kullanıcı raporu oluştur
-async function handleUserReport(interaction, options) {
-    const targetUser = options.getUser('kullanıcı');
-    const reportType = options.getString('tür') || 'all';
-    const guildId = interaction.guildId;
-    
-    if (!config.userTracking[guildId]) {
-        config.userTracking[guildId] = {
-            moderators: [],
-            trackedUsers: []
-        };
-    }
-    
-    const tracking = config.userTracking[guildId];
-    
-    // Sadece takip yetkilileri yapabilir
-    if (!tracking.moderators.includes(interaction.user.id)) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
-            ephemeral: true
-        });
-        return;
-    }
-    
-    const userData = config.userActivity[guildId]?.[targetUser.id];
-    
-    if (!userData) {
-        await interaction.reply({
-            content: `❌ ${targetUser.tag} için veri bulunamadı!`,
-            ephemeral: true
-        });
-        return;
-    }
-    
-    // Zaman filtresi
-    let filteredMessages = userData.messages;
-    let filteredLinks = userData.links;
-    let filteredGifs = userData.gifs;
-    let filteredCommands = userData.commands;
-    
-    const now = Date.now();
-    let timeFilter = 0;
-    
-    if (reportType === 'daily') {
-        timeFilter = now - (24 * 60 * 60 * 1000);
-    } else if (reportType === 'weekly') {
-        timeFilter = now - (7 * 24 * 60 * 60 * 1000);
-    } else if (reportType === 'monthly') {
-        timeFilter = now - (30 * 24 * 60 * 60 * 1000);
-    }
-    
-    if (timeFilter > 0) {
-        filteredMessages = userData.messages.filter(m => m.timestamp >= timeFilter);
-        filteredLinks = userData.links.filter(l => l.timestamp >= timeFilter);
-        filteredGifs = userData.gifs.filter(g => g.timestamp >= timeFilter);
-        filteredCommands = userData.commands.filter(c => c.timestamp >= timeFilter);
-    }
-    
-    const embed = new EmbedBuilder()
-        .setColor(0xFFA500)
-        .setTitle(`📈 ${targetUser.tag} RAPORU (${reportType.toUpperCase()})`)
-        .addFields(
-            { name: '👤 Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
-            { name: '📊 Rapor Türü', value: reportType, inline: true },
-            { name: '📅 Rapor Tarihi', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-            { name: '💬 Mesajlar', value: `${filteredMessages.length} mesaj`, inline: true },
-            { name: '🔗 Linkler', value: `${filteredLinks.length} link`, inline: true },
-            { name: '🎬 GIFler', value: `${filteredGifs.length} GIF`, inline: true },
-            { name: '⚡ Komutlar', value: `${filteredCommands.length} komut`, inline: true },
-            { name: '⚠️ Uyarılar', value: `${userData.warnings.length} uyarı`, inline: true }
-        )
-        .setDescription(`**Detaylı Aktivite Raporu**\nSon ${reportType} aktivite özeti`)
-        .setTimestamp();
-    
-    // Son 5 mesaj
-    if (filteredMessages.length > 0) {
-        const recentMessages = filteredMessages.slice(-5).reverse();
-        let messagesText = '';
-        recentMessages.forEach((msg, i) => {
-            const shortContent = msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content;
-            messagesText += `${i + 1}. ${shortContent}\n`;
-        });
-        embed.addFields({ name: '📝 Son Mesajlar', value: messagesText || 'Yok', inline: false });
-    }
-    
-    // Son 5 link
-    if (filteredLinks.length > 0) {
-        const recentLinks = filteredLinks.slice(-5).reverse();
-        let linksText = '';
-        recentLinks.forEach((link, i) => {
-            const shortUrl = link.url.length > 40 ? link.url.substring(0, 40) + '...' : link.url;
-            linksText += `${i + 1}. ${shortUrl}\n`;
-        });
-        embed.addFields({ name: '🔗 Son Linkler', value: linksText || 'Yok', inline: false });
-    }
-    
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-}
-
-// Mesaj oluşturulduğunda kullanıcı aktivitesini kaydet
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-    
-    const guildId = message.guild.id;
-    const userId = message.author.id;
-    
-    // Takip edilen kullanıcı mı?
-    const isTracked = config.userTracking[guildId]?.trackedUsers?.includes(userId);
-    
-    if (isTracked) {
-        // Mesaj aktivitesini kaydet
-        logUserActivity(guildId, userId, {
-            type: 'message',
-            content: message.content,
-            channelId: message.channel.id
-        });
-        
-        // Link varsa kaydet
-        const links = extractLinks(message.content);
-        if (links.length > 0) {
-            links.forEach(link => {
-                logUserActivity(guildId, userId, {
-                    type: 'link',
-                    url: link,
-                    channelId: message.channel.id
-                });
-            });
-        }
-        
-        // GIF varsa kaydet
-        if (message.content.includes('.gif') || message.attachments.some(a => a.url.includes('.gif'))) {
-            logUserActivity(guildId, userId, {
-                type: 'gif',
-                channelId: message.channel.id
-            });
-        }
-        
-        // Takip kanalına bildir
-        const trackingChannelId = config.trackingChannels[guildId];
-        if (trackingChannelId) {
-            const trackingChannel = await client.channels.fetch(trackingChannelId);
-            if (trackingChannel) {
-                const embed = new EmbedBuilder()
-                    .setColor(0x0099FF)
-                    .setTitle('💬 YENİ MESAJ KAYDEDİLDİ')
-                    .addFields(
-                        { name: 'Kullanıcı', value: `${message.author.tag}`, inline: true },
-                        { name: 'Kanal', value: `${message.channel.name}`, inline: true },
-                        { name: 'Mesaj', value: message.content.length > 100 ? message.content.substring(0, 100) + '...' : message.content, inline: false }
-                    )
-                    .setTimestamp();
-                await trackingChannel.send({ embeds: [embed] });
-            }
-        }
-    }
-});
-
-// Komut kullanıldığında kaydet
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
-    
-    const guildId = interaction.guildId;
-    const userId = interaction.user.id;
-    
-    // Takip edilen kullanıcı mı?
-    const isTracked = config.userTracking[guildId]?.trackedUsers?.includes(userId);
-    
-    if (isTracked) {
-        logUserActivity(guildId, userId, {
-            type: 'command',
-            command: interaction.commandName
-        });
-    }
-});
-
-// Uyarı verildiğinde kaydet (handleWarnUser fonksiyonunda çağrılacak)
-
 async function shareGame(channel, game) {
     const embed = new EmbedBuilder()
         .setColor(0x00AE86)
@@ -2275,11 +813,11 @@ client.login(token).then(() => {
     console.log(`🤖 Bot: ${client.user.tag}`);
     console.log(`🔗 Invite link: https://discord.com/oauth2/authorize?client_id=${client.user.id}&scope=bot%20applications.commands`);
     console.log('📋 Özellikler:');
-    console.log('   • Ücretsiz oyun paylaşımı');
-    console.log('   • Log sistemi');
-    console.log('   • Link filtresi');
-    console.log('   • Uyarı sistemi (1-2-3)');
-    console.log('   • Otomatik moderasyon');
+    console.log('   • Ücretsiz oyun paylaşımı (3 komut)');
+    console.log('   • Ticket sistemi (3 komut)');
+    console.log('   • Otomatik SS inceleme');
+    console.log('   • Kural ihlali kontrolü');
+    console.log('   • 30 dakika timeout cezası');
 }).catch(err => {
     console.error('❌ Bot giriş hatası:', err.message);
 });
