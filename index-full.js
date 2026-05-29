@@ -275,6 +275,74 @@ const commands = [
                 .setRequired(true)
                 .setMinValue(1)
                 .setMaxValue(10080) // 7 gün
+        ),
+
+    // KULLANICI TAKİP KOMUTLARI
+    new SlashCommandBuilder()
+        .setName('yetkiliayarla')
+        .setDescription('Kullanıcı takip yetkilisi ekler/çıkarır')
+        .addUserOption(option =>
+            option.setName('kullanıcı')
+                .setDescription('Yetkili eklenecek/çıkarılacak kullanıcı')
+                .setRequired(true)
+        )
+        .addBooleanOption(option =>
+            option.setName('ekle')
+                .setDescription('Ekle (true) veya çıkar (false)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('takipkanalıayarla')
+        .setDescription('Kullanıcı takip kanalını belirler')
+        .addChannelOption(option =>
+            option.setName('kanal')
+                .setDescription('Takip verilerinin gönderileceği kanal')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('oyuncuizle')
+        .setDescription('Kullanıcıyı takip etmeye başlar/durdurur')
+        .addUserOption(option =>
+            option.setName('kullanıcı')
+                .setDescription('Takip edilecek kullanıcı')
+                .setRequired(true)
+        )
+        .addBooleanOption(option =>
+            option.setName('aktif')
+                .setDescription('Takibi başlat (true) veya durdur (false)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('oyuncudata')
+        .setDescription('Kullanıcının tüm verilerini gösterir')
+        .addUserOption(option =>
+            option.setName('kullanıcı')
+                .setDescription('Verileri görüntülenecek kullanıcı')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('oyuncurapor')
+        .setDescription('Kullanıcı için detaylı rapor oluşturur')
+        .addUserOption(option =>
+            option.setName('kullanıcı')
+                .setDescription('Rapor oluşturulacak kullanıcı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('tür')
+                .setDescription('Rapor türü')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'Günlük', value: 'daily' },
+                    { name: 'Haftalık', value: 'weekly' },
+                    { name: 'Aylık', value: 'monthly' },
+                    { name: 'Tüm Zamanlar', value: 'all' }
+                )
         )
 ];
 
@@ -335,6 +403,18 @@ client.on('interactionCreate', async interaction => {
             await handleTicketClose(interaction, options);
         } else if (commandName === 'giveawaybaşlat') {
             await handleGiveawayStart(interaction, options);
+        
+        // KULLANICI TAKİP KOMUTLARI
+        } else if (commandName === 'yetkiliayarla') {
+            await handleTrackingModerator(interaction, options, user);
+        } else if (commandName === 'takipkanalıayarla') {
+            await handleTrackingChannelSet(interaction, options);
+        } else if (commandName === 'oyuncuizle') {
+            await handleTrackUser(interaction, options);
+        } else if (commandName === 'oyuncudata') {
+            await handleUserData(interaction, options);
+        } else if (commandName === 'oyuncurapor') {
+            await handleUserReport(interaction, options);
         }
     } catch (error) {
         console.error('Komut hatası:', error);
@@ -684,6 +764,13 @@ async function handleWarnUser(interaction, options) {
             await logChannel.send({ embeds: [embed] });
         }
     }
+    
+    // Uyarıyı kullanıcı aktivitesine kaydet
+    logUserActivity(guildId, targetUser.id, {
+        type: 'warning',
+        reason: reason,
+        moderator: interaction.user.id
+    });
     
     await interaction.reply({
         content: `✅ ${targetUser.tag} uyarıldı! (${warningCount}/3)`,
@@ -1584,6 +1671,452 @@ async function getSteamFreeGames() {
         ];
     }
 }
+
+// ========== KULLANICI TAKİP FONKSİYONLARI ==========
+
+// Kullanıcı aktivitesini kaydet
+function logUserActivity(guildId, userId, activity) {
+    if (!config.userActivity[guildId]) {
+        config.userActivity[guildId] = {};
+    }
+    
+    if (!config.userActivity[guildId][userId]) {
+        config.userActivity[guildId][userId] = {
+            messages: [],
+            links: [],
+            gifs: [],
+            commands: [],
+            warnings: [],
+            joinTime: Date.now(),
+            lastActivity: Date.now()
+        };
+    }
+    
+    const userData = config.userActivity[guildId][userId];
+    userData.lastActivity = Date.now();
+    
+    // Aktivite türüne göre kaydet
+    if (activity.type === 'message') {
+        userData.messages.push({
+            content: activity.content,
+            channelId: activity.channelId,
+            timestamp: Date.now()
+        });
+        // Son 100 mesajı tut
+        if (userData.messages.length > 100) {
+            userData.messages = userData.messages.slice(-100);
+        }
+    } else if (activity.type === 'link') {
+        userData.links.push({
+            url: activity.url,
+            channelId: activity.channelId,
+            timestamp: Date.now()
+        });
+        if (userData.links.length > 50) {
+            userData.links = userData.links.slice(-50);
+        }
+    } else if (activity.type === 'gif') {
+        userData.gifs.push({
+            channelId: activity.channelId,
+            timestamp: Date.now()
+        });
+        if (userData.gifs.length > 30) {
+            userData.gifs = userData.gifs.slice(-30);
+        }
+    } else if (activity.type === 'command') {
+        userData.commands.push({
+            command: activity.command,
+            timestamp: Date.now()
+        });
+        if (userData.commands.length > 50) {
+            userData.commands = userData.commands.slice(-50);
+        }
+    } else if (activity.type === 'warning') {
+        userData.warnings.push({
+            reason: activity.reason,
+            moderator: activity.moderator,
+            timestamp: Date.now()
+        });
+    }
+    
+    saveConfig();
+}
+
+// Takip yetkilisi ayarla
+async function handleTrackingModerator(interaction, options, user) {
+    // Sadece umutpapa123 yapabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const targetUser = options.getUser('kullanıcı');
+    const add = options.getBoolean('ekle');
+    const guildId = interaction.guildId;
+    
+    if (!config.userTracking[guildId]) {
+        config.userTracking[guildId] = {
+            moderators: [],
+            trackedUsers: []
+        };
+    }
+    
+    const tracking = config.userTracking[guildId];
+    
+    if (add) {
+        if (!tracking.moderators.includes(targetUser.id)) {
+            tracking.moderators.push(targetUser.id);
+            saveConfig();
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} takip yetkilisi olarak eklendi!`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} zaten takip yetkilisi!`,
+                ephemeral: true
+            });
+        }
+    } else {
+        const index = tracking.moderators.indexOf(targetUser.id);
+        if (index > -1) {
+            tracking.moderators.splice(index, 1);
+            saveConfig();
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} takip yetkilisi olarak çıkarıldı!`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} takip yetkilisi değil!`,
+                ephemeral: true
+            });
+        }
+    }
+}
+
+// Takip kanalı ayarla
+async function handleTrackingChannelSet(interaction, options) {
+    const channel = options.getChannel('kanal');
+    const guildId = interaction.guildId;
+    
+    config.trackingChannels[guildId] = channel.id;
+    saveConfig();
+    
+    await interaction.reply({
+        content: `✅ Takip kanalı ${channel} olarak ayarlandı!`,
+        ephemeral: true
+    });
+}
+
+// Kullanıcı takip et/durdur
+async function handleTrackUser(interaction, options) {
+    const targetUser = options.getUser('kullanıcı');
+    const active = options.getBoolean('aktif');
+    const guildId = interaction.guildId;
+    
+    if (!config.userTracking[guildId]) {
+        config.userTracking[guildId] = {
+            moderators: [],
+            trackedUsers: []
+        };
+    }
+    
+    const tracking = config.userTracking[guildId];
+    
+    // Sadece takip yetkilileri yapabilir
+    if (!tracking.moderators.includes(interaction.user.id)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    if (active) {
+        if (!tracking.trackedUsers.includes(targetUser.id)) {
+            tracking.trackedUsers.push(targetUser.id);
+            saveConfig();
+            
+            // Takip kanalına bildir
+            const trackingChannelId = config.trackingChannels[guildId];
+            if (trackingChannelId) {
+                const trackingChannel = await client.channels.fetch(trackingChannelId);
+                if (trackingChannel) {
+                    const embed = new EmbedBuilder()
+                        .setColor(0x00FF00)
+                        .setTitle('👤 KULLANICI TAKİBE ALINDI')
+                        .addFields(
+                            { name: 'Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
+                            { name: 'Yetkili', value: `${interaction.user.tag}`, inline: true },
+                            { name: 'Başlangıç', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
+                        )
+                        .setTimestamp();
+                    await trackingChannel.send({ embeds: [embed] });
+                }
+            }
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} takibe alındı! Tüm aktiviteleri kaydedilecek.`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} zaten takip ediliyor!`,
+                ephemeral: true
+            });
+        }
+    } else {
+        const index = tracking.trackedUsers.indexOf(targetUser.id);
+        if (index > -1) {
+            tracking.trackedUsers.splice(index, 1);
+            saveConfig();
+            
+            await interaction.reply({
+                content: `✅ ${targetUser.tag} takibi durduruldu!`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `❌ ${targetUser.tag} takip edilmiyor!`,
+                ephemeral: true
+            });
+        }
+    }
+}
+
+// Kullanıcı verilerini göster
+async function handleUserData(interaction, options) {
+    const targetUser = options.getUser('kullanıcı');
+    const guildId = interaction.guildId;
+    
+    if (!config.userTracking[guildId]) {
+        config.userTracking[guildId] = {
+            moderators: [],
+            trackedUsers: []
+        };
+    }
+    
+    const tracking = config.userTracking[guildId];
+    
+    // Sadece takip yetkilileri yapabilir
+    if (!tracking.moderators.includes(interaction.user.id)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const userData = config.userActivity[guildId]?.[targetUser.id];
+    
+    if (!userData) {
+        await interaction.reply({
+            content: `❌ ${targetUser.tag} için veri bulunamadı!`,
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle(`📊 ${targetUser.tag} VERİLERİ`)
+        .addFields(
+            { name: '👤 Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
+            { name: '📅 Katılma', value: `<t:${Math.floor(userData.joinTime / 1000)}:R>`, inline: true },
+            { name: '⏱️ Son Aktivite', value: `<t:${Math.floor(userData.lastActivity / 1000)}:R>`, inline: true },
+            { name: '💬 Mesaj Sayısı', value: `${userData.messages.length}`, inline: true },
+            { name: '🔗 Link Sayısı', value: `${userData.links.length}`, inline: true },
+            { name: '🎬 GIF Sayısı', value: `${userData.gifs.length}`, inline: true },
+            { name: '⚡ Komut Sayısı', value: `${userData.commands.length}`, inline: true },
+            { name: '⚠️ Uyarı Sayısı', value: `${userData.warnings.length}`, inline: true }
+        )
+        .setTimestamp();
+    
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+// Kullanıcı raporu oluştur
+async function handleUserReport(interaction, options) {
+    const targetUser = options.getUser('kullanıcı');
+    const reportType = options.getString('tür') || 'all';
+    const guildId = interaction.guildId;
+    
+    if (!config.userTracking[guildId]) {
+        config.userTracking[guildId] = {
+            moderators: [],
+            trackedUsers: []
+        };
+    }
+    
+    const tracking = config.userTracking[guildId];
+    
+    // Sadece takip yetkilileri yapabilir
+    if (!tracking.moderators.includes(interaction.user.id)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece takip yetkilileri kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const userData = config.userActivity[guildId]?.[targetUser.id];
+    
+    if (!userData) {
+        await interaction.reply({
+            content: `❌ ${targetUser.tag} için veri bulunamadı!`,
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Zaman filtresi
+    let filteredMessages = userData.messages;
+    let filteredLinks = userData.links;
+    let filteredGifs = userData.gifs;
+    let filteredCommands = userData.commands;
+    
+    const now = Date.now();
+    let timeFilter = 0;
+    
+    if (reportType === 'daily') {
+        timeFilter = now - (24 * 60 * 60 * 1000);
+    } else if (reportType === 'weekly') {
+        timeFilter = now - (7 * 24 * 60 * 60 * 1000);
+    } else if (reportType === 'monthly') {
+        timeFilter = now - (30 * 24 * 60 * 60 * 1000);
+    }
+    
+    if (timeFilter > 0) {
+        filteredMessages = userData.messages.filter(m => m.timestamp >= timeFilter);
+        filteredLinks = userData.links.filter(l => l.timestamp >= timeFilter);
+        filteredGifs = userData.gifs.filter(g => g.timestamp >= timeFilter);
+        filteredCommands = userData.commands.filter(c => c.timestamp >= timeFilter);
+    }
+    
+    const embed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle(`📈 ${targetUser.tag} RAPORU (${reportType.toUpperCase()})`)
+        .addFields(
+            { name: '👤 Kullanıcı', value: `${targetUser.tag} (${targetUser.id})`, inline: true },
+            { name: '📊 Rapor Türü', value: reportType, inline: true },
+            { name: '📅 Rapor Tarihi', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+            { name: '💬 Mesajlar', value: `${filteredMessages.length} mesaj`, inline: true },
+            { name: '🔗 Linkler', value: `${filteredLinks.length} link`, inline: true },
+            { name: '🎬 GIFler', value: `${filteredGifs.length} GIF`, inline: true },
+            { name: '⚡ Komutlar', value: `${filteredCommands.length} komut`, inline: true },
+            { name: '⚠️ Uyarılar', value: `${userData.warnings.length} uyarı`, inline: true }
+        )
+        .setDescription(`**Detaylı Aktivite Raporu**\nSon ${reportType} aktivite özeti`)
+        .setTimestamp();
+    
+    // Son 5 mesaj
+    if (filteredMessages.length > 0) {
+        const recentMessages = filteredMessages.slice(-5).reverse();
+        let messagesText = '';
+        recentMessages.forEach((msg, i) => {
+            const shortContent = msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content;
+            messagesText += `${i + 1}. ${shortContent}\n`;
+        });
+        embed.addFields({ name: '📝 Son Mesajlar', value: messagesText || 'Yok', inline: false });
+    }
+    
+    // Son 5 link
+    if (filteredLinks.length > 0) {
+        const recentLinks = filteredLinks.slice(-5).reverse();
+        let linksText = '';
+        recentLinks.forEach((link, i) => {
+            const shortUrl = link.url.length > 40 ? link.url.substring(0, 40) + '...' : link.url;
+            linksText += `${i + 1}. ${shortUrl}\n`;
+        });
+        embed.addFields({ name: '🔗 Son Linkler', value: linksText || 'Yok', inline: false });
+    }
+    
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+// Mesaj oluşturulduğunda kullanıcı aktivitesini kaydet
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+    
+    const guildId = message.guild.id;
+    const userId = message.author.id;
+    
+    // Takip edilen kullanıcı mı?
+    const isTracked = config.userTracking[guildId]?.trackedUsers?.includes(userId);
+    
+    if (isTracked) {
+        // Mesaj aktivitesini kaydet
+        logUserActivity(guildId, userId, {
+            type: 'message',
+            content: message.content,
+            channelId: message.channel.id
+        });
+        
+        // Link varsa kaydet
+        const links = extractLinks(message.content);
+        if (links.length > 0) {
+            links.forEach(link => {
+                logUserActivity(guildId, userId, {
+                    type: 'link',
+                    url: link,
+                    channelId: message.channel.id
+                });
+            });
+        }
+        
+        // GIF varsa kaydet
+        if (message.content.includes('.gif') || message.attachments.some(a => a.url.includes('.gif'))) {
+            logUserActivity(guildId, userId, {
+                type: 'gif',
+                channelId: message.channel.id
+            });
+        }
+        
+        // Takip kanalına bildir
+        const trackingChannelId = config.trackingChannels[guildId];
+        if (trackingChannelId) {
+            const trackingChannel = await client.channels.fetch(trackingChannelId);
+            if (trackingChannel) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('💬 YENİ MESAJ KAYDEDİLDİ')
+                    .addFields(
+                        { name: 'Kullanıcı', value: `${message.author.tag}`, inline: true },
+                        { name: 'Kanal', value: `${message.channel.name}`, inline: true },
+                        { name: 'Mesaj', value: message.content.length > 100 ? message.content.substring(0, 100) + '...' : message.content, inline: false }
+                    )
+                    .setTimestamp();
+                await trackingChannel.send({ embeds: [embed] });
+            }
+        }
+    }
+});
+
+// Komut kullanıldığında kaydet
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isCommand()) return;
+    
+    const guildId = interaction.guildId;
+    const userId = interaction.user.id;
+    
+    // Takip edilen kullanıcı mı?
+    const isTracked = config.userTracking[guildId]?.trackedUsers?.includes(userId);
+    
+    if (isTracked) {
+        logUserActivity(guildId, userId, {
+            type: 'command',
+            command: interaction.commandName
+        });
+    }
+});
+
+// Uyarı verildiğinde kaydet (handleWarnUser fonksiyonunda çağrılacak)
 
 async function shareGame(channel, game) {
     const embed = new EmbedBuilder()
