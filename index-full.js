@@ -134,6 +134,21 @@ const commands = [
         ),
 
     new SlashCommandBuilder()
+        .setName('sunucukurallarımod')
+        .setDescription('Kurallar kanalını ayarlar ve moderatör ekler')
+        .addChannelOption(option =>
+            option.setName('kanal')
+                .setDescription('Kuralların olduğu kanal')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)
+        )
+        .addUserOption(option =>
+            option.setName('moderatör')
+                .setDescription('Moderatör ekle (opsiyonel)')
+                .setRequired(false)
+        ),
+
+    new SlashCommandBuilder()
         .setName('sunucukuralları')
         .setDescription('Sunucu kurallarını gösterir (otomatik okur)'),
 
@@ -377,6 +392,8 @@ client.on('interactionCreate', async interaction => {
             await handleLogChannelSet(interaction, options);
         } else if (commandName === 'kurallarkanalıayarla') {
             await handleRuleChannelSet(interaction, options);
+        } else if (commandName === 'sunucukurallarımod') {
+            await handleRulesMod(interaction, options, user);
         } else if (commandName === 'sunucukuralları') {
             await handleShowRules(interaction);
         } else if (commandName === 'kuralihlalirol') {
@@ -865,6 +882,53 @@ async function giveWarning(guildId, userId, reason) {
     return warningCount;
 }
 
+// Sunucu kuralları mod komutu
+async function handleRulesMod(interaction, options, user) {
+    // Sadece umutpapa123 yapabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const channel = options.getChannel('kanal');
+    const moderatorUser = options.getUser('moderatör');
+    const guildId = interaction.guildId;
+    
+    // Kurallar kanalını ayarla
+    config.ruleChannels[guildId] = channel.id;
+    
+    // Moderator ekle
+    if (moderatorUser) {
+        if (!config.moderators.includes(moderatorUser.id)) {
+            config.moderators.push(moderatorUser.id);
+        }
+    }
+    
+    saveConfig();
+    
+    // Kuralları oku
+    const rules = await readServerRules(guildId);
+    
+    let response = `✅ Kurallar kanalı ${channel} olarak ayarlandı!`;
+    if (moderatorUser) {
+        response += `\n✅ ${moderatorUser.tag} moderatör olarak eklendi!`;
+    }
+    
+    if (rules && rules !== 'Kurallar bulunamadı.') {
+        response += `\n📜 **Kurallar okundu:** ${rules.substring(0, 100)}...`;
+    } else {
+        response += `\n⚠️ **Uyarı:** Kurallar kanalında kurallar bulunamadı!`;
+    }
+    
+    await interaction.reply({
+        content: response,
+        ephemeral: true
+    });
+}
+
 // Yeni moderasyon fonksiyonları
 async function handleRuleChannelSet(interaction, options) {
     const channel = options.getChannel('kanal');
@@ -1160,6 +1224,30 @@ async function handleTicketClose(interaction, options) {
     const ticketChannel = await interaction.guild.channels.fetch(ticket.channelId).catch(() => null);
     
     if (ticketChannel) {
+        // Ticket mesajlarını kontrol et (SS inceleniyor)
+        try {
+            const messages = await ticketChannel.messages.fetch({ limit: 50 });
+            let hasEvidence = false;
+            let hasBadContent = false;
+            let evidenceText = '';
+            
+            messages.forEach(msg => {
+                if (!msg.author.bot) {
+                    // SS veya kanıt kontrolü
+                    if (msg.attachments.size > 0 || msg.content.includes('http') || msg.content.toLowerCase().includes('ss') || msg.content.toLowerCase().includes('ekran')) {
+                        hasEvidence = true;
+                        evidenceText += `**${msg.author.tag}:** ${msg.content || 'Ekran görüntüsü/kanıt'}\n`;
+                    }
+                    
+                    // Kötü içerik kontrolü
+                    const badWords = ['küfür', 'hakaret', 'kötü', 'yasak', 'uyuşturucu', 'porno', 'nsfw'];
+                    const lowerContent = msg.content.toLowerCase();
+                    if (badWords.some(word => lowerContent.includes(word))) {
+                        hasBadContent = true;
+                    }
+                }
+            });
+            
         // Kapatma mesajı
         const closeEmbed = new EmbedBuilder()
             .setColor(0xFF0000)
@@ -1169,20 +1257,46 @@ async function handleTicketClose(interaction, options) {
                 { name: '👮 Kapatan', value: `${interaction.user.tag}`, inline: true },
                 { name: '📌 Konu', value: ticket.subject, inline: false },
                 { name: '🕐 Açılma', value: `<t:${Math.floor(ticket.createdAt / 1000)}:R>`, inline: true },
-                { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
+                { name: '🕐 Kapanma', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                { name: '🔍 Kanıt Durumu', value: hasEvidence ? '✅ Var' : '❌ Yok', inline: true },
+                { name: '⚠️ İçerik Durumu', value: hasBadContent ? '🚨 Kötü içerik' : '✅ Temiz', inline: true }
             )
             .setTimestamp();
         
         await ticketChannel.send({ embeds: [closeEmbed] });
         
-        // 10 saniye sonra kanalı sil
+        // Kötü içerik varsa uyarı ver
+        if (hasBadContent && isModerator) {
+            try {
+                const member = await interaction.guild.members.fetch(ticket.userId);
+                // 30 dakika timeout
+                await member.timeout(30 * 60 * 1000, 'Ticket: Kötü içerik paylaşımı');
+                
+                // Uyarı kaydı
+                logUserActivity(guildId, ticket.userId, {
+                    type: 'warning',
+                    reason: 'Ticket: Kötü içerik paylaşımı',
+                    moderator: interaction.user.id
+                });
+                
+                await ticketChannel.send(`⚠️ **${member.user.tag}** 30 dakika timeout verildi (Kötü içerik)`);
+            } catch (e) {
+                console.error('Timeout hatası:', e);
+            }
+        }
+        
+        } catch (e) {
+            console.error('Ticket mesaj kontrol hatası:', e);
+        }
+        
+        // 5 saniye sonra kanalı sil
         setTimeout(async () => {
             try {
                 await ticketChannel.delete('Ticket kapatıldı');
             } catch (e) {
                 console.error('Kanal silinemedi:', e);
             }
-        }, 10000);
+        }, 5000);
     }
     
     // Ticket'ı sil
@@ -1209,7 +1323,7 @@ async function handleTicketClose(interaction, options) {
     }
     
     await interaction.reply({
-        content: `✅ Ticket #${ticketId} kapatıldı! Kanal 10 saniye sonra silinecek.`,
+        content: `✅ Ticket #${ticketId} kapatıldı! Kanal 5 saniye sonra silinecek.`,
         ephemeral: true
     });
 }
