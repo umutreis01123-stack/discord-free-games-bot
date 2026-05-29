@@ -182,6 +182,16 @@ client.on('interactionCreate', async interaction => {
 
 // OYUN FONKSİYONLARI
 async function handleGameChannelSet(interaction, options) {
+    // Sadece yöneticiler kullanabilir
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
     const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
     
@@ -202,6 +212,16 @@ async function handleGameChannelSet(interaction, options) {
 }
 
 async function handleGameChannelRemove(interaction) {
+    // Sadece yöneticiler kullanabilir
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
     const guildId = interaction.guildId;
     
     if (config.gameChannels[guildId]) {
@@ -220,6 +240,16 @@ async function handleGameChannelRemove(interaction) {
 }
 
 async function handleShareAllGames(interaction) {
+    // Sadece yöneticiler kullanabilir
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
     await interaction.deferReply({ ephemeral: true });
     
     const guildId = interaction.guildId;
@@ -256,6 +286,15 @@ async function handleShareAllGames(interaction) {
 
 // TICKET FONKSİYONLARI
 async function handleTicketSetup(interaction, options) {
+    // Sadece umutpapa123 kullanabilir
+    if (interaction.user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
     const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
     
@@ -300,6 +339,15 @@ async function handleTicketSetup(interaction, options) {
 }
 
 async function handleReadRules(interaction, options) {
+    // Sadece umutpapa123 kullanabilir
+    if (interaction.user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
     const channel = options.getChannel('kanal');
     const guildId = interaction.guildId;
     
@@ -327,11 +375,14 @@ async function handleTicketModerator(interaction, options, user) {
     const add = options.getBoolean('ekle');
     const guildId = interaction.guildId;
     
-    // Sadece sunucu sahibi veya admin yapabilir
+    // Sadece umutpapa123 veya yöneticiler yapabilir
+    const isUmutpapa123 = user.username === 'umutpapa123';
     const member = await interaction.guild.members.fetch(user.id);
-    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
+    
+    if (!isUmutpapa123 && !isAdmin) {
         await interaction.reply({
-            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            content: '❌ Bu komutu sadece umutpapa123 veya yöneticiler kullanabilir!',
             ephemeral: true
         });
         return;
@@ -681,26 +732,44 @@ async function readServerRules(guildId) {
 // Kural ihlali kontrolü
 function checkRuleViolation(content, guildId) {
     // Bu fonksiyon sunucu kurallarını okuyup içerikte kural ihlali olup olmadığını kontrol eder
-    // Basit bir örnek: Küfür kontrolü
+    // Gelişmiş küfür kontrolü
     
     const badWords = [
-        'küfür', 'sövme', 'hakaret', 'kötü söz', 'argo',
-        'amk', 'aq', 'sg', 'siktir', 'orospu', 'piç'
+        // Küfürler
+        'amk', 'aq', 'sg', 'siktir', 'orospu', 'piç', 'amına', 'sik', 'göt', 'yarrak',
+        'kahpe', 'pezevenk', 'ibne', 'gavat', 'mal', 'salak', 'aptal', 'gerizekalı',
+        // Hakaretler
+        'küfür', 'sövme', 'hakaret', 'kötü söz', 'argo', 'küfrediyorum', 'sövüyorum',
+        // İngilizce küfürler
+        'fuck', 'shit', 'bitch', 'asshole', 'damn', 'hell', 'dick', 'pussy', 'cunt',
+        // Diğer
+        'öl', 'geber', 'siktir git', 'defol', 'yürü git'
     ];
     
     const lowerContent = content.toLowerCase();
     
+    // Noktalama işaretlerini kaldır
+    const cleanContent = lowerContent.replace(/[.,!?;:'"()\[\]{}]/g, ' ');
+    
+    // Kelimelere ayır
+    const words = cleanContent.split(/\s+/);
+    
     for (const word of badWords) {
-        if (lowerContent.includes(word)) {
+        // Tam kelime eşleşmesi veya içinde geçme
+        if (words.includes(word) || lowerContent.includes(word)) {
             return {
                 found: true,
-                reason: `Küfür/hakaret: "${word}"`
+                reason: `Küfür/hakaret tespit edildi: "${word}"`
             };
         }
     }
     
-    // Daha gelişmiş kurallar buraya eklenebilir
-    // Örneğin: spam, reklam, ırkçılık vs.
+    // Sunucu kurallarını da kontrol et (eğer okunmuşsa)
+    const rules = config.ruleChannels[guildId] ? 'Kurallar var' : null;
+    if (rules) {
+        // Burada daha gelişmiş kural kontrolü yapılabilir
+        // Örneğin: spam, reklam, ırkçılık vs.
+    }
     
     return {
         found: false,
@@ -797,8 +866,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot aktif!');
 });
-server.listen(process.env.PORT || 3000, () => {
-    console.log('Keep-alive server başladı');
+server.listen(process.env.PORT || 3001, () => {
+    console.log('Keep-alive server başladı (Port: 3001)');
 });
 
 // Botu başlat
