@@ -9,7 +9,8 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    Collection
+    Collection,
+    MessageFlags
 } = require('discord.js');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -32,13 +33,54 @@ let config = {};
 
 if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    
+    // Eski config dosyaları için eksik alanları başlat
+    const defaultConfig = {
+        gameChannels: config.gameChannels || {},
+        logChannels: config.logChannels || {},
+        ruleChannels: config.ruleChannels || {},
+        warningRoles: config.warningRoles || {},
+        allowedDomains: config.allowedDomains || [
+            "youtube.com", "youtu.be", "twitch.tv", "discord.com", "discord.gg",
+            "github.com", "steampowered.com", "epicgames.com", "spotify.com", "netflix.com"
+        ],
+        bannedDomains: config.bannedDomains || [],
+        gifControl: config.gifControl !== undefined ? config.gifControl : true,
+        ticketChannels: config.ticketChannels || {},
+        activeTickets: config.activeTickets || {},
+        giveaways: config.giveaways || {},
+        admins: config.admins || ["umutpapa123"],
+        moderators: config.moderators || [],
+        userTracking: config.userTracking || {},
+        trackingChannels: config.trackingChannels || {},
+        userActivity: config.userActivity || {},
+        freeAccounts: config.freeAccounts || {
+            stock: [],
+            stockChannel: null,
+            users: {},
+            lastDailyUse: {},
+            giveaways: []
+        },
+        ticketModerators: config.ticketModerators || []
+    };
+    
+    // Config'i güncelle
+    config = defaultConfig;
+    saveConfig();
 } else {
     config = {
         gameChannels: {},
         ruleChannels: {}, // Kurallar kanalı
         ticketChannels: {}, // Ticket kanalı
         ticketModerators: [], // Ticket yetkilileri
-        activeTickets: {} // Aktif ticketlar { ticketId: { userId, channelId, type, proof, status } }
+        activeTickets: {}, // Aktif ticketlar { ticketId: { userId, channelId, type, proof, status } }
+        freeAccounts: {
+            stock: [],
+            stockChannel: null,
+            users: {},
+            lastDailyUse: {},
+            giveaways: []
+        }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -343,7 +385,7 @@ async function handleShareAllGames(interaction) {
         return;
     }
     
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     
     const guildId = interaction.guildId;
     const gameChannelId = config.gameChannels[guildId];
