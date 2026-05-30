@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, ChannelType, MessageFlags } = require('discord.js');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
@@ -61,7 +61,7 @@ client.on('interactionCreate', async interaction => {
             
             await interaction.reply({
                 content: `✅ Ücretsiz oyunlar artık ${channel} kanalında paylaşılacak!`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
 
             // Hemen oyun paylaş
@@ -76,17 +76,17 @@ client.on('interactionCreate', async interaction => {
                 delete config.gameChannels[guildId];
                 await interaction.reply({
                     content: '✅ Oyun kanalı kaldırıldı!',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             } else {
                 await interaction.reply({
                     content: '❌ Oyun kanalı bulunamadı!',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
         } else if (commandName === 'bütünücretsizoyunlarıpaylaş') {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             
             const gameChannelId = config.gameChannels[guildId];
             if (!gameChannelId) {
@@ -121,7 +121,7 @@ client.on('interactionCreate', async interaction => {
         console.error('Komut hatası:', error);
         await interaction.reply({ 
             content: '❌ Komut işlenirken hata!', 
-            ephemeral: true 
+            flags: MessageFlags.Ephemeral 
         });
     }
 });

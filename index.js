@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, Collection, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, EmbedBuilder, Collection, ChannelType, MessageFlags } = require('discord.js');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
@@ -89,7 +89,7 @@ client.on('interactionCreate', async interaction => {
         }
     } catch (error) {
         console.error('Komut işlenirken hata:', error);
-        await interaction.reply({ content: 'Komut işlenirken bir hata oluştu!', ephemeral: true });
+        await interaction.reply({ content: 'Komut işlenirken bir hata oluştu!', flags: MessageFlags.Ephemeral });
     }
 });
 
@@ -103,7 +103,7 @@ async function handleSetGameChannel(interaction, options) {
 
     await interaction.reply({
         content: `✅ Ücretsiz oyunlar artık ${channel} kanalında paylaşılacak! Hemen oyunları paylaşıyorum...`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 
     // Kanal ayarlandıktan sonra hemen oyunları paylaş
@@ -119,13 +119,13 @@ async function handleSetGameChannel(interaction, options) {
 
         await interaction.followUp({
             content: `✅ Kanal ayarlandı ve ${sharedCount} ücretsiz oyun paylaşıldı!`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     } catch (error) {
         console.error('Oyun paylaşılırken hata:', error);
         await interaction.followUp({
             content: '❌ Kanal ayarlandı ama oyunlar paylaşılırken hata oluştu!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
@@ -139,19 +139,19 @@ async function handleRemoveGameChannel(interaction) {
         saveConfig();
         await interaction.reply({
             content: '✅ Oyun kanalı başarıyla kaldırıldı!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     } else {
         await interaction.reply({
             content: '❌ Bu sunucuda ayarlanmış bir oyun kanalı bulunamadı!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
 
 // Tüm ücretsiz oyunları paylaşma - GÜNCELLENMİŞ
 async function handleShareAllFreeGames(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const guildId = interaction.guildId;
     const gameChannelId = config.gameChannels[guildId];

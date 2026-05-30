@@ -276,14 +276,14 @@ client.on('interactionCreate', async interaction => {
         } else {
             await interaction.reply({ 
                 content: '❌ Bu komut şu anda kullanılamıyor!', 
-                ephemeral: true 
+                flags: MessageFlags.Ephemeral 
             });
         }
     } catch (error) {
         console.error('Komut hatası:', error);
         await interaction.reply({ 
             content: '❌ Komut işlenirken hata!', 
-            ephemeral: true 
+            flags: MessageFlags.Ephemeral 
         });
     }
 });
@@ -308,7 +308,7 @@ client.on('interactionCreate', async interaction => {
         console.error('Button hatası:', error);
         await interaction.reply({
             content: '❌ İşlem sırasında hata!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 });
@@ -322,7 +322,7 @@ async function handleGameChannelSet(interaction, options) {
     if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({
             content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -335,7 +335,7 @@ async function handleGameChannelSet(interaction, options) {
     
     await interaction.reply({
         content: `✅ Ücretsiz oyunlar artık ${channel} kanalında paylaşılacak!`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
     
     // Hemen oyun paylaş
@@ -352,7 +352,7 @@ async function handleGameChannelRemove(interaction) {
     if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({
             content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -364,12 +364,12 @@ async function handleGameChannelRemove(interaction) {
         saveConfig();
         await interaction.reply({
             content: '✅ Oyun kanalı kaldırıldı!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     } else {
         await interaction.reply({
             content: '❌ Oyun kanalı bulunamadı!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
@@ -380,7 +380,7 @@ async function handleShareAllGames(interaction) {
     if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({
             content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -425,7 +425,7 @@ async function handleTicketSetup(interaction, options) {
     if (interaction.user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -469,7 +469,7 @@ async function handleTicketSetup(interaction, options) {
     
     await interaction.reply({
         content: `✅ Ticket sistemi ${channel} kanalında kuruldu!`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -478,7 +478,7 @@ async function handleReadRules(interaction, options) {
     if (interaction.user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -495,12 +495,12 @@ async function handleReadRules(interaction, options) {
     if (rules && rules !== 'Kurallar bulunamadı.') {
         await interaction.reply({
             content: `✅ Kurallar kanalı ${channel} olarak ayarlandı!\n📜 **Kurallar okundu:** ${rules.substring(0, 150)}...`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     } else {
         await interaction.reply({
             content: `✅ Kurallar kanalı ${channel} olarak ayarlandı!\n⚠️ **Uyarı:** Kurallar kanalında kurallar bulunamadı!`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
@@ -518,7 +518,7 @@ async function handleTicketModerator(interaction, options, user) {
     if (!isUmutpapa123 && !isAdmin) {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 veya yöneticiler kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -530,12 +530,12 @@ async function handleTicketModerator(interaction, options, user) {
             
             await interaction.reply({
                 content: `✅ ${targetUser.tag} ticket yetkilisi olarak eklendi!`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         } else {
             await interaction.reply({
                 content: `❌ ${targetUser.tag} zaten ticket yetkilisi!`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     } else {
@@ -546,12 +546,12 @@ async function handleTicketModerator(interaction, options, user) {
             
             await interaction.reply({
                 content: `✅ ${targetUser.tag} ticket yetkilisi olarak çıkarıldı!`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         } else {
             await interaction.reply({
                 content: `❌ ${targetUser.tag} ticket yetkilisi değil!`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     }
@@ -665,7 +665,7 @@ async function handleTicketOpen(interaction, ticketType) {
     
     await interaction.reply({
         content: `✅ Ticket açıldı! Kanal: ${ticketChannel}\n**Ticket ID:** ${ticketId}`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -676,7 +676,7 @@ async function handleTicketClose(interaction, customId) {
     if (!config.activeTickets[guildId] || !config.activeTickets[guildId][ticketId]) {
         await interaction.reply({
             content: '❌ Ticket bulunamadı!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -690,7 +690,7 @@ async function handleTicketClose(interaction, customId) {
     if (!isModerator && !isOwner) {
         await interaction.reply({
             content: '❌ Bu ticketı kapatma yetkiniz yok!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -900,7 +900,7 @@ async function handleTicketClose(interaction, customId) {
     
     await interaction.reply({
         content: `✅ Ticket #${ticketId} kapatıldı!`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1072,7 +1072,7 @@ async function handleAddProduct(interaction, options, user) {
     if (user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1121,7 +1121,7 @@ async function handleAddProduct(interaction, options, user) {
     
     await interaction.reply({
         content: `✅ Ürün başarıyla eklendi!\n**Ürün:** ${productName}\n**Kullanıcı Adı:** ||${username}||\n**Şifre:** ||${password}||`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1131,7 +1131,7 @@ async function handleAddRobloxStock(interaction, options, user) {
     if (user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1178,7 +1178,7 @@ async function handleAddRobloxStock(interaction, options, user) {
     
     await interaction.reply({
         content: `✅ Roblox hesabı başarıyla eklendi!\n**Roblox İsmi:** ${robloxName}\n**Şifre:** ||${robloxPassword}||`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1188,7 +1188,7 @@ async function handleAddGiveaway(interaction, options, user) {
     if (user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1246,7 +1246,7 @@ async function handleSetStockChannel(interaction, options, user) {
     if (user.username !== 'umutpapa123') {
         await interaction.reply({
             content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1257,7 +1257,7 @@ async function handleSetStockChannel(interaction, options, user) {
     
     await interaction.reply({
         content: `✅ Stok kanalı ${channel} olarak ayarlandı! Yeni eklenen ürünler bu kanala gönderilecek.`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1275,7 +1275,7 @@ async function handleFreeAccount(interaction, user) {
         const nextUse = new Date(lastUse + oneDay);
         await interaction.reply({
             content: `❌ Günde sadece 1 kez bedava hesap çekebilirsin!\n**Sonraki kullanım:** <t:${Math.floor(nextUse.getTime() / 1000)}:R>`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1288,7 +1288,7 @@ async function handleFreeAccount(interaction, user) {
         
         await interaction.reply({
             content: '❌ **Şanssızsın!** Bedava hesap çıkmadı. Yarın tekrar dene!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1297,7 +1297,7 @@ async function handleFreeAccount(interaction, user) {
     if (config.freeAccounts.stock.length === 0) {
         await interaction.reply({
             content: '❌ **Stokta hesap kalmadı!** umutpapa123 yeni hesap ekleyene kadar bekleyin.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1328,7 +1328,7 @@ async function handleFreeAccount(interaction, user) {
         
         await interaction.reply({
             content: '✅ **Tebrikler!** Bedava hesap kazandın! Detaylar DM olarak gönderildi. 🎉',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         
     } catch (error) {
@@ -1348,7 +1348,7 @@ async function handleFreeAccount(interaction, user) {
         await interaction.reply({
             content: '✅ **Tebrikler!** Bedava hesap kazandın! 🎉',
             embeds: [privateEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
     }
 }
@@ -1360,7 +1360,7 @@ async function handleRegister(interaction, user) {
     if (config.freeAccounts.users[userId]) {
         await interaction.reply({
             content: '❌ Zaten kayıtlısın!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1398,7 +1398,7 @@ async function handleRegister(interaction, user) {
     
     await interaction.reply({
         embeds: [embed],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1410,7 +1410,7 @@ async function handleAccountLogin(interaction, user) {
     if (!userAccount) {
         await interaction.reply({
             content: '❌ Kayıtlı hesabın yok! Önce /kayıtol komutu ile kayıt ol.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1434,7 +1434,7 @@ async function handleAccountLogin(interaction, user) {
     
     await interaction.reply({
         embeds: [embed],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
@@ -1460,7 +1460,7 @@ async function handleGiveawayJoin(interaction, customId) {
     if (!giveaway || giveaway.status !== 'active') {
         await interaction.reply({
             content: '❌ Bu çekiliş aktif değil veya sona erdi!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1471,7 +1471,7 @@ async function handleGiveawayJoin(interaction, customId) {
         saveConfig();
         await interaction.reply({
             content: '❌ Çekiliş süresi doldu!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1480,7 +1480,7 @@ async function handleGiveawayJoin(interaction, customId) {
     if (giveaway.participants.includes(userId)) {
         await interaction.reply({
             content: '❌ Zaten bu çekilişe katıldın!',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -1491,7 +1491,7 @@ async function handleGiveawayJoin(interaction, customId) {
     
     await interaction.reply({
         content: '✅ Çekilişe başarıyla katıldın! 🎉',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
     });
 }
 
