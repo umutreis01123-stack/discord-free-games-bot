@@ -101,7 +101,83 @@ const commands = [
             option.setName('ekle')
                 .setDescription('Ekleme mi çıkarma mı?')
                 .setRequired(true)
+        ),
+
+    // BEDAVA HESAP SİSTEMİ KOMUTLARI (umutpapa123 için)
+    new SlashCommandBuilder()
+        .setName('ürünekle')
+        .setDescription('Yeni ürün/hesap ekler (sadece umutpapa123)')
+        .addStringOption(option =>
+            option.setName('ürün_adı')
+                .setDescription('Ürün/hesap adı')
+                .setRequired(true)
         )
+        .addStringOption(option =>
+            option.setName('kullanıcı_adı')
+                .setDescription('Kullanıcı adı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('şifre')
+                .setDescription('Şifre')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('stokekle')
+        .setDescription('Roblox hesabı ekler (sadece umutpapa123)')
+        .addStringOption(option =>
+            option.setName('roblox_ismi')
+                .setDescription('Roblox kullanıcı adı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('roblox_şifresi')
+                .setDescription('Roblox şifresi')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('çekilişekle')
+        .setDescription('Yeni çekiliş ekler (sadece umutpapa123)')
+        .addStringOption(option =>
+            option.setName('ödül')
+                .setDescription('Çekiliş ödülü')
+                .setRequired(true)
+        )
+        .addIntegerOption(option =>
+            option.setName('kazanan_sayısı')
+                .setDescription('Kazanan sayısı')
+                .setRequired(true)
+        )
+        .addIntegerOption(option =>
+            option.setName('süre_dakika')
+                .setDescription('Çekiliş süresi (dakika)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('stokkanalekle')
+        .setDescription('Stokların gösterileceği kanalı ayarlar (sadece umutpapa123)')
+        .addChannelOption(option =>
+            option.setName('kanal')
+                .setDescription('Stok kanalı')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)
+        ),
+
+    // KULLANICI KOMUTLARI
+    new SlashCommandBuilder()
+        .setName('bedavahesap')
+        .setDescription('Bedava hesap çek (günde 1 kez, düşük şans)'),
+
+    new SlashCommandBuilder()
+        .setName('kayıtol')
+        .setDescription('Sisteme kayıt ol'),
+
+    new SlashCommandBuilder()
+        .setName('hesapgiriş')
+        .setDescription('Kayıtlı hesabına giriş yap')
 ];
 
 // ========== BOT HAZIR ==========
@@ -138,6 +214,23 @@ client.on('interactionCreate', async interaction => {
             await handleReadRules(interaction, options);
         } else if (commandName === 'ticketyetkili') {
             await handleTicketModerator(interaction, options, user);
+        }
+        
+        // BEDAVA HESAP SİSTEMİ KOMUTLARI
+        else if (commandName === 'ürünekle') {
+            await handleAddProduct(interaction, options, user);
+        } else if (commandName === 'stokekle') {
+            await handleAddRobloxStock(interaction, options, user);
+        } else if (commandName === 'çekilişekle') {
+            await handleAddGiveaway(interaction, options, user);
+        } else if (commandName === 'stokkanalekle') {
+            await handleSetStockChannel(interaction, options, user);
+        } else if (commandName === 'bedavahesap') {
+            await handleFreeAccount(interaction, user);
+        } else if (commandName === 'kayıtol') {
+            await handleRegister(interaction, user);
+        } else if (commandName === 'hesapgiriş') {
+            await handleAccountLogin(interaction, user);
         } else {
             await interaction.reply({ 
                 content: '❌ Bu komut şu anda kullanılamıyor!', 
@@ -929,6 +1022,437 @@ async function shareGame(channel, game) {
     });
 }
 
+// ========== BEDAVA HESAP SİSTEMİ FONKSİYONLARI ==========
+
+// Ürün ekle (sadece umutpapa123)
+async function handleAddProduct(interaction, options, user) {
+    // Sadece umutpapa123 kullanabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const productName = options.getString('ürün_adı');
+    const username = options.getString('kullanıcı_adı');
+    const password = options.getString('şifre');
+    
+    // Ürünü stok'a ekle
+    const product = {
+        id: Date.now().toString(),
+        name: productName,
+        username: username,
+        password: password,
+        type: 'product',
+        addedAt: Date.now(),
+        addedBy: user.id
+    };
+    
+    config.freeAccounts.stock.push(product);
+    saveConfig();
+    
+    // Stok kanalına mesaj gönder (eğer ayarlanmışsa)
+    if (config.freeAccounts.stockChannel) {
+        try {
+            const stockChannel = await client.channels.fetch(config.freeAccounts.stockChannel);
+            if (stockChannel) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x00FF00)
+                    .setTitle('🆕 YENİ ÜRÜN EKLENDİ')
+                    .addFields(
+                        { name: '📦 Ürün Adı', value: productName, inline: true },
+                        { name: '👤 Kullanıcı Adı', value: `||${username}||`, inline: true },
+                        { name: '🔑 Şifre', value: `||${password}||`, inline: true },
+                        { name: '📅 Eklenme', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                        { name: '👨‍💼 Ekleyen', value: user.tag, inline: true }
+                    )
+                    .setTimestamp();
+                
+                await stockChannel.send({ embeds: [embed] });
+            }
+        } catch (error) {
+            console.error('Stok kanalına mesaj gönderilemedi:', error);
+        }
+    }
+    
+    await interaction.reply({
+        content: `✅ Ürün başarıyla eklendi!\n**Ürün:** ${productName}\n**Kullanıcı Adı:** ||${username}||\n**Şifre:** ||${password}||`,
+        ephemeral: true
+    });
+}
+
+// Roblox stok ekle (sadece umutpapa123)
+async function handleAddRobloxStock(interaction, options, user) {
+    // Sadece umutpapa123 kullanabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const robloxName = options.getString('roblox_ismi');
+    const robloxPassword = options.getString('roblox_şifresi');
+    
+    // Roblox hesabını stok'a ekle
+    const robloxAccount = {
+        id: Date.now().toString(),
+        name: `Roblox: ${robloxName}`,
+        username: robloxName,
+        password: robloxPassword,
+        type: 'roblox',
+        addedAt: Date.now(),
+        addedBy: user.id
+    };
+    
+    config.freeAccounts.stock.push(robloxAccount);
+    saveConfig();
+    
+    // Stok kanalına mesaj gönder (eğer ayarlanmışsa)
+    if (config.freeAccounts.stockChannel) {
+        try {
+            const stockChannel = await client.channels.fetch(config.freeAccounts.stockChannel);
+            if (stockChannel) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x0099FF)
+                    .setTitle('🎮 YENİ ROBLOX HESABI EKLENDİ')
+                    .addFields(
+                        { name: '👤 Roblox İsmi', value: robloxName, inline: true },
+                        { name: '🔑 Şifre', value: `||${robloxPassword}||`, inline: true },
+                        { name: '📅 Eklenme', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+                        { name: '👨‍💼 Ekleyen', value: user.tag, inline: true }
+                    )
+                    .setTimestamp();
+                
+                await stockChannel.send({ embeds: [embed] });
+            }
+        } catch (error) {
+            console.error('Stok kanalına mesaj gönderilemedi:', error);
+        }
+    }
+    
+    await interaction.reply({
+        content: `✅ Roblox hesabı başarıyla eklendi!\n**Roblox İsmi:** ${robloxName}\n**Şifre:** ||${robloxPassword}||`,
+        ephemeral: true
+    });
+}
+
+// Çekiliş ekle (sadece umutpapa123)
+async function handleAddGiveaway(interaction, options, user) {
+    // Sadece umutpapa123 kullanabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const prize = options.getString('ödül');
+    const winnerCount = options.getInteger('kazanan_sayısı');
+    const durationMinutes = options.getInteger('süre_dakika');
+    
+    const giveaway = {
+        id: Date.now().toString(),
+        prize: prize,
+        winnerCount: winnerCount,
+        duration: durationMinutes * 60 * 1000, // milisaniyeye çevir
+        startTime: Date.now(),
+        endTime: Date.now() + (durationMinutes * 60 * 1000),
+        participants: [],
+        status: 'active',
+        createdBy: user.id
+    };
+    
+    config.freeAccounts.giveaways.push(giveaway);
+    saveConfig();
+    
+    // Çekiliş mesajı gönder
+    const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle('🎉 YENİ ÇEKİLİŞ BAŞLADI!')
+        .setDescription(`**Ödül:** ${prize}\n**Kazanan Sayısı:** ${winnerCount} kişi\n**Süre:** ${durationMinutes} dakika`)
+        .addFields(
+            { name: '⏰ Bitiş', value: `<t:${Math.floor(giveaway.endTime / 1000)}:R>`, inline: true },
+            { name: '👥 Katılımcı', value: '0 kişi', inline: true },
+            { name: '🎁 Ödül', value: prize, inline: true }
+        )
+        .setFooter({ text: 'Çekilişe katılmak için "Katıl" butonuna tıklayın!' })
+        .setTimestamp();
+    
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`giveaway_join_${giveaway.id}`)
+                .setLabel('🎉 Katıl')
+                .setStyle(ButtonStyle.Success)
+        );
+    
+    await interaction.reply({
+        content: '🎉 **YENİ ÇEKİLİŞ BAŞLADI!**',
+        embeds: [embed],
+        components: [row]
+    });
+}
+
+// Stok kanalı ayarla (sadece umutpapa123)
+async function handleSetStockChannel(interaction, options, user) {
+    // Sadece umutpapa123 kullanabilir
+    if (user.username !== 'umutpapa123') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const channel = options.getChannel('kanal');
+    config.freeAccounts.stockChannel = channel.id;
+    saveConfig();
+    
+    await interaction.reply({
+        content: `✅ Stok kanalı ${channel} olarak ayarlandı! Yeni eklenen ürünler bu kanala gönderilecek.`,
+        ephemeral: true
+    });
+}
+
+// Bedava hesap çek
+async function handleFreeAccount(interaction, user) {
+    const userId = user.id;
+    const guildId = interaction.guildId;
+    
+    // Günde 1 kez kontrolü
+    const lastUse = config.freeAccounts.lastDailyUse[userId];
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+    
+    if (lastUse && (now - lastUse) < oneDay) {
+        const nextUse = new Date(lastUse + oneDay);
+        await interaction.reply({
+            content: `❌ Günde sadece 1 kez bedava hesap çekebilirsin!\n**Sonraki kullanım:** <t:${Math.floor(nextUse.getTime() / 1000)}:R>`,
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Düşük şans kontrolü (%10 şans)
+    const chance = Math.random() * 100;
+    if (chance > 10) { // %90 başarısız
+        config.freeAccounts.lastDailyUse[userId] = now;
+        saveConfig();
+        
+        await interaction.reply({
+            content: '❌ **Şanssızsın!** Bedava hesap çıkmadı. Yarın tekrar dene!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Stok'tan rastgele bir hesap seç
+    if (config.freeAccounts.stock.length === 0) {
+        await interaction.reply({
+            content: '❌ **Stokta hesap kalmadı!** umutpapa123 yeni hesap ekleyene kadar bekleyin.',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * config.freeAccounts.stock.length);
+    const account = config.freeAccounts.stock[randomIndex];
+    
+    // Hesabı stok'tan çıkar
+    config.freeAccounts.stock.splice(randomIndex, 1);
+    config.freeAccounts.lastDailyUse[userId] = now;
+    saveConfig();
+    
+    // Kullanıcıya DM gönder
+    try {
+        const dmEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🎉 TEBRİKLER! BEDAVA HESAP KAZANDIN')
+            .setDescription(`**${account.name}** hesabını kazandın!`)
+            .addFields(
+                { name: '👤 Kullanıcı Adı', value: account.username },
+                { name: '🔑 Şifre', value: account.password },
+                { name: '📅 Kazanma Tarihi', value: `<t:${Math.floor(now / 1000)}:R>` }
+            )
+            .setFooter({ text: 'Bu bilgileri kimseyle paylaşma!' })
+            .setTimestamp();
+        
+        await user.send({ embeds: [dmEmbed] });
+        
+        await interaction.reply({
+            content: '✅ **Tebrikler!** Bedava hesap kazandın! Detaylar DM olarak gönderildi. 🎉',
+            ephemeral: true
+        });
+        
+    } catch (error) {
+        // DM kapalıysa, özel mesaj olarak göster
+        const privateEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('🎉 TEBRİKLER! BEDAVA HESAP KAZANDIN')
+            .setDescription(`**${account.name}** hesabını kazandın!`)
+            .addFields(
+                { name: '👤 Kullanıcı Adı', value: `||${account.username}||` },
+                { name: '🔑 Şifre', value: `||${account.password}||` },
+                { name: '📅 Kazanma Tarihi', value: `<t:${Math.floor(now / 1000)}:R>` }
+            )
+            .setFooter({ text: 'Bu bilgileri kimseyle paylaşma! DM kapalı olduğu için burada gösteriliyor.' })
+            .setTimestamp();
+        
+        await interaction.reply({
+            content: '✅ **Tebrikler!** Bedava hesap kazandın! 🎉',
+            embeds: [privateEmbed],
+            ephemeral: true
+        });
+    }
+}
+
+// Kayıt ol
+async function handleRegister(interaction, user) {
+    const userId = user.id;
+    
+    if (config.freeAccounts.users[userId]) {
+        await interaction.reply({
+            content: '❌ Zaten kayıtlısın!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Rastgele kullanıcı adı ve şifre oluştur
+    const randomUsername = `user_${Math.random().toString(36).substr(2, 8)}`;
+    const randomPassword = Math.random().toString(36).substr(2, 10);
+    
+    const userAccount = {
+        id: userId,
+        username: randomUsername,
+        password: randomPassword,
+        registeredAt: Date.now(),
+        lastLogin: null
+    };
+    
+    config.freeAccounts.users[userId] = userAccount;
+    saveConfig();
+    
+    // Oto giriş yap
+    userAccount.lastLogin = Date.now();
+    saveConfig();
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('✅ KAYIT BAŞARILI!')
+        .setDescription('Hesabın oluşturuldu ve otomatik giriş yapıldı.')
+        .addFields(
+            { name: '👤 Kullanıcı Adın', value: randomUsername },
+            { name: '🔑 Şifren', value: randomPassword },
+            { name: '📅 Kayıt Tarihi', value: `<t:${Math.floor(Date.now() / 1000)}:R>` }
+        )
+        .setFooter({ text: 'Bu bilgileri kaybetme! /hesapgiriş komutu ile giriş yapabilirsin.' })
+        .setTimestamp();
+    
+    await interaction.reply({
+        embeds: [embed],
+        ephemeral: true
+    });
+}
+
+// Hesap giriş
+async function handleAccountLogin(interaction, user) {
+    const userId = user.id;
+    const userAccount = config.freeAccounts.users[userId];
+    
+    if (!userAccount) {
+        await interaction.reply({
+            content: '❌ Kayıtlı hesabın yok! Önce /kayıtol komutu ile kayıt ol.',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Oto giriş yap
+    userAccount.lastLogin = Date.now();
+    saveConfig();
+    
+    const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle('✅ GİRİŞ BAŞARILI!')
+        .setDescription('Hesabına başarıyla giriş yaptın.')
+        .addFields(
+            { name: '👤 Kullanıcı Adın', value: userAccount.username },
+            { name: '🔑 Şifren', value: userAccount.password },
+            { name: '📅 Son Giriş', value: `<t:${Math.floor(Date.now() / 1000)}:R>` },
+            { name: '📅 Kayıt Tarihi', value: `<t:${Math.floor(userAccount.registeredAt / 1000)}:R>` }
+        )
+        .setFooter({ text: 'Hesap bilgilerini kimseyle paylaşma!' })
+        .setTimestamp();
+    
+    await interaction.reply({
+        embeds: [embed],
+        ephemeral: true
+    });
+}
+
+// Çekiliş buton işleyiciyi ekle
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isButton()) return;
+    
+    const { customId } = interaction;
+    
+    if (customId.startsWith('giveaway_join_')) {
+        await handleGiveawayJoin(interaction, customId);
+    }
+});
+
+// Çekilişe katıl
+async function handleGiveawayJoin(interaction, customId) {
+    const giveawayId = customId.replace('giveaway_join_', '');
+    const userId = interaction.user.id;
+    
+    // Çekilişi bul
+    const giveaway = config.freeAccounts.giveaways.find(g => g.id === giveawayId);
+    
+    if (!giveaway || giveaway.status !== 'active') {
+        await interaction.reply({
+            content: '❌ Bu çekiliş aktif değil veya sona erdi!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Süre kontrolü
+    if (Date.now() > giveaway.endTime) {
+        giveaway.status = 'ended';
+        saveConfig();
+        await interaction.reply({
+            content: '❌ Çekiliş süresi doldu!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Zaten katılmış mı kontrolü
+    if (giveaway.participants.includes(userId)) {
+        await interaction.reply({
+            content: '❌ Zaten bu çekilişe katıldın!',
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // Katılımcı ekle
+    giveaway.participants.push(userId);
+    saveConfig();
+    
+    await interaction.reply({
+        content: '✅ Çekilişe başarıyla katıldın! 🎉',
+        ephemeral: true
+    });
+}
+
 // Keep-alive server
 const http = require('http');
 const server = http.createServer((req, res) => {
@@ -956,6 +1480,9 @@ client.login(token).then(() => {
     console.log('   • Otomatik SS inceleme');
     console.log('   • Kural ihlali kontrolü');
     console.log('   • 30 dakika timeout cezası');
+    console.log('   • Bedava hesap sistemi (7 yeni komut)');
+    console.log('   • Çekiliş sistemi');
+    console.log('   • Roblox hesap stok yönetimi');
 }).catch(err => {
     console.error('❌ Bot giriş hatası:', err.message);
 });
