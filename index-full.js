@@ -437,8 +437,9 @@ app.get('/', (req, res) => {
         
         .giveaway-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 15px;
+            min-height: 100px;
         }
         
         .giveaway-card {
@@ -446,45 +447,163 @@ app.get('/', (req, res) => {
             border: 1px solid #3d3b7f;
             border-radius: 8px;
             padding: 15px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .giveaway-card h4 {
             color: #7c3aed;
-            font-size: 1rem;
+            font-size: 0.95rem;
             margin-bottom: 8px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            max-width: 100%;
         }
         
         .giveaway-card p {
             color: #a0aec0;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             margin-bottom: 5px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
         .no-data {
             color: #666;
             text-align: center;
+            padding: 30px 20px;
+            width: 100%;
+        }
+        
+        /* FOOTER */
+        footer {
+            background: rgba(10, 14, 39, 0.95);
+            border-top: 1px solid #2d2b6b;
             padding: 20px;
+            text-align: center;
+            color: #a0aec0;
+            font-size: 0.9rem;
+            margin-top: 40px;
+        }
+        
+        footer a {
+            color: #7c3aed;
+            text-decoration: none;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 1024px) {
+            .main {
+                padding: 20px;
+            }
+            
+            .giveaway-list {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
         
         @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
             .sidebar {
                 width: 100%;
                 height: auto;
                 position: relative;
                 border-right: none;
                 border-bottom: 1px solid #2d2b6b;
+                padding: 15px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .sidebar h3 {
+                width: 100%;
+                margin-top: 0;
+            }
+            
+            .sidebar a {
+                flex: 1;
+                min-width: 100px;
+                padding: 8px;
+                font-size: 0.85rem;
             }
             
             .main {
                 margin-left: 0;
+                padding: 15px;
+            }
+            
+            .navbar {
+                padding: 10px 15px;
+            }
+            
+            .navbar-brand {
+                font-size: 1.2rem;
             }
             
             .nav-menu {
-                gap: 15px;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+            
+            .nav-menu a {
+                font-size: 0.85rem;
             }
             
             .stats {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: 1fr;
+            }
+            
+            .giveaway-list {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h2 {
+                font-size: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .navbar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .navbar-brand {
+                font-size: 1rem;
+                letter-spacing: 1px;
+            }
+            
+            .nav-menu {
+                width: 100%;
+                gap: 5px;
+            }
+            
+            .nav-menu a {
+                font-size: 0.75rem;
+                padding: 5px;
+            }
+            
+            .main {
+                padding: 10px;
+            }
+            
+            .header h2 {
+                font-size: 1.2rem;
+            }
+            
+            .section {
+                padding: 15px;
             }
         }
     </style>
@@ -580,6 +699,10 @@ app.get('/', (req, res) => {
             </div>
         </div>
     </div>
+    
+    <footer>
+        <p>© 2026 ShadowCore - Çekiliş & Duyuru Sistemi | <a href="#">Discord Bot</a> | <a href="#">GitHub</a></p>
+    </footer>
     
     <script>
         function showDashboard() {
