@@ -10,6 +10,7 @@ const {
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
 
 const client = new Client({
     intents: [
@@ -28,9 +29,14 @@ if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } else {
     config = {
-        fruitChannel: null,
-        lastFruits: {},
-        spawnTimes: []
+        announceChannel: null,
+        users: {},
+        messages: [],
+        stats: {
+            dmsSent: 0,
+            bulkDmsSent: 0,
+            announcementsSent: 0
+        }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -39,81 +45,79 @@ function saveConfig() {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
-// Blox Fruits Listesi
-const FRUITS = {
-    'Mera': { emoji: '🔥', rarity: 'Rare' },
-    'Gomu': { emoji: '🟠', rarity: 'Common' },
-    'Yami': { emoji: '⬛', rarity: 'Rare' },
-    'Logia': { emoji: '💨', rarity: 'Uncommon' },
-    'Paramecia': { emoji: '✨', rarity: 'Uncommon' },
-    'Zoan': { emoji: '🐾', rarity: 'Uncommon' },
-    'Mythical': { emoji: '👹', rarity: 'Legendary' },
-    'Magma': { emoji: '🌋', rarity: 'Rare' },
-    'Flame': { emoji: '🔥', rarity: 'Rare' },
-    'Ice': { emoji: '❄️', rarity: 'Rare' },
-    'Lightning': { emoji: '⚡', rarity: 'Legendary' },
-    'String': { emoji: '🧵', rarity: 'Common' },
-    'Sand': { emoji: '🏜️', rarity: 'Rare' },
-    'Spike': { emoji: '🌵', rarity: 'Common' },
-    'Smoke': { emoji: '💨', rarity: 'Common' },
-    'Chop': { emoji: '🪓', rarity: 'Common' },
-    'Spring': { emoji: '🔩', rarity: 'Common' },
-    'Bomb': { emoji: '💣', rarity: 'Common' },
-    'Kilo': { emoji: '⚖️', rarity: 'Common' },
-    'Dough': { emoji: '🍪', rarity: 'Legendary' },
-    'Venom': { emoji: '☠️', rarity: 'Legendary' },
-    'Rumble': { emoji: '🔊', rarity: 'Legendary' },
-    'Buddha': { emoji: '🧘', rarity: 'Legendary' },
-    'Human Human': { emoji: '👤', rarity: 'Mythical' },
-    'Falcon': { emoji: '🦅', rarity: 'Mythical' },
-    'Hound': { emoji: '🐕', rarity: 'Rare' },
-    'Cat': { emoji: '🐱', rarity: 'Rare' },
-    'Mouse': { emoji: '🐭', rarity: 'Common' }
-};
-
 // Komutlar
 const commands = [
     new SlashCommandBuilder()
-        .setName('fruittakip')
-        .setDescription('Blox Fruits takip panelini aç'),
+        .setName('dm')
+        .setDescription('Kullanıcıya DM gönder (Admin only)')
+        .addUserOption(option =>
+            option.setName('kullanıcı')
+                .setDescription('Mesaj alacak kullanıcı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('mesaj')
+                .setDescription('Gönderilecek mesaj')
+                .setRequired(true)
+        ),
 
     new SlashCommandBuilder()
-        .setName('fruitkanal')
-        .setDescription('Fruit spawn bildirimlerinin geleceği kanalı ayarla (Admin only)')
+        .setName('topludm')
+        .setDescription('Toplu DM gönder (Admin only)')
+        .addStringOption(option =>
+            option.setName('mesaj')
+                .setDescription('Gönderilecek mesaj')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('rol')
+                .setDescription('Hangi role gönder? (hepsi/role_adı)')
+                .setRequired(false)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('duyuru')
+        .setDescription('Duyuru gönder (Admin only)')
+        .addStringOption(option =>
+            option.setName('başlık')
+                .setDescription('Duyuru başlığı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('içerik')
+                .setDescription('Duyuru içeriği')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('renk')
+                .setDescription('Embed rengi (mavi/yeşil/kırmızı/mor)')
+                .setRequired(false)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('duyurukanal')
+        .setDescription('Duyuru kanalını ayarla (Admin only)')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Bildirim kanalı')
+                .setDescription('Duyuru gönderilecek kanal')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
         ),
 
     new SlashCommandBuilder()
-        .setName('fruitspawn')
-        .setDescription('Manual fruit spawn ekle (Admin only)')
-        .addStringOption(option =>
-            option.setName('fruit')
-                .setDescription('Fruit adı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('konum')
-                .setDescription('Spawn konumu')
-                .setRequired(true)
-        )
+        .setName('panel')
+        .setDescription('Admin panelini aç')
 ];
 
 // Bot Ready
 client.once('ready', async () => {
-    console.log(`✅ Blox Fruits Tracker başladı: ${client.user.tag}`);
+    console.log(`✅ Bot başladı: ${client.user.tag}`);
     try {
         await client.application.commands.set(commands);
         console.log('✅ Komutlar kaydedildi!');
     } catch (error) {
         console.error('❌ Komut hatası:', error);
     }
-
-    // Otomatik takip başlat
-    startFruitTracking();
 });
 
 // Komut İşleyici
@@ -123,47 +127,28 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user, guild } = interaction;
 
     try {
-        if (commandName === 'fruittakip') {
-            await handleFruitPanel(interaction);
-        } else if (commandName === 'fruitkanal') {
-            // Admin kontrolü
-            const member = await guild.members.fetch(user.id);
-            if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                await interaction.reply({
-                    content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-                    flags: MessageFlags.Ephemeral
-                });
-                return;
-            }
+        // Admin kontrolü
+        const member = await guild.members.fetch(user.id);
+        const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
 
-            const channel = options.getChannel('kanal');
-            config.fruitChannel = channel.id;
-            saveConfig();
-
+        if (commandName !== 'panel' && !isAdmin) {
             await interaction.reply({
-                content: `✅ Fruit bildirim kanalı ${channel} olarak ayarlandı!`,
+                content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
                 flags: MessageFlags.Ephemeral
             });
-        } else if (commandName === 'fruitspawn') {
-            // Admin kontrolü
-            const member = await guild.members.fetch(user.id);
-            if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                await interaction.reply({
-                    content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-                    flags: MessageFlags.Ephemeral
-                });
-                return;
-            }
+            return;
+        }
 
-            const fruit = options.getString('fruit');
-            const location = options.getString('konum');
-
-            await sendFruitNotification(fruit, location, interaction.guild);
-
-            await interaction.reply({
-                content: `✅ **${fruit}** @ ${location} bildirim gönderildi!`,
-                flags: MessageFlags.Ephemeral
-            });
+        if (commandName === 'dm') {
+            await handleDM(interaction, options);
+        } else if (commandName === 'topludm') {
+            await handleBulkDM(interaction, options, guild);
+        } else if (commandName === 'duyuru') {
+            await handleAnnouncement(interaction, options);
+        } else if (commandName === 'duyurukanal') {
+            await handleAnnounceChannel(interaction, options);
+        } else if (commandName === 'panel') {
+            await handlePanel(interaction);
         }
     } catch (error) {
         console.error('Komut hatası:', error);
@@ -174,104 +159,413 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Fruit Panel
-async function handleFruitPanel(interaction) {
+// DM Gönder
+async function handleDM(interaction, options) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    let fruitsText = '';
-    let fruitCount = Object.keys(FRUITS).length;
-
-    for (const [name, info] of Object.entries(FRUITS)) {
-        fruitsText += `${info.emoji} **${name}** - ${info.rarity}\n`;
-    }
-
-    const embed = new EmbedBuilder()
-        .setColor(0xFF6347)
-        .setTitle('🍎 BLOX FRUITS SPAWN TRACKER')
-        .setDescription('Roblox Blox Fruits oyunundaki fruit spawnlarını 7/24 takip ediyor!')
-        .addFields(
-            { name: '📊 Takip Edilen Fruits', value: fruitCount.toString(), inline: true },
-            { name: '⏱️ Spawn Aralığı', value: '2 saat', inline: true },
-            { name: '🔔 Durum', value: '🟢 Aktif', inline: true },
-            { name: '📜 Tüm Fruits', value: fruitsText, inline: false }
-        )
-        .setTimestamp();
-
-    await interaction.editReply({ embeds: [embed] });
-}
-
-// Fruit Bildirim Gönder
-async function sendFruitNotification(fruit, location, guild) {
-    if (!config.fruitChannel) return;
+    const user = options.getUser('kullanıcı');
+    const message = options.getString('mesaj');
 
     try {
-        const channel = await client.channels.fetch(config.fruitChannel);
-        const fruitInfo = FRUITS[fruit];
-
-        if (!fruitInfo) return;
-
-        const embed = new EmbedBuilder()
-            .setColor(0xFF6347)
-            .setTitle(`${fruitInfo.emoji} YENİ FRUIT SPAWN!`)
-            .setDescription(`**${fruit}** fruit spawnlandı!`)
-            .addFields(
-                { name: '🎮 Fruit', value: fruit, inline: true },
-                { name: '📍 Konum', value: location, inline: true },
-                { name: '⭐ Rarity', value: fruitInfo.rarity, inline: true },
-                { name: '🕐 Zaman', value: new Date().toLocaleTimeString('tr-TR'), inline: false }
-            )
-            .setFooter({ text: 'Blox Fruits Tracker' })
-            .setTimestamp();
-
-        await channel.send({
-            content: '@here 🔔 **FRUIT SPAWN!**',
-            embeds: [embed]
+        const dm = await user.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x7289DA)
+                    .setTitle('📨 Yeni Mesaj')
+                    .setDescription(message)
+                    .setFooter({ text: interaction.user.tag })
+                    .setTimestamp()
+            ]
         });
 
-        // Spawn zamanını kaydet
-        config.spawnTimes.push({
-            fruit: fruit,
-            location: location,
-            time: Date.now()
+        config.stats.dmsSent++;
+        config.messages.push({
+            type: 'dm',
+            recipient: user.tag,
+            message: message,
+            time: new Date().toISOString()
         });
         saveConfig();
 
+        await interaction.editReply({
+            content: `✅ Mesaj ${user.tag} kullanıcısına gönderildi!`
+        });
     } catch (error) {
-        console.error('Bildirim gönderme hatası:', error);
+        await interaction.editReply({
+            content: `❌ Mesaj gönderilemedi! Kullanıcının DM kapalı olabilir.`
+        });
     }
 }
 
-// Otomatik Takip (Simüle)
-function startFruitTracking() {
-    console.log('🔍 Blox Fruits takibi başlatıldı...');
+// Toplu DM Gönder
+async function handleBulkDM(interaction, options, guild) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Her 2 saat de bir random fruit spawn
-    setInterval(async () => {
-        const fruitNames = Object.keys(FRUITS);
-        const randomFruit = fruitNames[Math.floor(Math.random() * fruitNames.length)];
-        const locations = ['Starter Island', 'Pirate Island', 'Jungle', 'Desert', 'Snow Island', 'Sky Island'];
-        const randomLocation = locations[Math.floor(Math.random() * locations.length)];
+    const message = options.getString('mesaj');
+    const roleFilter = options.getString('rol') || 'hepsi';
 
-        console.log(`🍎 ${randomFruit} @ ${randomLocation} spawn detected!`);
+    try {
+        let members = await guild.members.fetch();
 
-        // Tüm guild'lerde bildirim gönder
-        for (const guild of client.guilds.cache.values()) {
-            await sendFruitNotification(randomFruit, randomLocation, guild);
+        if (roleFilter !== 'hepsi') {
+            const role = guild.roles.cache.find(r => r.name.toLowerCase() === roleFilter.toLowerCase());
+            if (!role) {
+                await interaction.editReply({
+                    content: `❌ Rol "${roleFilter}" bulunamadı!`
+                });
+                return;
+            }
+            members = members.filter(m => m.roles.cache.has(role.id));
         }
-    }, 2 * 60 * 60 * 1000); // 2 saat
+
+        let sent = 0;
+        let failed = 0;
+
+        for (const member of members.values()) {
+            try {
+                await member.user.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x7289DA)
+                            .setTitle('📨 Toplu Mesaj')
+                            .setDescription(message)
+                            .setFooter({ text: interaction.user.tag })
+                            .setTimestamp()
+                    ]
+                });
+                sent++;
+            } catch (e) {
+                failed++;
+            }
+        }
+
+        config.stats.bulkDmsSent++;
+        saveConfig();
+
+        await interaction.editReply({
+            content: `✅ Toplu DM gönderildi!\n**Başarılı:** ${sent}\n**Başarısız:** ${failed}`
+        });
+    } catch (error) {
+        await interaction.editReply({
+            content: `❌ Hata: ${error.message}`
+        });
+    }
 }
+
+// Duyuru Gönder
+async function handleAnnouncement(interaction, options) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+    if (!config.announceChannel) {
+        await interaction.editReply({
+            content: '❌ Duyuru kanalı ayarlanmamış! /duyurukanal ile ayarlayın.'
+        });
+        return;
+    }
+
+    const title = options.getString('başlık');
+    const content = options.getString('içerik');
+    const colorStr = options.getString('renk') || 'mavi';
+
+    const colors = {
+        'mavi': 0x7289DA,
+        'yeşil': 0x43B581,
+        'kırmızı': 0xF04747,
+        'mor': 0x9C27B0
+    };
+
+    try {
+        const channel = await client.channels.fetch(config.announceChannel);
+
+        const embed = new EmbedBuilder()
+            .setColor(colors[colorStr] || colors['mavi'])
+            .setTitle('📢 ' + title)
+            .setDescription(content)
+            .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+            .setTimestamp();
+
+        await channel.send({
+            content: '@everyone',
+            embeds: [embed]
+        });
+
+        config.stats.announcementsSent++;
+        saveConfig();
+
+        await interaction.editReply({
+            content: `✅ Duyuru gönderildi!`
+        });
+    } catch (error) {
+        await interaction.editReply({
+            content: `❌ Duyuru gönderilemedi: ${error.message}`
+        });
+    }
+}
+
+// Duyuru Kanalı Ayarla
+async function handleAnnounceChannel(interaction, options) {
+    const channel = options.getChannel('kanal');
+    config.announceChannel = channel.id;
+    saveConfig();
+
+    await interaction.reply({
+        content: `✅ Duyuru kanalı ${channel} olarak ayarlandı!`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Admin Panel
+async function handlePanel(interaction) {
+    const embed = new EmbedBuilder()
+        .setColor(0x7289DA)
+        .setTitle('📊 Admin Paneli')
+        .setDescription('ShadowBot Kontrol Paneli')
+        .addFields(
+            { name: '📨 DM\'ler', value: config.stats.dmsSent.toString(), inline: true },
+            { name: '📬 Toplu DM\'ler', value: config.stats.bulkDmsSent.toString(), inline: true },
+            { name: '📢 Duyurular', value: config.stats.announcementsSent.toString(), inline: true },
+            { name: '📋 Komutlar', value: '/dm\n/topludm\n/duyuru\n/duyurukanal', inline: false }
+        )
+        .setFooter({ text: 'ShadowBot v1.0' })
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// WEB DASHBOARD
+const app = express();
+app.use(express.static('public'));
+app.use(express.json());
+
+// Dashboard HTML
+app.get('/', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShadowBot - Admin Paneli</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0e11 0%, #1a1828 100%);
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: #1a1828;
+            border-right: 1px solid #2d2438;
+            padding: 20px;
+        }
+        
+        .sidebar h1 {
+            color: #7289DA;
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+        }
+        
+        .sidebar ul {
+            list-style: none;
+        }
+        
+        .sidebar li {
+            margin: 10px 0;
+        }
+        
+        .sidebar a {
+            color: #b0b1b3;
+            text-decoration: none;
+            padding: 10px;
+            display: block;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar a:hover {
+            background: #2d2438;
+            color: #7289DA;
+        }
+        
+        .main {
+            flex: 1;
+            padding: 40px;
+        }
+        
+        .header {
+            margin-bottom: 40px;
+        }
+        
+        .header h2 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #2d2438 0%, #1a1828 100%);
+            border: 1px solid #3d3850;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #7289DA;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .commands {
+            background: linear-gradient(135deg, #2d2438 0%, #1a1828 100%);
+            border: 1px solid #3d3850;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .commands h3 {
+            color: #7289DA;
+            margin-bottom: 15px;
+        }
+        
+        .command-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .command-item {
+            background: #1a1828;
+            border-left: 3px solid #7289DA;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        .command-item h4 {
+            color: #7289DA;
+            margin-bottom: 5px;
+        }
+        
+        .command-item p {
+            color: #b0b1b3;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h1>🎮 ShadowBot</h1>
+            <ul>
+                <li><a href="#dashboard">📊 Dashboard</a></li>
+                <li><a href="#messages">📨 Mesajlar</a></li>
+                <li><a href="#users">👥 Kullanıcılar</a></li>
+                <li><a href="#settings">⚙️ Ayarlar</a></li>
+            </ul>
+        </div>
+        
+        <div class="main">
+            <div class="header">
+                <h2>📊 Dashboard</h2>
+                <p>Sunucu yönetim paneli</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <h3>📨 DM\'ler</h3>
+                    <div class="number" id="dms">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>📬 Toplu DM</h3>
+                    <div class="number" id="bulkdms">0</div>
+                </div>
+                <div class="stat-card">
+                    <h3>📢 Duyurular</h3>
+                    <div class="number" id="announces">0</div>
+                </div>
+            </div>
+            
+            <div class="commands">
+                <h3>🔧 Komutlar</h3>
+                <div class="command-list">
+                    <div class="command-item">
+                        <h4>/dm</h4>
+                        <p>Kullanıcıya DM gönder</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/topludm</h4>
+                        <p>Toplu DM gönder</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/duyuru</h4>
+                        <p>Duyuru gönder</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/duyurukanal</h4>
+                        <p>Duyuru kanalı ayarla</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // İstatistikleri güncelle
+        fetch('/api/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('dms').textContent = data.dmsSent;
+                document.getElementById('bulkdms').textContent = data.bulkDmsSent;
+                document.getElementById('announces').textContent = data.announcementsSent;
+            });
+    </script>
+</body>
+</html>
+    `);
+});
+
+// API
+app.get('/api/stats', (req, res) => {
+    res.json(config.stats);
+});
 
 // Keep-alive
 const http = require('http');
-const server = http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end('Blox Fruits Tracker aktif!');
-});
-server.listen(process.env.PORT || 3001, () => {
-    console.log('✅ Keep-alive server başladı (Port: 3001)');
+const PORT = process.env.PORT || 3001;
+
+const server = http.createServer(app);
+server.listen(PORT, () => {
+    console.log(`✅ Web server başladı: http://localhost:${PORT}`);
 });
 
-// Botu Başlat
+// Bot başlat
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
     console.error('❌ DISCORD_TOKEN bulunamadı!');
@@ -279,11 +573,13 @@ if (!token) {
 }
 
 client.login(token).then(() => {
-    console.log('🎮 Blox Fruits Tracker çalışıyor!');
+    console.log('🚀 ShadowBot çalışıyor!');
     console.log('📋 Komutlar:');
-    console.log('   • /fruittakip - Takip paneli');
-    console.log('   • /fruitkanal - Kanal ayarla');
-    console.log('   • /fruitspawn - Manual spawn ekle');
+    console.log('   • /dm - DM gönder');
+    console.log('   • /topludm - Toplu DM');
+    console.log('   • /duyuru - Duyuru');
+    console.log('   • /duyurukanal - Kanal ayarla');
+    console.log('   • /panel - Admin paneli');
 }).catch(err => {
     console.error('❌ Bot hatası:', err.message);
 });

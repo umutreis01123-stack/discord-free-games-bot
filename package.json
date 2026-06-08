@@ -1,7 +1,7 @@
 {
-  "name": "roblox-blox-fruits-bot",
+  "name": "shadowbot",
   "version": "1.0.0",
-  "description": "Discord Roblox Blox Fruits Stok Bot",
+  "description": "Discord Admin Panel Bot + Web Dashboard",
   "main": "index-full.js",
   "scripts": {
     "start": "node index-full.js",
@@ -10,14 +10,15 @@
   "keywords": [
     "discord",
     "bot",
-    "roblox",
-    "blox-fruits"
+    "admin",
+    "dashboard"
   ],
-  "author": "",
+  "author": "Umut",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.16.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"

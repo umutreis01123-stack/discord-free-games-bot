@@ -1,93 +1,107 @@
-# 🍎 Roblox Blox Fruits Spawn Tracker Bot
+# 🎮 ShadowBot - Admin Panel Bot
 
-Discord'da Roblox Blox Fruits oyunundaki fruit spawnlarını 7/24 takip eden bot.
+Discord sunucusu yönetim botu + Web Dashboard. Mesaj gönder, duyuru yap, istatistikleri takip et!
 
 ## ✨ Özellikler
 
-- 🔔 **Real-time Bildirim** - Fruit spawn olunca anında Discord'a haber ver
-- 📊 **Otomatik Takip** - Her 2 saatte bir fruit spawn kontrolü
-- 🎮 **27+ Fruit Desteği** - Tüm Blox Fruits mevcut
-- ⚡ **Komut Tabanlı Yönetim** - Admin komutları ile kontrol et
-- 📍 **Konum Bilgisi** - Spawn konumunu belirt
+- 📨 **DM Gönder** - Tek kullanıcıya mesaj
+- 📬 **Toplu DM** - Sunucudaki herkese veya role mesaj
+- 📢 **Duyuru Sistemi** - Kanal'a renkli duyuru gönder
+- 📊 **Web Dashboard** - Admin paneli ve istatistikler
+- 🔐 **Admin Only** - Sadece yöneticiler kullanabilir
 
 ## 🚀 Komutlar
 
-### `/fruittakip`
-Blox Fruits takip panelini açar.
-- Takip edilen fruits listesi
-- Spawn aralığı bilgisi
-- Sistem durumu
+### `/dm <kullanıcı> <mesaj>`
+Belirtilen kullanıcıya DM gönder.
 
-### `/fruitkanal <kanal>`
-Fruit spawn bildirimlerinin geleceği kanalı ayarlar.
-- Örnek: `/fruitkanal kanal: #fruit-spawnlar`
+### `/topludm <mesaj> [rol]`
+Toplu DM gönder. Rol belirtilmezse herkese gönder.
 
-### `/fruitspawn <fruit> <konum>`
-Manuel olarak fruit spawn ekler.
-- Örnek: `/fruitspawn fruit: Mera konum: Starter Island`
+### `/duyuru <başlık> <içerik> [renk]`
+Duyuru gönder (mavi, yeşil, kırmızı, mor).
 
-## 📋 Desteklenen Fruits
+### `/duyurukanal <kanal>`
+Duyuruların geleceği kanalı ayarla.
 
-🔥 Mera • 🟠 Gomu • ⬛ Yami • 💨 Logia • ✨ Paramecia • 🐾 Zoan • 👹 Mythical • 🌋 Magma • 🔥 Flame • ❄️ Ice • ⚡ Lightning • 🧵 String • 🏜️ Sand • 🌵 Spike • 💨 Smoke • 🪓 Chop • 🔩 Spring • 💣 Bomb • ⚖️ Kilo • 🍪 Dough • ☠️ Venom • 🔊 Rumble • 🧘 Buddha • 👤 Human Human • 🦅 Falcon • 🐕 Hound • 🐱 Cat • 🐭 Mouse
+### `/panel`
+Admin panelini aç (istatistikler).
 
-## 🎯 Kullanım
+## 📊 Web Dashboard
 
-1. Bot'ı sunucuya ekle
-2. `/fruitkanal` ile bildirim kanalı ayarla
-3. `/fruittakip` ile panel aç
-4. Fruit spawn olduğunda otomatik bildirim gel
+Bot çalışırken http://localhost:3001 adresine erişebilirsiniz.
 
-## ⚙️ Kurulum
+**Özellikler:**
+- İstatistikler (DM, Toplu DM, Duyuru)
+- Komut listesi
+- Sunucu yönetimi
+- Dark theme (ShadowMC tarzı)
 
-### Environment Variables
+## 🔧 Kurulum
 
-Railway'de şu variable'ı ekle:
+### Railway'de
+
+1. Token ekle: `DISCORD_TOKEN=your_token`
+2. Redeploy et
+3. `/duyurukanal` ile kanal ayarla
+4. Komutları kullan!
+
+### Lokalde
+
+```bash
+npm install
+npm start
 ```
-DISCORD_TOKEN = your_token_here
+
+## 📋 Config Dosyası
+
+`config.json` otomatik oluşur:
+
+```json
+{
+  "announceChannel": null,
+  "users": {},
+  "messages": [],
+  "stats": {
+    "dmsSent": 0,
+    "bulkDmsSent": 0,
+    "announcementsSent": 0
+  }
+}
 ```
 
-### Config
+## 🎯 Kullanım Örneği
 
-Bot otomatik `config.json` oluşturur.
+```
+/dm @kullanıcı Merhaba!
+/topludm Sunucu duyurusu @role:Moderatör
+/duyuru "Sunucu Haber" "Sunucu güncellemesi..." mavi
+/duyurukanal #duyurular
+/panel
+```
 
-## 📊 Spawn Sistemi
+## 📱 Özellikler
 
-- **Aralık:** Her 2 saat
-- **Otomatik:** 7/24 çalışır
-- **Bildirim:** @here mention ile haber ver
-- **Konum:** Her spawn için konum belirtilir
+✅ Admin paneli arayüzü  
+✅ Real-time istatistikler  
+✅ Toplu mesajlaşma  
+✅ Renkli duyurular  
+✅ Web dashboard  
+✅ Railroad tarafından çalışacak  
 
-## 🔒 İzinler
+## ⚙️ Gereksinimler
 
-- `/fruitkanal` - Admin only
-- `/fruitspawn` - Admin only
-- `/fruittakip` - Herkes
+- Node.js 18+
+- Discord Bot Token
+- Express.js (web server)
 
-## 📱 Discord Notifications
+## 📞 Destek
 
-Fruit spawn olduğunda:
-- 🔔 @here ping
-- Fruit adı ve emoji
-- Spawn konumu
-- Rarity bilgisi
-- Spawn zamanı
-
-## 🎮 Roblox Hesap
-
-Bot, configure edilmiş Roblox hesabı kullanarak oyunu takip eder.
-
-## 📞 Komut Ayarı
-
-Railway'de redeploy sonrası komutlar 1-2 dakika içinde aktif olur.
-
-## ✅ Kontrol Listesi
-
-- [ ] Token ekledi
-- [ ] Bot sunucuya ekledi
-- [ ] `/fruitkanal` ile kanal ayarladı
-- [ ] `/fruittakip` ile paneli açtı
-- [ ] Notification'lar geliyor
+Hata varsa logs'a bak:
+```
+/panel
+```
 
 ---
 
-**Bot hazır! Fruit spawnlarını kaçırma!** 🍎🚀
+**ShadowBot v1.0 - Sunucu Yönetim Botu** 🚀
