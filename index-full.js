@@ -454,15 +454,22 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.json());
 
-// Dashboard HTML
+// Session kontrol
+function isAuthenticated(req) {
+    return req.session && req.session.userId;
+}
+
+// Dashboard HTML - Login Sayfası / Dashboard
 app.get('/', (req, res) => {
+    const isLoggedIn = localStorage ? true : false;
+    
     res.send(`
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bedava Hesap Sistemi - Dashboard</title>
+    <title>Bedava Hesap Sistemi - SHADOWMC</title>
     <style>
         * {
             margin: 0;
@@ -471,192 +478,445 @@ app.get('/', (req, res) => {
         }
         
         body {
-            background: linear-gradient(135deg, #0f0e11 0%, #1a1828 100%);
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
             color: #e0e0e0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
             min-height: 100vh;
         }
         
-        .container {
+        /* TOP NAV BAR */
+        .navbar {
+            background: rgba(10, 14, 39, 0.95);
+            border-bottom: 1px solid #2d2b6b;
+            padding: 15px 30px;
             display: flex;
-            min-height: 100vh;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
         
-        .sidebar {
-            width: 250px;
-            background: #1a1828;
-            border-right: 1px solid #2d2438;
-            padding: 20px;
-        }
-        
-        .sidebar h1 {
-            color: #00ff88;
-            margin-bottom: 30px;
+        .navbar-brand {
             font-size: 1.5rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 2px;
         }
         
-        .sidebar ul {
+        .navbar-brand span {
+            color: #7c3aed;
+        }
+        
+        .nav-menu {
+            display: flex;
+            gap: 30px;
+            align-items: center;
             list-style: none;
         }
         
-        .sidebar li {
-            margin: 10px 0;
+        .nav-menu a {
+            color: #a0aec0;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+        
+        .nav-menu a:hover {
+            color: #7c3aed;
+        }
+        
+        .login-btn {
+            background: #7c3aed;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        
+        .login-btn:hover {
+            background: #6d28d9;
+        }
+        
+        /* LOGIN PAGE */
+        .login-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 14, 39, 0.95);
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+        }
+        
+        .login-container.active {
+            display: flex;
+        }
+        
+        .login-box {
+            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
+            border: 1px solid #3d3b7f;
+            border-radius: 15px;
+            padding: 50px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .login-box h2 {
+            color: #fff;
+            margin-bottom: 30px;
+            font-size: 1.8rem;
+        }
+        
+        .login-box input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            background: #0a0e27;
+            border: 1px solid #3d3b7f;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .login-box input::placeholder {
+            color: #666;
+        }
+        
+        .login-box button {
+            width: 100%;
+            padding: 12px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+        
+        .login-box button:hover {
+            background: #6d28d9;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        /* DASHBOARD CONTAINER */
+        .container {
+            display: flex;
+            min-height: calc(100vh - 60px);
+        }
+        
+        .sidebar {
+            width: 220px;
+            background: #0f0e1e;
+            border-right: 1px solid #2d2b6b;
+            padding: 25px 15px;
+            position: fixed;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        
+        .sidebar h3 {
+            color: #7c3aed;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
         }
         
         .sidebar a {
-            color: #b0b1b3;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #a0aec0;
             text-decoration: none;
             padding: 10px;
-            display: block;
-            border-radius: 5px;
+            border-radius: 6px;
             transition: all 0.3s;
+            cursor: pointer;
+            font-size: 0.95rem;
         }
         
-        .sidebar a:hover {
-            background: #2d2438;
-            color: #00ff88;
+        .sidebar a:hover, .sidebar a.active {
+            background: #2d2b6b;
+            color: #7c3aed;
         }
         
         .main {
+            margin-left: 220px;
+            padding: 30px;
             flex: 1;
-            padding: 40px;
         }
         
         .header {
-            margin-bottom: 40px;
+            margin-bottom: 30px;
         }
         
         .header h2 {
             font-size: 2rem;
-            margin-bottom: 10px;
-            color: #00ff88;
+            color: #fff;
+            margin-bottom: 5px;
         }
         
+        .header p {
+            color: #7c3aed;
+            font-size: 0.95rem;
+        }
+        
+        /* STAT CARDS */
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 40px;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
         }
         
         .stat-card {
-            background: linear-gradient(135deg, #2d2438 0%, #1a1828 100%);
-            border: 1px solid #3d3850;
+            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
+            border: 1px solid #3d3b7f;
             border-radius: 10px;
             padding: 20px;
             text-align: center;
         }
         
+        .stat-card.green { border-top: 3px solid #10b981; }
+        .stat-card.blue { border-top: 3px solid #3b82f6; }
+        .stat-card.yellow { border-top: 3px solid #f59e0b; }
+        .stat-card.purple { border-top: 3px solid #a855f7; }
+        
         .stat-card h3 {
-            color: #00ff88;
+            color: #a0aec0;
+            font-size: 0.85rem;
+            text-transform: uppercase;
             margin-bottom: 10px;
+            letter-spacing: 1px;
         }
         
         .stat-card .number {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: bold;
-            color: #00ff88;
+            color: #fff;
         }
         
-        .commands {
-            background: linear-gradient(135deg, #2d2438 0%, #1a1828 100%);
-            border: 1px solid #3d3850;
+        /* SECTIONS */
+        .section {
+            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
+            border: 1px solid #3d3b7f;
             border-radius: 10px;
             padding: 20px;
+            margin-bottom: 20px;
         }
         
-        .commands h3 {
-            color: #00ff88;
+        .section h3 {
+            color: #fff;
             margin-bottom: 15px;
+            font-size: 1.1rem;
         }
         
-        .command-list {
+        .item-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             gap: 15px;
         }
         
-        .command-item {
-            background: #1a1828;
-            border-left: 3px solid #00ff88;
+        .item-card {
+            background: #0a0e27;
+            border: 1px solid #3d3b7f;
+            border-radius: 8px;
             padding: 15px;
-            border-radius: 5px;
+            text-align: center;
         }
         
-        .command-item h4 {
-            color: #00ff88;
-            margin-bottom: 5px;
+        .item-card .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
         }
         
-        .command-item p {
-            color: #b0b1b3;
-            font-size: 0.9rem;
+        .item-card h4 {
+            color: #fff;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+        
+        .item-card p {
+            color: #a0aec0;
+            font-size: 0.85rem;
+        }
+        
+        .no-data {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+                border-right: none;
+                border-bottom: 1px solid #2d2b6b;
+            }
+            
+            .main {
+                margin-left: 0;
+            }
+            
+            .nav-menu {
+                gap: 15px;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
     </style>
 </head>
 <body>
+    <!-- NAV BAR -->
+    <div class="navbar">
+        <div class="navbar-brand">SHADOW<span>MC</span></div>
+        <ul class="nav-menu">
+            <li><a onclick="showDashboard()">Anasayfa</a></li>
+            <li><a onclick="showAccounts()">Hesaplar</a></li>
+            <li><a onclick="showProducts()">Ürünler</a></li>
+            <li><a onclick="showStats()">İstatistikler</a></li>
+            <li><button class="login-btn" onclick="toggleLogin()">Giriş Yap</button></li>
+        </ul>
+    </div>
+    
+    <!-- LOGIN MODAL -->
+    <div class="login-container" id="loginModal">
+        <button class="close-btn" onclick="toggleLogin()">✕</button>
+        <div class="login-box">
+            <h2>🔐 Giriş Yap</h2>
+            <input type="text" id="username" placeholder="Kullanıcı Adı" />
+            <input type="password" id="password" placeholder="Şifre" />
+            <button onclick="login()">Giriş Yap</button>
+            <div style="margin-top: 15px; color: #7c3aed;">
+                <p>Hesabınız yok mu? <a href="#" onclick="toggleRegister()" style="color: #fff; text-decoration: underline;">Kayıt Ol</a></p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MAIN CONTAINER -->
     <div class="container">
+        <!-- SIDEBAR -->
         <div class="sidebar">
-            <h1>🎮 Bedava Hesap</h1>
-            <ul>
-                <li><a href="#dashboard">📊 Dashboard</a></li>
-                <li><a href="#accounts">👤 Hesaplar</a></li>
-                <li><a href="#stats">📈 İstatistikler</a></li>
-                <li><a href="#commands">⚙️ Komutlar</a></li>
-            </ul>
+            <h3>Yönetim Paneli</h3>
+            <a onclick="showDashboard()" class="active">📊 Dashboard</a>
+            <a onclick="showAccounts()">👤 Hesaplar</a>
+            <a onclick="showProducts()">📦 Ürünler</a>
+            
+            <h3>İçerik</h3>
+            <a onclick="showStats()">📈 İstatistikler</a>
+            <a onclick="showGiveaways()">🎁 Çekilişler</a>
+            
+            <h3>Kullanıcı</h3>
+            <a onclick="showProfile()">👥 Profil</a>
+            <a onclick="logout()">🚪 Çıkış</a>
         </div>
         
+        <!-- MAIN CONTENT -->
         <div class="main">
-            <div class="header">
-                <h2>📊 Sistem Dashboard</h2>
-                <p>Bedava Hesap Dağıtım Sistemi</p>
+            <!-- DASHBOARD VIEW -->
+            <div id="dashboard-view">
+                <div class="header">
+                    <h2>Dashboard</h2>
+                    <p>Bedava Hesap Sistemi</p>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-card green">
+                        <h3>🎁 Dağıtılan</h3>
+                        <div class="number" id="stat-given">0</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <h3>👥 Kullanıcı</h3>
+                        <div class="number" id="stat-users">0</div>
+                    </div>
+                    <div class="stat-card yellow">
+                        <h3>📦 Stok</h3>
+                        <div class="number" id="stat-stock">0</div>
+                    </div>
+                    <div class="stat-card purple">
+                        <h3>🎉 Çekiliş</h3>
+                        <div class="number" id="stat-giveaways">0</div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>📝 Son Başvurular</h3>
+                    <div class="item-grid">
+                        <div class="no-data">Henüz başvuru yok</div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>🎉 Aktif Çekilişler</h3>
+                    <div id="giveaways-list" class="item-grid">
+                        <div class="no-data">Aktif çekiliş yok</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="stats">
-                <div class="stat-card">
-                    <h3>🎁 Dağıtılan Hesaplar</h3>
-                    <div class="number" id="freeAccounts">0</div>
+            <!-- ACCOUNTS VIEW -->
+            <div id="accounts-view" style="display: none;">
+                <div class="header">
+                    <h2>Hesaplar</h2>
+                    <p>Dağıtılan Bedava Hesaplar</p>
                 </div>
-                <div class="stat-card">
-                    <h3>👥 Kayıtlı Kullanıcılar</h3>
-                    <div class="number" id="users">0</div>
-                </div>
-                <div class="stat-card">
-                    <h3>📦 Stok Güncellemeleri</h3>
-                    <div class="number" id="stocks">0</div>
+                <div class="section">
+                    <div id="accounts-list" class="item-grid">
+                        <div class="no-data">Henüz hesap yok</div>
+                    </div>
                 </div>
             </div>
             
-            <div class="commands">
-                <h3>🔧 Komutlar</h3>
-                <div class="command-list">
-                    <div class="command-item">
-                        <h4>/bedavahesap</h4>
-                        <p>Ücretsiz hesap kazan! (15% şans)</p>
+            <!-- PRODUCTS VIEW -->
+            <div id="products-view" style="display: none;">
+                <div class="header">
+                    <h2>Ürünler</h2>
+                    <p>Stokta Bulunan Ürünler</p>
+                </div>
+                <div class="section">
+                    <div id="products-list" class="item-grid">
+                        <div class="no-data">Henüz ürün yok</div>
                     </div>
-                    <div class="command-item">
-                        <h4>/ürünekle</h4>
-                        <p>Yeni ürün ekle</p>
-                    </div>
-                    <div class="command-item">
-                        <h4>/stokekle</h4>
-                        <p>Stok ekle (umutpapa123)</p>
-                    </div>
-                    <div class="command-item">
-                        <h4>/kayıt ol</h4>
-                        <p>Hesap oluştur</p>
-                    </div>
-                    <div class="command-item">
-                        <h4>/hesapgiriş</h4>
-                        <p>Hesaba giriş yap</p>
-                    </div>
-                    <div class="command-item">
-                        <h4>/çekiliş ekle</h4>
-                        <p>Çekiliş oluştur (umutpapa123)</p>
-                    </div>
-                    <div class="command-item">
-                        <h4>/stokkanalekle</h4>
-                        <p>Stok kanalı ayarla (Admin)</p>
+                </div>
+            </div>
+            
+            <!-- STATS VIEW -->
+            <div id="stats-view" style="display: none;">
+                <div class="header">
+                    <h2>İstatistikler</h2>
+                    <p>Sistem Aktivitesi</p>
+                </div>
+                <div class="section">
+                    <div id="stats-content">
+                        <p style="color: #a0aec0;">İstatistikler yükleniyor...</p>
                     </div>
                 </div>
             </div>
@@ -664,15 +924,61 @@ app.get('/', (req, res) => {
     </div>
     
     <script>
-        // İstatistikleri güncelle
-        fetch('/api/stats')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('freeAccounts').textContent = data.freeAccountsGiven;
-                document.getElementById('users').textContent = data.registeredUsers;
-                document.getElementById('stocks').textContent = data.stockUpdates;
-            })
-            .catch(err => console.error('Stats yükleme hatası:', err));
+        function showDashboard() {
+            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
+            document.getElementById('dashboard-view').style.display = 'block';
+            loadStats();
+        }
+        
+        function showAccounts() {
+            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
+            document.getElementById('accounts-view').style.display = 'block';
+        }
+        
+        function showProducts() {
+            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
+            document.getElementById('products-view').style.display = 'block';
+        }
+        
+        function showStats() {
+            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
+            document.getElementById('stats-view').style.display = 'block';
+        }
+        
+        function showGiveaways() {
+            alert('Çekilişler bölümü yakında...');
+        }
+        
+        function showProfile() {
+            alert('Profil bölümü yakında...');
+        }
+        
+        function toggleLogin() {
+            document.getElementById('loginModal').classList.toggle('active');
+        }
+        
+        function login() {
+            alert('Giriş sistemi yakında aktif olacak...');
+            toggleLogin();
+        }
+        
+        function logout() {
+            alert('Çıkış yaptınız!');
+        }
+        
+        function loadStats() {
+            fetch('/api/stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('stat-given').textContent = data.freeAccountsGiven;
+                    document.getElementById('stat-users').textContent = data.registeredUsers;
+                    document.getElementById('stat-stock').textContent = data.stockUpdates;
+                    document.getElementById('stat-giveaways').textContent = '0';
+                })
+                .catch(err => console.error(err));
+        }
+        
+        loadStats();
     </script>
 </body>
 </html>
