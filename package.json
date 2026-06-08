@@ -1,26 +1,28 @@
 {
-  "name": "discord-ucretsiz-oyun-botu",
+  "name": "roblox-blox-fruits-bot",
   "version": "1.0.0",
-  "description": "Discord'da ücretsiz oyunları paylaşan bot",
+  "description": "Discord Roblox Blox Fruits Stok Bot",
   "main": "index-full.js",
   "scripts": {
     "start": "node index-full.js",
-    "dev": "nodemon index-full.js",
-    "simple": "node index-simple.js",
-    "full": "node index-full.js"
+    "dev": "nodemon index-full.js"
   },
+  "keywords": [
+    "discord",
+    "bot",
+    "roblox",
+    "blox-fruits"
+  ],
+  "author": "",
+  "license": "MIT",
   "dependencies": {
     "discord.js": "^14.16.3",
-    "axios": "^1.7.2",
-    "dotenv": "^16.4.5",
-    "cheerio": "^1.0.0-rc.12",
-    "express": "^4.19.2",
-    "concurrently": "^8.2.2"
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
   },
-  "keywords": ["discord", "bot", "oyun", "ücretsiz"],
-  "author": "",
-  "license": "MIT"
+  "engines": {
+    "node": "18.x"
+  }
 }

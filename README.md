@@ -1,29 +1,52 @@
-# Roblox Blox Fruits Stok Bot
+# 🍎 Roblox Blox Fruits Stok Bot
 
 Discord sunucunuzda Roblox Blox Fruits hesaplarını yönetip paylaşan bot.
 
-## Özellikler
+## 🚀 Başlıyoruz!
 
-### Ana Komutlar
-1. **`/bloxfruitkur`** - Blox Fruits stok sistemini aç
-   - GUI ile tüm stokları görüntüle
-   - Select menu ile Fruit seç
-   - Rastgele Fruit çek butonu
+**3 Çalıştırma Seçeneği:**
 
-2. **`/bloxkanal`** - Stok kanalını ayarla
-   - Yeni Fruit eklendiğinde bu kanala duyuru gönderilir
+### 1️⃣ Bilgisayarında Çalıştır (En Kolay)
+```bash
+npm install
+npm start
+```
 
-3. **`/fruityekle`** - Yeni Fruit ekle
-   - Fruit adı, oyuncu adı, şifre ile yeni hesap ekle
-   - Otomatik kanal'a duyuru gönderilir
+### 2️⃣ GitHub Actions ile (Ücretsiz)
+- Token'ı secret olarak ekle
+- Workflow otomatik çalışır
+- Aylık 2,000 dakika limitli
 
-### Stok Sistemleri
-- **Select Menu** - Fruit türüne göre filtrele
-- **Rastgele Çekiliş** - "Şanslı" butonuyla rastgele Fruit çek
-- **DM Gönderme** - Detayları kullanıcının DM'ine gönder
-- **GUI Arayüzü** - Güzel ve kullanıcı dostu tasarım
+### 3️⃣ Render.com ile (Önerilen - 24/7)
+- Repository'ni Render'a bağla
+- Token ekle
+- Deploy et
 
-### Desteklenen Fruits
+**📖 Detaylı kurulum: [BAŞLAT.md](./BAŞLAT.md)**
+
+---
+
+## 📋 Komutlar
+
+### `/bloxfruitkur`
+Blox Fruits yönetim panelini açar.
+- Select menu ile Fruit seç
+- Rastgele Fruit çek
+- Detayları DM'e gönder
+
+### `/bloxkanal <kanal>`
+Stok kanalını ayarlar.
+- Yeni Fruit eklenince otomatik duyuru
+- Örnek: `/bloxkanal kanal: #stok`
+
+### `/fruityekle <fruit> <oyuncu_adı> <şifre>`
+Yeni Fruit ekler.
+- Örnek: `/fruityekle fruit: Mera oyuncu_adı: player123 şifre: pass123`
+
+---
+
+## 🎮 Desteklenen Fruits
+
 - 🔥 Mera
 - 🟠 Gomu
 - ⬛ Yami
@@ -35,118 +58,123 @@ Discord sunucunuzda Roblox Blox Fruits hesaplarını yönetip paylaşan bot.
 - 💎 Rare
 - 📦 Common
 
-## Kurulum
+---
 
-### 1. Gereksinimler
-- Node.js v18+
-- Discord Bot Token
+## ✨ Özellikler
 
-### 2. Bağımlılıkları Yükle
-```bash
-npm install
-```
-
-### 3. Token'ı `.env` Dosyasına Koy
-```
-DISCORD_TOKEN=your_token_here
-```
-
-### 4. Botu Başlat
-```bash
-node index-full.js
-```
-
-## Kullanım
-
-### Admin Komutları
-
-#### `/bloxfruitkur`
-Blox Fruits yönetim panelini açar.
-- Stoktaki tüm Fruits'ler görüntülenir
-- Select menu ile Fruit seçilir
-- "Rastgele Fruit Çek" butonu ile şansa katılır
-- Seçilen Fruit'in detayları DM'e gönderilir
-
-#### `/bloxkanal <kanal>`
-Stok kanalını ayarlar.
-- Yeni Fruit eklendiğinde bu kanala duyuru gönderilir
-- Örnek: `/bloxkanal #stok-duyuruları`
-
-#### `/fruityekle <fruit> <oyuncu_adı> <şifre>`
-Yeni Fruit ekler.
-- Örnek: `/fruityekle Mera eloysturk 123456`
-- Otomatik olarak kanal'a duyuru gönderilir
-
-## Komut Örnekleri
-
-```bash
-# Stok kanalı ayarla
-/bloxkanal kanal: #stok-duyuruları
-
-# Mera Fruit ekle
-/fruityekle fruit: Mera oyuncu_adı: player123 şifre: mypassword
-
-# Gomu Fruit ekle
-/fruityekle fruit: Gomu oyuncu_adı: player456 şifre: pass123
-
-# Sistemini aç ve stokları gör
-/bloxfruitkur
-```
-
-## Config Yapısı
-
-```json
-{
-  "bloxFruitChannel": "channel_id",
-  "fruits": [
-    {
-      "name": "Mera",
-      "username": "oyuncu_adı",
-      "password": "şifre",
-      "addedAt": 1234567890,
-      "addedBy": "user_id"
-    }
-  ]
-}
-```
-
-## Özellikler
-
-### 🎯 Select Menu
-- Tüm Fruit türlerini dropdown'dan seç
-- Seçilen Fruit'in tüm hesaplarını göster
-- Otomatik DM'e gönder
+### 🎯 Select Menu GUI
+- Dropdown'dan Fruit seç
+- Her Fruit için emoji
+- Stok sayısı göster
 
 ### 🎲 Rastgele Çekiliş
 - "Rastgele Fruit Çek" butonu
-- Stoktaki herhangi bir Fruit rastgele seç
-- Kazananı DM'e bildir
+- DM'e sonuç gönder
 
 ### 📬 DM Gönderme
-- Fruit detayları kullanıcının DM'ine gönderilir
-- DM kapalıysa ephemeral mesaj olarak gösterilir
-- Güvenli şifre gösterimi (||şifre||)
+- Detayları kullanıcının DM'ine gönder
+- DM kapalıysa ephemeral mesaj
+- Güvenli şifre gösterimi
 
 ### 📢 Kanal Duyuruları
-- Yeni Fruit eklenince stok kanalına otomatik duyuru
-- Renkli embed mesajları
-- Ekleyen kişi ve tarih bilgisi
+- Yeni Fruit ekleme bildirimi
+- Renkli embed'ler
+- Ekleyen ve tarih bilgisi
 
-## Sorun Giderme
+---
 
-### Bot çalışmıyor
-- Token'ı kontrol edin
-- Botun sunucuda olduğundan emin olun
-- Admin izinlerini kontrol edin
+## 🔧 Teknik Özellikler
 
-### Komutlar görünmüyor
-- Botu yeniden başlatın
-- Sunucudan çıkarıp tekrar ekleyin
-- 5 dakika bekleyin
+- **Runtime:** Node.js 18+
+- **Framework:** Discord.js v14
+- **Database:** JSON (config.json)
+- **Hosting:** Kendi bilgisayar / GitHub Actions / Render
 
-### DM gelmiyor
-- DM ayarlarınızı kontrol edin
-- Ephemeral mesajda detayları görüntüleyin
+---
 
-## Lisans
-MIT License
+## 📁 Proje Yapısı
+
+```
+.
+├── index-full.js           # Ana bot dosyası
+├── config.json             # Stok verileri (otomatik oluşur)
+├── package.json            # Bağımlılıklar
+├── .env                    # Bot token (gizli)
+├── README.md              # Bu dosya
+├── BAŞLAT.md              # Detaylı kurulum
+└── .github/workflows/     # GitHub Actions
+    └── bot.yml
+```
+
+---
+
+## 📖 Başlangıç
+
+### Adım 1: Token Al
+1. [Discord Developer Portal](https://discord.com/developers/applications)
+2. "New Application" → İsim ver
+3. "Bot" → "Add Bot"
+4. Token'ı kopyala
+
+### Adım 2: Bağla
+1. .env dosyası oluştur
+2. `DISCORD_TOKEN=your_token_here` ekle
+
+### Adım 3: Çalıştır
+```bash
+npm install
+npm start
+```
+
+**Tamamlandı!** Bot çalışıyor. ✅
+
+---
+
+## 🐛 Sorun Giderme
+
+| Sorun | Çözüm |
+|-------|-------|
+| Komutlar görünmüyor | Botu yeniden başlat ve 5 dakika bekle |
+| Token hatası | Token'ı doğru kopyala, .env kaydet |
+| Bot çalışmıyor | Node.js yüklü mü? `npm install` çalıştır |
+| DM gelmiyor | DM ayarlarını aç veya ephemeral mesaja bak |
+
+---
+
+## 🌐 Çalıştırma Seçenekleri Karşılaştırması
+
+| Seçenek | Maliyet | 24/7 | Sınır | Zorluk |
+|---------|---------|------|-------|--------|
+| Bilgisayar | Elektrik | ❌ | Yok | ⭐ Kolay |
+| GitHub Actions | Ücretsiz | ❌ | 2000 dk/ay | ⭐⭐ Orta |
+| Render | Ücretsiz | ✅ | Yok | ⭐⭐ Orta |
+
+**Tavsiye:** Render seçin (24/7 ve ücretsiz)
+
+---
+
+## 📚 Kaynaklar
+
+- [Discord.js Docs](https://discord.js.org/)
+- [Discord Developer Docs](https://discord.com/developers/docs)
+- [Render Docs](https://render.com/docs)
+- [GitHub Actions](https://github.com/features/actions)
+
+---
+
+## 📝 Lisans
+
+MIT License - Özgürce kullan!
+
+---
+
+## 💡 İpuçları
+
+✅ Token'ı .env dosyasında sakla (GitHub'a yükleme)  
+✅ config.json'u düzenli yedekle  
+✅ Geliştirme için `npm run dev` kullan  
+✅ Production'da Render kullan  
+
+---
+
+**Sorular? GitHub Issues'da soru aç!** 🎮
