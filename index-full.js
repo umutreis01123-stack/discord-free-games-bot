@@ -6,7 +6,10 @@ const {
     EmbedBuilder, 
     ChannelType,
     PermissionsBitField,
-    MessageFlags
+    MessageFlags,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -25,17 +28,22 @@ const client = new Client({
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 
+const OWNER_ID = 'umutpapa123';
+
 if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } else {
     config = {
-        announceChannel: null,
+        stockChannel: null,
+        products: [],
+        accounts: [],
         users: {},
-        messages: [],
+        giveaways: [],
+        dailyAttempts: {}, // { userId: { date: '2024-01-01', used: true } }
         stats: {
-            dmsSent: 0,
-            bulkDmsSent: 0,
-            announcementsSent: 0
+            freeAccountsGiven: 0,
+            registeredUsers: 0,
+            stockUpdates: 0
         }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -48,65 +56,78 @@ function saveConfig() {
 // Komutlar
 const commands = [
     new SlashCommandBuilder()
-        .setName('dm')
-        .setDescription('Kullanıcıya DM gönder (Admin only)')
-        .addUserOption(option =>
-            option.setName('kullanıcı')
-                .setDescription('Mesaj alacak kullanıcı')
-                .setRequired(true)
-        )
+        .setName('bedavahesap')
+        .setDescription('Düşük şansla ücretsiz hesap kazan!')
         .addStringOption(option =>
-            option.setName('mesaj')
-                .setDescription('Gönderilecek mesaj')
+            option.setName('roblox_kullanıcı')
+                .setDescription('Hesabı alacak Roblox kullanıcı adı')
                 .setRequired(true)
         ),
 
     new SlashCommandBuilder()
-        .setName('topludm')
-        .setDescription('Toplu DM gönder (Admin only)')
+        .setName('ürünekle')
+        .setDescription('Ürün ekle')
         .addStringOption(option =>
-            option.setName('mesaj')
-                .setDescription('Gönderilecek mesaj')
+            option.setName('ürün_adı')
+                .setDescription('Ürün adı')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('rol')
-                .setDescription('Hangi role gönder? (hepsi/role_adı)')
+            option.setName('açıklama')
+                .setDescription('Ürün açıklaması')
                 .setRequired(false)
         ),
 
     new SlashCommandBuilder()
-        .setName('duyuru')
-        .setDescription('Duyuru gönder (Admin only)')
+        .setName('stokekle')
+        .setDescription('Stok ekle (Roblox hesabı bilgileriyle)')
         .addStringOption(option =>
-            option.setName('başlık')
-                .setDescription('Duyuru başlığı')
+            option.setName('ürün')
+                .setDescription('Stok eklenecek ürün')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('içerik')
-                .setDescription('Duyuru içeriği')
+            option.setName('roblox_kullanıcı')
+                .setDescription('Roblox kullanıcı adı')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('renk')
-                .setDescription('Embed rengi (mavi/yeşil/kırmızı/mor)')
+            option.setName('roblox_şifre')
+                .setDescription('Roblox şifresi (güvenli tutulur)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('kayıt ol')
+        .setDescription('Yeni hesap oluştur'),
+
+    new SlashCommandBuilder()
+        .setName('hesapgiriş')
+        .setDescription('Hesaba giriş yap'),
+
+    new SlashCommandBuilder()
+        .setName('çekiliş ekle')
+        .setDescription('Çekiliş ekle (Sadece umutpapa123)')
+        .addStringOption(option =>
+            option.setName('ödül')
+                .setDescription('Çekiliş ödülü')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('açıklama')
+                .setDescription('Çekiliş açıklaması')
                 .setRequired(false)
         ),
 
     new SlashCommandBuilder()
-        .setName('duyurukanal')
-        .setDescription('Duyuru kanalını ayarla (Admin only)')
+        .setName('stokkanalekle')
+        .setDescription('Stok duyuru kanalını ayarla (Admin only)')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Duyuru gönderilecek kanal')
+                .setDescription('Stok duyuruları gönderilecek kanal')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('panel')
-        .setDescription('Admin panelini aç')
+        )
 ];
 
 // Bot Ready
@@ -116,7 +137,7 @@ client.once('ready', async () => {
         await client.application.commands.set(commands);
         console.log('✅ Komutlar kaydedildi!');
     } catch (error) {
-        console.error('❌ Komut hatası:', error);
+        console.error('❌ Komut kaydı hatası:', error);
     }
 });
 
@@ -127,210 +148,303 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user, guild } = interaction;
 
     try {
-        // Admin kontrolü
-        const member = await guild.members.fetch(user.id);
-        const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-        if (commandName !== 'panel' && !isAdmin) {
-            await interaction.reply({
-                content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
-
-        if (commandName === 'dm') {
-            await handleDM(interaction, options);
-        } else if (commandName === 'topludm') {
-            await handleBulkDM(interaction, options, guild);
-        } else if (commandName === 'duyuru') {
-            await handleAnnouncement(interaction, options);
-        } else if (commandName === 'duyurukanal') {
-            await handleAnnounceChannel(interaction, options);
-        } else if (commandName === 'panel') {
-            await handlePanel(interaction);
+        if (commandName === 'bedavahesap') {
+            await handleFreeAccount(interaction, options);
+        } else if (commandName === 'ürünekle') {
+            await handleAddProduct(interaction, options);
+        } else if (commandName === 'stokekle') {
+            await handleAddStock(interaction, options);
+        } else if (commandName === 'kayıt ol') {
+            await handleRegister(interaction);
+        } else if (commandName === 'hesapgiriş') {
+            await handleLogin(interaction);
+        } else if (commandName === 'çekiliş ekle') {
+            await handleAddGiveaway(interaction, options);
+        } else if (commandName === 'stokkanalekle') {
+            await handleSetStockChannel(interaction, options);
         }
     } catch (error) {
         console.error('Komut hatası:', error);
         await interaction.reply({
-            content: '❌ Hata!',
+            content: '❌ Komut yürütülürken hata oluştu!',
             flags: MessageFlags.Ephemeral
-        });
+        }).catch(() => {});
     }
 });
 
-// DM Gönder
-async function handleDM(interaction, options) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+// Bedava Hesap Komutu
+async function handleFreeAccount(interaction, options) {
+    const robloxUsername = options.getString('roblox_kullanıcı');
+    const userId = interaction.user.id;
+    const today = new Date().toISOString().split('T')[0];
 
-    const user = options.getUser('kullanıcı');
-    const message = options.getString('mesaj');
-
-    try {
-        const dm = await user.send({
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0x7289DA)
-                    .setTitle('📨 Yeni Mesaj')
-                    .setDescription(message)
-                    .setFooter({ text: interaction.user.tag })
-                    .setTimestamp()
-            ]
-        });
-
-        config.stats.dmsSent++;
-        config.messages.push({
-            type: 'dm',
-            recipient: user.tag,
-            message: message,
-            time: new Date().toISOString()
-        });
-        saveConfig();
-
-        await interaction.editReply({
-            content: `✅ Mesaj ${user.tag} kullanıcısına gönderildi!`
-        });
-    } catch (error) {
-        await interaction.editReply({
-            content: `❌ Mesaj gönderilemedi! Kullanıcının DM kapalı olabilir.`
-        });
+    // Günlük deneme kontrolü
+    if (!config.dailyAttempts[userId]) {
+        config.dailyAttempts[userId] = { date: today, used: false };
     }
-}
 
-// Toplu DM Gönder
-async function handleBulkDM(interaction, options, guild) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    const message = options.getString('mesaj');
-    const roleFilter = options.getString('rol') || 'hepsi';
-
-    try {
-        let members = await guild.members.fetch();
-
-        if (roleFilter !== 'hepsi') {
-            const role = guild.roles.cache.find(r => r.name.toLowerCase() === roleFilter.toLowerCase());
-            if (!role) {
-                await interaction.editReply({
-                    content: `❌ Rol "${roleFilter}" bulunamadı!`
-                });
-                return;
-            }
-            members = members.filter(m => m.roles.cache.has(role.id));
-        }
-
-        let sent = 0;
-        let failed = 0;
-
-        for (const member of members.values()) {
-            try {
-                await member.user.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor(0x7289DA)
-                            .setTitle('📨 Toplu Mesaj')
-                            .setDescription(message)
-                            .setFooter({ text: interaction.user.tag })
-                            .setTimestamp()
-                    ]
-                });
-                sent++;
-            } catch (e) {
-                failed++;
-            }
-        }
-
-        config.stats.bulkDmsSent++;
-        saveConfig();
-
-        await interaction.editReply({
-            content: `✅ Toplu DM gönderildi!\n**Başarılı:** ${sent}\n**Başarısız:** ${failed}`
-        });
-    } catch (error) {
-        await interaction.editReply({
-            content: `❌ Hata: ${error.message}`
-        });
-    }
-}
-
-// Duyuru Gönder
-async function handleAnnouncement(interaction, options) {
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    if (!config.announceChannel) {
-        await interaction.editReply({
-            content: '❌ Duyuru kanalı ayarlanmamış! /duyurukanal ile ayarlayın.'
+    if (config.dailyAttempts[userId].date === today && 
+        config.dailyAttempts[userId].used && 
+        interaction.user.username !== OWNER_ID) {
+        
+        await interaction.reply({
+            content: '❌ Günde 1 kere hak vardır! Yarın tekrar deneyebilirsiniz.',
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
 
-    const title = options.getString('başlık');
-    const content = options.getString('içerik');
-    const colorStr = options.getString('renk') || 'mavi';
+    // Günü değiştiyse resetle
+    if (config.dailyAttempts[userId].date !== today) {
+        config.dailyAttempts[userId] = { date: today, used: false };
+    }
 
-    const colors = {
-        'mavi': 0x7289DA,
-        'yeşil': 0x43B581,
-        'kırmızı': 0xF04747,
-        'mor': 0x9C27B0
-    };
+    // Düşük şansa tabi tut (% 15 şans)
+    const chance = Math.random() < 0.15;
 
+    if (!chance) {
+        await interaction.reply({
+            content: '❌ Puan yetersiz! Daha sonra tekrar deneyin.',
+            flags: MessageFlags.Ephemeral
+        });
+        config.dailyAttempts[userId].used = true;
+        saveConfig();
+        return;
+    }
+
+    // Hesap varsa seç
+    if (config.accounts.length === 0) {
+        await interaction.reply({
+            content: '❌ Şu anda dağıtılacak hesap yok!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const account = config.accounts.pop();
+    config.stats.freeAccountsGiven++;
+    config.dailyAttempts[userId].used = true;
+    saveConfig();
+
+    // Özel mesaj olarak gönder
     try {
-        const channel = await client.channels.fetch(config.announceChannel);
-
         const embed = new EmbedBuilder()
-            .setColor(colors[colorStr] || colors['mavi'])
-            .setTitle('📢 ' + title)
-            .setDescription(content)
-            .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+            .setColor(0x00ff88)
+            .setTitle('🎉 Tebrikler! Ücretsiz Hesap Kazandınız!')
+            .setDescription('Başarıyla bir hesap kazandınız!')
+            .addFields(
+                { name: 'Roblox Kullanıcı Adı', value: account.username, inline: false },
+                { name: 'Şifre', value: account.password, inline: false },
+                { name: 'Notlar', value: account.notes || 'Hesabı kullanmak için Roblox\'a giriş yapınız.', inline: false }
+            )
+            .setFooter({ text: 'Bu bilgileri kimseyle paylaşmayın!' })
             .setTimestamp();
 
-        await channel.send({
-            content: '@everyone',
-            embeds: [embed]
-        });
+        await interaction.user.send({ embeds: [embed] });
 
-        config.stats.announcementsSent++;
-        saveConfig();
-
-        await interaction.editReply({
-            content: `✅ Duyuru gönderildi!`
+        await interaction.reply({
+            content: '✅ Tebrikler! Hesap özel mesajınıza gönderildi!',
+            flags: MessageFlags.Ephemeral
         });
     } catch (error) {
-        await interaction.editReply({
-            content: `❌ Duyuru gönderilemedi: ${error.message}`
+        await interaction.reply({
+            content: '⚠️ Hesap kazandınız ama özel mesaj gönderilemedi. DM\'leriniz kapalı olabilir.',
+            flags: MessageFlags.Ephemeral
         });
     }
 }
 
-// Duyuru Kanalı Ayarla
-async function handleAnnounceChannel(interaction, options) {
-    const channel = options.getChannel('kanal');
-    config.announceChannel = channel.id;
+// Ürün Ekle
+async function handleAddProduct(interaction, options) {
+    const productName = options.getString('ürün_adı');
+    const description = options.getString('açıklama') || 'Açıklama yok';
+
+    config.products.push({
+        name: productName,
+        description: description,
+        addedBy: interaction.user.tag,
+        addedAt: new Date().toISOString()
+    });
     saveConfig();
 
     await interaction.reply({
-        content: `✅ Duyuru kanalı ${channel} olarak ayarlandı!`,
+        content: `✅ Ürün "${productName}" başarıyla eklendi!`,
         flags: MessageFlags.Ephemeral
     });
 }
 
-// Admin Panel
-async function handlePanel(interaction) {
+// Stok Ekle (umutpapa123 only)
+async function handleAddStock(interaction, options) {
+    if (interaction.user.username !== OWNER_ID) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const product = options.getString('ürün');
+    const robloxUsername = options.getString('roblox_kullanıcı');
+    const robloxPassword = options.getString('roblox_şifre');
+
+    config.accounts.push({
+        username: robloxUsername,
+        password: robloxPassword,
+        product: product,
+        addedAt: new Date().toISOString()
+    });
+    config.stats.stockUpdates++;
+    saveConfig();
+
+    await interaction.reply({
+        content: `✅ Stok eklendi!\n📦 Ürün: ${product}\n👤 Hesap: ${robloxUsername}`,
+        flags: MessageFlags.Ephemeral
+    });
+
+    // Stok kanalına duyuru gönder
+    if (config.stockChannel) {
+        try {
+            const channel = await client.channels.fetch(config.stockChannel);
+            const embed = new EmbedBuilder()
+                .setColor(0x00ff88)
+                .setTitle('📦 Yeni Stok Eklendi!')
+                .setDescription(`${product} ürünü için yeni hesap eklendi!`)
+                .addFields(
+                    { name: 'Stok Durumu', value: `${config.accounts.length} hesap mevcut`, inline: false }
+                )
+                .setTimestamp();
+
+            await channel.send({ embeds: [embed] });
+        } catch (error) {
+            console.error('Stok kanalı hatası:', error);
+        }
+    }
+}
+
+// Kayıt Ol
+async function handleRegister(interaction) {
+    const userId = interaction.user.id;
+
+    if (config.users[userId]) {
+        await interaction.reply({
+            content: '❌ Zaten kayıtlı biri bulunuyor!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    config.users[userId] = {
+        username: interaction.user.username,
+        registeredAt: new Date().toISOString(),
+        loggedIn: true,
+        accounts: []
+    };
+    config.stats.registeredUsers++;
+    saveConfig();
+
+    await interaction.reply({
+        content: `✅ Hesap oluşturuldu! Kullanıcı: ${interaction.user.username}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Hesap Giriş
+async function handleLogin(interaction) {
+    const userId = interaction.user.id;
+
+    if (!config.users[userId]) {
+        await interaction.reply({
+            content: '❌ Önce /kayıt ol komutu ile hesap oluşturun!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    config.users[userId].loggedIn = true;
+    saveConfig();
+
     const embed = new EmbedBuilder()
         .setColor(0x7289DA)
-        .setTitle('📊 Admin Paneli')
-        .setDescription('ShadowBot Kontrol Paneli')
+        .setTitle('✅ Başarıyla Giriş Yaptınız!')
+        .setDescription(`Hoşgeldiniz ${interaction.user.username}!`)
         .addFields(
-            { name: '📨 DM\'ler', value: config.stats.dmsSent.toString(), inline: true },
-            { name: '📬 Toplu DM\'ler', value: config.stats.bulkDmsSent.toString(), inline: true },
-            { name: '📢 Duyurular', value: config.stats.announcementsSent.toString(), inline: true },
-            { name: '📋 Komutlar', value: '/dm\n/topludm\n/duyuru\n/duyurukanal', inline: false }
+            { name: 'Hesap Durumu', value: 'Aktif', inline: true },
+            { name: 'Giriş Zamanı', value: new Date().toLocaleString('tr-TR'), inline: true }
         )
-        .setFooter({ text: 'ShadowBot v1.0' })
+        .setFooter({ text: 'ShadowBot Free Account System' })
         .setTimestamp();
 
     await interaction.reply({
         embeds: [embed],
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Çekiliş Ekle (umutpapa123 only)
+async function handleAddGiveaway(interaction, options) {
+    if (interaction.user.username !== OWNER_ID) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const prize = options.getString('ödül');
+    const description = options.getString('açıklama') || 'Katılmak için aşağıdaki butona tıklayın!';
+
+    const giveaway = {
+        id: Date.now().toString(),
+        prize: prize,
+        description: description,
+        createdAt: new Date().toISOString(),
+        participants: []
+    };
+
+    config.giveaways.push(giveaway);
+    saveConfig();
+
+    const button = new ButtonBuilder()
+        .setCustomId(`giveaway_${giveaway.id}`)
+        .setLabel('🎉 Çekilişe Katıl')
+        .setStyle(ButtonStyle.Green);
+
+    const row = new ActionRowBuilder().addComponents(button);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle('🎉 YENİ ÇEKİLİŞ!')
+        .setDescription(description)
+        .addFields(
+            { name: 'Ödül', value: prize, inline: false },
+            { name: 'Katılımcılar', value: '0', inline: true }
+        )
+        .setFooter({ text: 'ShadowBot Çekiliş Sistemi' })
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed],
+        components: [row]
+    });
+}
+
+// Stok Kanalı Ayarla
+async function handleSetStockChannel(interaction, options) {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const channel = options.getChannel('kanal');
+    config.stockChannel = channel.id;
+    saveConfig();
+
+    await interaction.reply({
+        content: `✅ Stok duyuru kanalı ${channel} olarak ayarlandı!`,
         flags: MessageFlags.Ephemeral
     });
 }
@@ -348,7 +462,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShadowBot - Admin Paneli</title>
+    <title>Bedava Hesap Sistemi - Dashboard</title>
     <style>
         * {
             margin: 0;
@@ -376,7 +490,7 @@ app.get('/', (req, res) => {
         }
         
         .sidebar h1 {
-            color: #7289DA;
+            color: #00ff88;
             margin-bottom: 30px;
             font-size: 1.5rem;
         }
@@ -400,7 +514,7 @@ app.get('/', (req, res) => {
         
         .sidebar a:hover {
             background: #2d2438;
-            color: #7289DA;
+            color: #00ff88;
         }
         
         .main {
@@ -415,6 +529,7 @@ app.get('/', (req, res) => {
         .header h2 {
             font-size: 2rem;
             margin-bottom: 10px;
+            color: #00ff88;
         }
         
         .stats {
@@ -433,7 +548,7 @@ app.get('/', (req, res) => {
         }
         
         .stat-card h3 {
-            color: #7289DA;
+            color: #00ff88;
             margin-bottom: 10px;
         }
         
@@ -451,7 +566,7 @@ app.get('/', (req, res) => {
         }
         
         .commands h3 {
-            color: #7289DA;
+            color: #00ff88;
             margin-bottom: 15px;
         }
         
@@ -463,13 +578,13 @@ app.get('/', (req, res) => {
         
         .command-item {
             background: #1a1828;
-            border-left: 3px solid #7289DA;
+            border-left: 3px solid #00ff88;
             padding: 15px;
             border-radius: 5px;
         }
         
         .command-item h4 {
-            color: #7289DA;
+            color: #00ff88;
             margin-bottom: 5px;
         }
         
@@ -482,33 +597,33 @@ app.get('/', (req, res) => {
 <body>
     <div class="container">
         <div class="sidebar">
-            <h1>🎮 ShadowBot</h1>
+            <h1>🎮 Bedava Hesap</h1>
             <ul>
                 <li><a href="#dashboard">📊 Dashboard</a></li>
-                <li><a href="#messages">📨 Mesajlar</a></li>
-                <li><a href="#users">👥 Kullanıcılar</a></li>
-                <li><a href="#settings">⚙️ Ayarlar</a></li>
+                <li><a href="#accounts">👤 Hesaplar</a></li>
+                <li><a href="#stats">📈 İstatistikler</a></li>
+                <li><a href="#commands">⚙️ Komutlar</a></li>
             </ul>
         </div>
         
         <div class="main">
             <div class="header">
-                <h2>📊 Dashboard</h2>
-                <p>Sunucu yönetim paneli</p>
+                <h2>📊 Sistem Dashboard</h2>
+                <p>Bedava Hesap Dağıtım Sistemi</p>
             </div>
             
             <div class="stats">
                 <div class="stat-card">
-                    <h3>📨 DM\'ler</h3>
-                    <div class="number" id="dms">0</div>
+                    <h3>🎁 Dağıtılan Hesaplar</h3>
+                    <div class="number" id="freeAccounts">0</div>
                 </div>
                 <div class="stat-card">
-                    <h3>📬 Toplu DM</h3>
-                    <div class="number" id="bulkdms">0</div>
+                    <h3>👥 Kayıtlı Kullanıcılar</h3>
+                    <div class="number" id="users">0</div>
                 </div>
                 <div class="stat-card">
-                    <h3>📢 Duyurular</h3>
-                    <div class="number" id="announces">0</div>
+                    <h3>📦 Stok Güncellemeleri</h3>
+                    <div class="number" id="stocks">0</div>
                 </div>
             </div>
             
@@ -516,20 +631,32 @@ app.get('/', (req, res) => {
                 <h3>🔧 Komutlar</h3>
                 <div class="command-list">
                     <div class="command-item">
-                        <h4>/dm</h4>
-                        <p>Kullanıcıya DM gönder</p>
+                        <h4>/bedavahesap</h4>
+                        <p>Ücretsiz hesap kazan! (15% şans)</p>
                     </div>
                     <div class="command-item">
-                        <h4>/topludm</h4>
-                        <p>Toplu DM gönder</p>
+                        <h4>/ürünekle</h4>
+                        <p>Yeni ürün ekle</p>
                     </div>
                     <div class="command-item">
-                        <h4>/duyuru</h4>
-                        <p>Duyuru gönder</p>
+                        <h4>/stokekle</h4>
+                        <p>Stok ekle (umutpapa123)</p>
                     </div>
                     <div class="command-item">
-                        <h4>/duyurukanal</h4>
-                        <p>Duyuru kanalı ayarla</p>
+                        <h4>/kayıt ol</h4>
+                        <p>Hesap oluştur</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/hesapgiriş</h4>
+                        <p>Hesaba giriş yap</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/çekiliş ekle</h4>
+                        <p>Çekiliş oluştur (umutpapa123)</p>
+                    </div>
+                    <div class="command-item">
+                        <h4>/stokkanalekle</h4>
+                        <p>Stok kanalı ayarla (Admin)</p>
                     </div>
                 </div>
             </div>
@@ -541,10 +668,11 @@ app.get('/', (req, res) => {
         fetch('/api/stats')
             .then(r => r.json())
             .then(data => {
-                document.getElementById('dms').textContent = data.dmsSent;
-                document.getElementById('bulkdms').textContent = data.bulkDmsSent;
-                document.getElementById('announces').textContent = data.announcementsSent;
-            });
+                document.getElementById('freeAccounts').textContent = data.freeAccountsGiven;
+                document.getElementById('users').textContent = data.registeredUsers;
+                document.getElementById('stocks').textContent = data.stockUpdates;
+            })
+            .catch(err => console.error('Stats yükleme hatası:', err));
     </script>
 </body>
 </html>
@@ -573,13 +701,15 @@ if (!token) {
 }
 
 client.login(token).then(() => {
-    console.log('🚀 ShadowBot çalışıyor!');
+    console.log('🚀 Bedava Hesap Bot çalışıyor!');
     console.log('📋 Komutlar:');
-    console.log('   • /dm - DM gönder');
-    console.log('   • /topludm - Toplu DM');
-    console.log('   • /duyuru - Duyuru');
-    console.log('   • /duyurukanal - Kanal ayarla');
-    console.log('   • /panel - Admin paneli');
+    console.log('   • /bedavahesap - Ücretsiz hesap kazan');
+    console.log('   • /ürünekle - Ürün ekle');
+    console.log('   • /stokekle - Stok ekle (umutpapa123)');
+    console.log('   • /kayıt ol - Hesap oluştur');
+    console.log('   • /hesapgiriş - Hesaba giriş yap');
+    console.log('   • /çekiliş ekle - Çekiliş oluştur (umutpapa123)');
+    console.log('   • /stokkanalekle - Stok kanalı ayarla (Admin)');
 }).catch(err => {
     console.error('❌ Bot hatası:', err.message);
 });
