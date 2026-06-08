@@ -371,7 +371,151 @@ app.get('/', (req, res) => {
             display: block;
         }
         
-        .server-info {
+        /* HERO SECTION */
+        .hero-section {
+            text-align: center;
+            margin-bottom: 50px;
+            margin-top: -30px;
+            margin-left: -30px;
+            margin-right: -30px;
+            padding: 100px 30px;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
+            border-bottom: 1px solid #3d3b7f;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .hero-badge {
+            display: inline-block;
+            background: rgba(124, 58, 237, 0.2);
+            border: 1px solid #7c3aed;
+            color: #7c3aed;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, #fff 0%, #a0aec0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: #a0aec0;
+            margin-bottom: 40px;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 50px;
+            flex-wrap: wrap;
+        }
+        
+        .btn-primary {
+            padding: 12px 30px;
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid #7c3aed;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        
+        .btn-primary:hover {
+            background: rgba(124, 58, 237, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            padding: 12px 30px;
+            background: #7c3aed;
+            border: none;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+        
+        .btn-secondary:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);
+        }
+        
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .hero-stat {
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px solid #3d3b7f;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .hero-stat:hover {
+            background: rgba(124, 58, 237, 0.15);
+            transform: translateY(-5px);
+            border-color: #7c3aed;
+        }
+        
+        .stat-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #7c3aed;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #a0aec0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
@@ -558,10 +702,40 @@ app.get('/', (req, res) => {
             <div class="content">
                 <!-- Home -->
                 <div id="home">
-                    <h2>📊 Ana Sayfa</h2>
+                    <div class="hero-section">
+                        <div class="hero-content">
+                            <div class="hero-badge">🎮 SUNUCU AKTİF</div>
+                            <h1 class="hero-title">Türkiye'nin En İyi Mc Sunucusu</h1>
+                            <p class="hero-subtitle">Mükemmel sistemler etkinlikleri her şey sizlerle</p>
+                            
+                            <div class="hero-buttons">
+                                <button class="btn-primary">📋 play.shadowcore.com</button>
+                                <button class="btn-secondary">▶️ OYNA</button>
+                            </div>
+                            
+                            <div class="hero-stats">
+                                <div class="hero-stat">
+                                    <div class="stat-icon">👥</div>
+                                    <div class="stat-value">125</div>
+                                    <div class="stat-label">Çevrimiçi</div>
+                                </div>
+                                <div class="hero-stat">
+                                    <div class="stat-icon">⚡</div>
+                                    <div class="stat-value">12ms</div>
+                                    <div class="stat-label">Ping</div>
+                                </div>
+                                <div class="hero-stat">
+                                    <div class="stat-icon">📦</div>
+                                    <div class="stat-value">1.21.11</div>
+                                    <div class="stat-label">Sürüm</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="server-info" id="serverInfo"></div>
                     
-                    <h3 style="color: #fff; margin-top: 30px; margin-bottom: 15px;">📢 Duyurular</h3>
+                    <h3 style="color: #fff; margin-top: 50px; margin-bottom: 20px; font-size: 1.5rem;">📢 Duyurular</h3>
                     <div id="announcements-list"></div>
                 </div>
                 
