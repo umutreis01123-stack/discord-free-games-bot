@@ -2,14 +2,9 @@ require('dotenv').config();
 const { 
     Client, 
     GatewayIntentBits, 
-    SlashCommandBuilder, 
     EmbedBuilder, 
-    ChannelType,
     PermissionsBitField,
-    MessageFlags,
-    ButtonBuilder,
-    ButtonStyle,
-    ActionRowBuilder
+    MessageFlags
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -20,7 +15,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
@@ -28,16 +24,27 @@ const client = new Client({
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 
+const ADMIN_USERNAME = 'umut';
+const ADMIN_PASSWORD = 'umutpapa001122u';
+
 if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } else {
     config = {
-        duyuruKanali: null,
-        cekilisler: [],
-        istatistikler: {
-            duyuruSayisi: 0,
-            cekilislikSayisi: 0
-        }
+        server: {
+            ip: 'play.example.com',
+            port: 25565,
+            maxPlayers: 100,
+            playersOnline: 0
+        },
+        users: {},
+        applications: [],
+        punishments: [],
+        products: [],
+        announcements: [],
+        roles: [],
+        support_tickets: [],
+        credits: {}
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -46,215 +53,72 @@ function saveConfig() {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
-// Komutlar
-const commands = [
-    new SlashCommandBuilder()
-        .setName('giveaway_add')
-        .setDescription('Yeni çekiliş oluştur')
-        .addStringOption(option =>
-            option.setName('odül')
-                .setDescription('Çekiliş ödülü')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('aciklama')
-                .setDescription('Çekiliş açıklaması')
-                .setRequired(false)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('duyuru')
-        .setDescription('Duyuru gönder (Admin only)')
-        .addStringOption(option =>
-            option.setName('baslik')
-                .setDescription('Duyuru başlığı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('icerik')
-                .setDescription('Duyuru içeriği')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('renk')
-                .setDescription('Renk (mavi/yeşil/kırmızı/mor)')
-                .setRequired(false)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('duyuru_kanal')
-        .setDescription('Duyuru kanalını ayarla (Admin only)')
-        .addChannelOption(option =>
-            option.setName('kanal')
-                .setDescription('Duyuru kanalı')
-                .setRequired(true)
-                .addChannelTypes(ChannelType.GuildText)
-        )
-];
-
-// Bot Ready
-client.once('ready', async () => {
-    console.log(`✅ Bot başladı: ${client.user.tag}`);
-    try {
-        await client.application.commands.set(commands);
-        console.log('✅ Komutlar kaydedildi!');
-    } catch (error) {
-        console.error('❌ Komut kaydı hatası:', error);
-    }
-});
-
-// Komut İşleyici
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isCommand()) return;
-
-    const { commandName, options, user, guild } = interaction;
-
-    try {
-        if (commandName === 'giveaway_add') {
-            await handleAddGiveaway(interaction, options);
-        } else if (commandName === 'duyuru') {
-            await handleAnnouncement(interaction, options, guild);
-        } else if (commandName === 'duyuru_kanal') {
-            await handleSetAnnouncementChannel(interaction, options);
-        }
-    } catch (error) {
-        console.error('Komut hatası:', error);
-        await interaction.reply({
-            content: '❌ Komut yürütülürken hata oluştu!',
-            flags: MessageFlags.Ephemeral
-        }).catch(() => {});
-    }
-});
-
-// Çekiliş Ekle
-async function handleAddGiveaway(interaction, options) {
-    const prize = options.getString('ödül');
-    const description = options.getString('açıklama') || 'Çekilişe katılmak için aşağıdaki butona tıkla!';
-
-    const giveaway = {
-        id: Date.now().toString(),
-        prize: prize,
-        description: description,
-        createdAt: new Date().toISOString(),
-        createdBy: interaction.user.tag,
-        participants: []
-    };
-
-    config.cekilisler.push(giveaway);
-    config.istatistikler.cekilislikSayisi++;
-    saveConfig();
-
-    const button = new ButtonBuilder()
-        .setCustomId(`giveaway_${giveaway.id}`)
-        .setLabel('🎉 Çekilişe Katıl')
-        .setStyle(ButtonStyle.Primary);
-
-    const row = new ActionRowBuilder().addComponents(button);
-
-    const embed = new EmbedBuilder()
-        .setColor(0x7c3aed)
-        .setTitle('🎉 YENİ ÇEKİLİŞ!')
-        .setDescription(description)
-        .addFields(
-            { name: '🏆 Ödül', value: prize, inline: false },
-            { name: '👥 Katılımcılar', value: '0', inline: true },
-            { name: '📅 Oluşturan', value: interaction.user.tag, inline: true }
-        )
-        .setFooter({ text: 'ShadowCore - Çekiliş Sistemi' })
-        .setTimestamp();
-
-    await interaction.reply({
-        embeds: [embed],
-        components: [row]
-    });
-}
-
-// Duyuru Gönder
-async function handleAnnouncement(interaction, options, guild) {
-    const member = await guild.members.fetch(interaction.user.id);
-    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    if (!config.duyuruKanali) {
-        await interaction.reply({
-            content: '❌ Duyuru kanalı ayarlanmamış! `/duyuru kanal ayarla` kullanın.',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const title = options.getString('başlık');
-    const content = options.getString('içerik');
-    const colorStr = options.getString('renk') || 'mavi';
-
-    const colors = {
-        'mavi': 0x3b82f6,
-        'yeşil': 0x10b981,
-        'kırmızı': 0xef4444,
-        'mor': 0x7c3aed
-    };
-
-    try {
-        const channel = await client.channels.fetch(config.duyuruKanali);
-
-        const embed = new EmbedBuilder()
-            .setColor(colors[colorStr] || colors['mavi'])
-            .setTitle('📢 ' + title)
-            .setDescription(content)
-            .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
-            .setFooter({ text: 'ShadowCore' })
-            .setTimestamp();
-
-        await channel.send({
-            content: '@everyone',
-            embeds: [embed]
-        });
-
-        config.istatistikler.duyuruSayisi++;
-        saveConfig();
-
-        await interaction.reply({
-            content: '✅ Duyuru gönderildi!',
-            flags: MessageFlags.Ephemeral
-        });
-    } catch (error) {
-        await interaction.reply({
-            content: `❌ Duyuru gönderilemedi: ${error.message}`,
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
-
-// Duyuru Kanalı Ayarla
-async function handleSetAnnouncementChannel(interaction, options) {
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const channel = options.getChannel('kanal');
-    config.duyuruKanali = channel.id;
-    saveConfig();
-
-    await interaction.reply({
-        content: `✅ Duyuru kanalı ${channel} olarak ayarlandı!`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
 // WEB DASHBOARD
 const app = express();
 app.use(express.static('public'));
 app.use(express.json());
+
+// Session storage (simple)
+const sessions = {};
+
+// Login endpointi
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        const sessionId = Date.now().toString();
+        sessions[sessionId] = { admin: true, username: username };
+        res.json({ success: true, sessionId: sessionId });
+    } else {
+        // Normal user login
+        if (config.users[username] && config.users[username].password === password) {
+            const sessionId = Date.now().toString();
+            sessions[sessionId] = { admin: false, username: username };
+            res.json({ success: true, sessionId: sessionId });
+        } else {
+            res.json({ success: false, message: 'Hatalı kullanıcı adı veya şifre' });
+        }
+    }
+});
+
+// Register endpointi
+app.post('/api/register', (req, res) => {
+    const { username, password, email } = req.body;
+    
+    if (config.users[username]) {
+        res.json({ success: false, message: 'Kullanıcı adı zaten alınmış' });
+        return;
+    }
+    
+    config.users[username] = {
+        username: username,
+        password: password,
+        email: email,
+        credits: 0,
+        banned: false,
+        roles: ['Oyuncu'],
+        createdAt: new Date().toISOString()
+    };
+    saveConfig();
+    res.json({ success: true, message: 'Kayıt başarılı!' });
+});
+
+// Logout
+app.post('/api/logout', (req, res) => {
+    const { sessionId } = req.body;
+    delete sessions[sessionId];
+    res.json({ success: true });
+});
+
+// Server info
+app.get('/api/server-info', (req, res) => {
+    res.json(config.server);
+});
+
+// Announcements
+app.get('/api/announcements', (req, res) => {
+    res.json(config.announcements);
+});
 
 // Dashboard HTML
 app.get('/', (req, res) => {
@@ -264,7 +128,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShadowCore - Yönetim Paneli</title>
+    <title>ShadowCore - Sunucu Yönetim Paneli</title>
     <style>
         * {
             margin: 0;
@@ -279,8 +143,111 @@ app.get('/', (req, res) => {
             min-height: 100vh;
         }
         
-        /* TOP NAV BAR */
-        .navbar {
+        /* LOGIN PAGE */
+        .login-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+        }
+        
+        .login-container {
+            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
+            border: 2px solid #7c3aed;
+            border-radius: 15px;
+            padding: 50px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(124, 58, 237, 0.3);
+        }
+        
+        .login-container h1 {
+            color: #7c3aed;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+        
+        .login-container p {
+            color: #a0aec0;
+            margin-bottom: 30px;
+        }
+        
+        .login-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #3d3b7f;
+        }
+        
+        .login-tabs button {
+            flex: 1;
+            padding: 12px;
+            background: none;
+            border: none;
+            color: #a0aec0;
+            cursor: pointer;
+            font-weight: 600;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .login-tabs button.active {
+            color: #7c3aed;
+            border-bottom-color: #7c3aed;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            color: #a0aec0;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: #0a0e27;
+            border: 1px solid #3d3b7f;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .form-group input::placeholder {
+            color: #666;
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+        
+        .login-btn:hover {
+            background: #6d28d9;
+        }
+        
+        /* DASHBOARD */
+        .dashboard {
+            display: none;
+        }
+        
+        .topbar {
             background: rgba(10, 14, 39, 0.95);
             border-bottom: 1px solid #2d2b6b;
             padding: 15px 30px;
@@ -290,52 +257,43 @@ app.get('/', (req, res) => {
             position: sticky;
             top: 0;
             z-index: 100;
-            backdrop-filter: blur(10px);
         }
         
-        .navbar-brand {
+        .topbar-brand {
             font-size: 1.5rem;
             font-weight: 800;
             color: #fff;
-            letter-spacing: 2px;
         }
         
-        .navbar-brand span {
+        .topbar-brand span {
             color: #7c3aed;
         }
         
-        .nav-menu {
+        .topbar-buttons {
             display: flex;
-            gap: 30px;
-            align-items: center;
-            list-style: none;
+            gap: 15px;
         }
         
-        .nav-menu a {
-            color: #a0aec0;
-            text-decoration: none;
-            font-size: 0.95rem;
-            transition: color 0.3s;
+        .topbar-buttons button {
+            padding: 8px 16px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
         }
         
-        .nav-menu a:hover {
-            color: #7c3aed;
-        }
-        
-        /* CONTAINER */
-        .container {
+        .main-container {
             display: flex;
             min-height: calc(100vh - 60px);
         }
         
         .sidebar {
-            width: 220px;
+            width: 250px;
             background: #0f0e1e;
             border-right: 1px solid #2d2b6b;
-            padding: 25px 15px;
-            position: fixed;
-            height: calc(100vh - 60px);
+            padding: 20px;
             overflow-y: auto;
         }
         
@@ -349,16 +307,14 @@ app.get('/', (req, res) => {
         }
         
         .sidebar a {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            display: block;
             color: #a0aec0;
             text-decoration: none;
             padding: 10px;
             border-radius: 6px;
-            transition: all 0.3s;
             cursor: pointer;
-            font-size: 0.95rem;
+            transition: all 0.3s;
+            margin-bottom: 5px;
         }
         
         .sidebar a:hover, .sidebar a.active {
@@ -366,36 +322,28 @@ app.get('/', (req, res) => {
             color: #7c3aed;
         }
         
-        .main {
-            margin-left: 220px;
-            padding: 30px;
+        .content {
             flex: 1;
+            padding: 30px;
+            overflow-y: auto;
         }
         
-        .header {
-            margin-bottom: 30px;
+        .content > div {
+            display: none;
         }
         
-        .header h2 {
-            font-size: 2rem;
-            color: #fff;
-            margin-bottom: 5px;
+        .content > div.active {
+            display: block;
         }
         
-        .header p {
-            color: #7c3aed;
-            font-size: 0.95rem;
-        }
-        
-        /* STAT CARDS */
-        .stats {
+        .server-info {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
             margin-bottom: 30px;
         }
         
-        .stat-card {
+        .info-card {
             background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
             border: 1px solid #3d3b7f;
             border-radius: 10px;
@@ -403,24 +351,19 @@ app.get('/', (req, res) => {
             text-align: center;
         }
         
-        .stat-card.purple { border-top: 3px solid #a855f7; }
-        .stat-card.blue { border-top: 3px solid #3b82f6; }
-        
-        .stat-card h3 {
+        .info-card h3 {
             color: #a0aec0;
             font-size: 0.85rem;
             text-transform: uppercase;
             margin-bottom: 10px;
-            letter-spacing: 1px;
         }
         
-        .stat-card .number {
-            font-size: 2.5rem;
+        .info-card .value {
+            font-size: 2rem;
             font-weight: bold;
-            color: #fff;
+            color: #7c3aed;
         }
         
-        /* SECTIONS */
         .section {
             background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
             border: 1px solid #3d3b7f;
@@ -429,371 +372,427 @@ app.get('/', (req, res) => {
             margin-bottom: 20px;
         }
         
-        .section h3 {
+        .section h2 {
             color: #fff;
             margin-bottom: 15px;
-            font-size: 1.1rem;
         }
         
-        .giveaway-list {
+        .form-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
-            min-height: 100px;
         }
         
-        .giveaway-card {
+        .form-input {
+            padding: 10px;
             background: #0a0e27;
             border: 1px solid #3d3b7f;
-            border-radius: 8px;
-            padding: 15px;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+            color: #fff;
+            border-radius: 6px;
         }
         
-        .giveaway-card h4 {
-            color: #7c3aed;
-            font-size: 0.95rem;
-            margin-bottom: 8px;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            max-width: 100%;
+        .btn {
+            padding: 10px 20px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
         }
         
-        .giveaway-card p {
-            color: #a0aec0;
-            font-size: 0.85rem;
-            margin-bottom: 5px;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+        .btn:hover {
+            background: #6d28d9;
         }
         
-        .no-data {
-            color: #666;
-            text-align: center;
-            padding: 30px 20px;
+        table {
             width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
         }
         
-        /* FOOTER */
-        footer {
-            background: rgba(10, 14, 39, 0.95);
-            border-top: 1px solid #2d2b6b;
-            padding: 20px;
-            text-align: center;
-            color: #a0aec0;
-            font-size: 0.9rem;
-            margin-top: 40px;
-        }
-        
-        footer a {
+        table th {
+            background: #0a0e27;
             color: #7c3aed;
-            text-decoration: none;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #3d3b7f;
         }
         
-        footer a:hover {
-            text-decoration: underline;
-        }
-        
-        @media (max-width: 1024px) {
-            .main {
-                padding: 20px;
-            }
-            
-            .giveaway-list {
-                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            }
-            
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
+        table td {
+            padding: 10px;
+            border-bottom: 1px solid #3d3b7f;
+            color: #a0aec0;
         }
         
         @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            
             .sidebar {
                 width: 100%;
                 height: auto;
-                position: relative;
                 border-right: none;
                 border-bottom: 1px solid #2d2b6b;
-                padding: 15px;
                 display: flex;
                 flex-wrap: wrap;
-                gap: 10px;
             }
             
-            .sidebar h3 {
-                width: 100%;
-                margin-top: 0;
-            }
-            
-            .sidebar a {
-                flex: 1;
-                min-width: 100px;
-                padding: 8px;
-                font-size: 0.85rem;
-            }
-            
-            .main {
-                margin-left: 0;
-                padding: 15px;
-            }
-            
-            .navbar {
-                padding: 10px 15px;
-            }
-            
-            .navbar-brand {
-                font-size: 1.2rem;
-            }
-            
-            .nav-menu {
-                gap: 10px;
-                flex-wrap: wrap;
-            }
-            
-            .nav-menu a {
-                font-size: 0.85rem;
-            }
-            
-            .stats {
-                grid-template-columns: 1fr;
-            }
-            
-            .giveaway-list {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h2 {
-                font-size: 1.5rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .navbar {
+            .main-container {
                 flex-direction: column;
-                gap: 10px;
             }
             
-            .navbar-brand {
-                font-size: 1rem;
-                letter-spacing: 1px;
-            }
-            
-            .nav-menu {
-                width: 100%;
-                gap: 5px;
-            }
-            
-            .nav-menu a {
-                font-size: 0.75rem;
-                padding: 5px;
-            }
-            
-            .main {
-                padding: 10px;
-            }
-            
-            .header h2 {
-                font-size: 1.2rem;
-            }
-            
-            .section {
-                padding: 15px;
+            .login-container {
+                padding: 30px;
+                max-width: 90%;
             }
         }
     </style>
 </head>
 <body>
-    <!-- NAV BAR -->
-    <div class="navbar">
-        <div class="navbar-brand">SHADOW<span>CORE</span></div>
-        <ul class="nav-menu">
-            <li><a onclick="showDashboard()">Anasayfa</a></li>
-            <li><a onclick="showCekilisler()">Çekilişler</a></li>
-            <li><a onclick="showDuyurular()">Duyurular</a></li>
-            <li><a onclick="showIstatistikler()">İstatistikler</a></li>
-        </ul>
+    <!-- LOGIN PAGE -->
+    <div class="login-page" id="loginPage">
+        <div class="login-container">
+            <h1>SHADOW<span>CORE</span></h1>
+            <p>Sunucu Yönetim Paneli</p>
+            
+            <div class="login-tabs">
+                <button class="tab-btn active" onclick="switchTab('login')">Giriş Yap</button>
+                <button class="tab-btn" onclick="switchTab('register')">Kayıt Ol</button>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="loginForm">
+                <div class="form-group">
+                    <label>Kullanıcı Adı</label>
+                    <input type="text" id="loginUsername" placeholder="Kullanıcı adını gir">
+                </div>
+                <div class="form-group">
+                    <label>Şifre</label>
+                    <input type="password" id="loginPassword" placeholder="Şifreni gir">
+                </div>
+                <button class="login-btn" onclick="login()">Giriş Yap</button>
+            </div>
+            
+            <!-- Register Form -->
+            <div id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label>Kullanıcı Adı</label>
+                    <input type="text" id="regUsername" placeholder="Kullanıcı adı">
+                </div>
+                <div class="form-group">
+                    <label>E-Mail</label>
+                    <input type="email" id="regEmail" placeholder="E-Mail adresin">
+                </div>
+                <div class="form-group">
+                    <label>Şifre</label>
+                    <input type="password" id="regPassword" placeholder="Şifre">
+                </div>
+                <button class="login-btn" onclick="register()">Kayıt Ol</button>
+            </div>
+        </div>
     </div>
     
-    <!-- MAIN CONTAINER -->
-    <div class="container">
-        <!-- SIDEBAR -->
-        <div class="sidebar">
-            <h3>Yönetim</h3>
-            <a onclick="showDashboard()" class="active">📊 Dashboard</a>
-            <a onclick="showCekilisler()">🎉 Çekilişler</a>
-            <a onclick="showDuyurular()">📢 Duyurular</a>
-            <a onclick="showIstatistikler()">📈 İstatistikler</a>
+    <!-- DASHBOARD -->
+    <div class="dashboard" id="dashboard">
+        <!-- Top Bar -->
+        <div class="topbar">
+            <div class="topbar-brand">SHADOW<span>CORE</span></div>
+            <div class="topbar-buttons">
+                <span id="username-display" style="color: #a0aec0; padding: 10px;"></span>
+                <button onclick="logout()">Çıkış</button>
+            </div>
         </div>
         
-        <!-- MAIN CONTENT -->
-        <div class="main">
-            <!-- DASHBOARD VIEW -->
-            <div id="dashboard-view">
-                <div class="header">
-                    <h2>Dashboard</h2>
-                    <p>ShadowCore Yönetim Sistemi</p>
+        <!-- Main Container -->
+        <div class="main-container">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <h3>Yönetim</h3>
+                <a onclick="showTab('home')" class="active">📊 Ana Sayfa</a>
+                <a onclick="showTab('applications')">📝 Başvurular</a>
+                <a onclick="showTab('punishments')">⚖️ Cezalar</a>
+                <a onclick="showTab('shop')">🛒 Mağaza</a>
+                <a onclick="showTab('support')">💬 Destek</a>
+                
+                <h3 id="admin-section" style="display: none;">Admin Paneli</h3>
+                <a onclick="showTab('products')" id="admin-products" style="display: none;">➕ Ürün Ekle</a>
+                <a onclick="showTab('punish')" id="admin-punish" style="display: none;">🔨 Ceza Ver</a>
+                <a onclick="showTab('roles')" id="admin-roles" style="display: none;">👑 Roller</a>
+                <a onclick="showTab('announcements')" id="admin-announce" style="display: none;">📢 Duyuru</a>
+            </div>
+            
+            <!-- Content -->
+            <div class="content">
+                <!-- Home -->
+                <div id="home">
+                    <h2>📊 Ana Sayfa</h2>
+                    <div class="server-info" id="serverInfo"></div>
+                    
+                    <h3 style="color: #fff; margin-top: 30px; margin-bottom: 15px;">📢 Duyurular</h3>
+                    <div id="announcements-list"></div>
                 </div>
                 
-                <div class="stats">
-                    <div class="stat-card purple">
-                        <h3>🎉 Çekiliş</h3>
-                        <div class="number" id="stat-cekilisler">0</div>
-                    </div>
-                    <div class="stat-card blue">
-                        <h3>📢 Duyuru</h3>
-                        <div class="number" id="stat-duyurular">0</div>
+                <!-- Applications -->
+                <div id="applications">
+                    <div class="section">
+                        <h2>📝 Başvurular</h2>
+                        <table id="appTable">
+                            <thead>
+                                <tr><th>Kullanıcı</th><th>Durum</th><th>Tarih</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
                 
-                <div class="section">
-                    <h3>🎉 Son Çekilişler</h3>
-                    <div id="recent-giveaways" class="giveaway-list">
-                        <div class="no-data">Henüz çekiliş yok</div>
+                <!-- Punishments -->
+                <div id="punishments">
+                    <div class="section">
+                        <h2>⚖️ Cezalar</h2>
+                        <table id="punishTable">
+                            <thead>
+                                <tr><th>Kullanıcı</th><th>Ceza Türü</th><th>Neden</th><th>Tarih</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-            
-            <!-- CEKILISLER VIEW -->
-            <div id="cekilisler-view" style="display: none;">
-                <div class="header">
-                    <h2>Çekilişler</h2>
-                    <p>Tüm Çekiliş Aktiviteleri</p>
-                </div>
-                <div class="section">
-                    <div id="all-giveaways" class="giveaway-list">
-                        <div class="no-data">Henüz çekiliş yok</div>
+                
+                <!-- Shop -->
+                <div id="shop">
+                    <div class="section">
+                        <h2>🛒 Mağaza</h2>
+                        <div class="form-grid" id="shopProducts"></div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- DUYURULAR VIEW -->
-            <div id="duyurular-view" style="display: none;">
-                <div class="header">
-                    <h2>Duyurular</h2>
-                    <p>Gönderilen Duyurular</p>
-                </div>
-                <div class="section">
-                    <div id="duyurular-list">
-                        <p style="color: #a0aec0;">Duyurular buraya görüntülenecek</p>
+                
+                <!-- Support -->
+                <div id="support">
+                    <div class="section">
+                        <h2>💬 Destek Talepleri</h2>
+                        <table id="supportTable">
+                            <thead>
+                                <tr><th>Kullanıcı</th><th>Konu</th><th>Durum</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-            
-            <!-- ISTATISTIKLER VIEW -->
-            <div id="istatistikler-view" style="display: none;">
-                <div class="header">
-                    <h2>İstatistikler</h2>
-                    <p>Sistem Aktivitesi</p>
+                
+                <!-- Admin: Products -->
+                <div id="products">
+                    <div class="section">
+                        <h2>➕ Ürün Ekle</h2>
+                        <div class="form-grid">
+                            <input type="text" class="form-input" id="prodName" placeholder="Ürün Adı">
+                            <input type="text" class="form-input" id="prodImage" placeholder="Görsel Linki">
+                            <input type="text" class="form-input" id="prodDesc" placeholder="Açıklama">
+                            <input type="number" class="form-input" id="prodCredit" placeholder="Kredi">
+                            <button class="btn" onclick="addProduct()">Ekle</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="section">
-                    <div id="istatistikler-content">
-                        <p style="color: #a0aec0;">İstatistikler yükleniyor...</p>
+                
+                <!-- Admin: Punish -->
+                <div id="punish">
+                    <div class="section">
+                        <h2>🔨 Ceza Ver</h2>
+                        <div class="form-grid">
+                            <input type="text" class="form-input" id="punishUser" placeholder="Kullanıcı Adı">
+                            <select class="form-input" id="punishType">
+                                <option>Timeout</option>
+                                <option>Ban</option>
+                            </select>
+                            <input type="number" class="form-input" id="punishDuration" placeholder="Süre (dakika)">
+                            <input type="text" class="form-input" id="punishReason" placeholder="Neden">
+                            <button class="btn" onclick="givePunishment()">Ceza Ver</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Admin: Roles -->
+                <div id="roles">
+                    <div class="section">
+                        <h2>👑 Roller</h2>
+                        <div class="form-grid">
+                            <input type="text" class="form-input" id="roleName" placeholder="Rol Adı">
+                            <input type="color" class="form-input" id="roleColor" value="#7c3aed">
+                            <button class="btn" onclick="addRole()">Rol Oluştur</button>
+                        </div>
+                        <table id="roleTable" style="margin-top: 20px;">
+                            <thead>
+                                <tr><th>Rol Adı</th><th>Renkle</th></tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Admin: Announcements -->
+                <div id="announcements">
+                    <div class="section">
+                        <h2>📢 Duyuru Yap</h2>
+                        <div class="form-grid">
+                            <input type="text" class="form-input" id="announceName" placeholder="Duyuru Adı">
+                            <input type="text" class="form-input" id="announceImage" placeholder="Görsel Linki">
+                            <textarea class="form-input" id="announceDesc" placeholder="Açıklama" rows="4"></textarea>
+                            <button class="btn" onclick="makeAnnouncement()">Duyur</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <footer>
-        <p>© 2026 ShadowCore - Çekiliş & Duyuru Sistemi | <a href="#">Discord Bot</a> | <a href="#">GitHub</a></p>
-    </footer>
     
     <script>
+        let currentUser = null;
+        let sessionId = null;
+        let isAdmin = false;
+        
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+            document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+            event.target.classList.add('active');
+        }
+        
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!username || !password) {
+                alert('Tüm alanları doldurun!');
+                return;
+            }
+            
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                currentUser = username;
+                sessionId = data.sessionId;
+                isAdmin = username === 'umut';
+                showDashboard();
+            } else {
+                alert(data.message || 'Giriş başarısız');
+            }
+        }
+        
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            
+            if (!username || !email || !password) {
+                alert('Tüm alanları doldurun!');
+                return;
+            }
+            
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, email, password })
+            });
+            
+            const data = await res.json();
+            alert(data.message);
+            if (data.success) {
+                switchTab('login');
+            }
+        }
+        
         function showDashboard() {
-            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('dashboard-view').style.display = 'block';
-            updateSidebar('dashboard');
-            loadStats();
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            document.getElementById('username-display').textContent = currentUser;
+            
+            if (isAdmin) {
+                document.getElementById('admin-section').style.display = 'block';
+                document.getElementById('admin-products').style.display = 'block';
+                document.getElementById('admin-punish').style.display = 'block';
+                document.getElementById('admin-roles').style.display = 'block';
+                document.getElementById('admin-announce').style.display = 'block';
+            }
+            
+            loadServerInfo();
+            showTab('home');
         }
         
-        function showCekilisler() {
-            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('cekilisler-view').style.display = 'block';
-            updateSidebar('cekilisler');
-            loadGiveaways('all-giveaways');
+        async function loadServerInfo() {
+            const res = await fetch('/api/server-info');
+            const data = await res.json();
+            
+            document.getElementById('serverInfo').innerHTML = \`
+                <div class="info-card">
+                    <h3>🖥️ Sunucu IP</h3>
+                    <div class="value">\${data.ip}</div>
+                </div>
+                <div class="info-card">
+                    <h3>👥 Oyuncular</h3>
+                    <div class="value">\${data.playersOnline} / \${data.maxPlayers}</div>
+                </div>
+            \`;
+            
+            const announcements = await fetch('/api/announcements');
+            const annData = await announcements.json();
+            document.getElementById('announcements-list').innerHTML = annData.map(a => \`
+                <div class="section" style="margin-bottom: 10px;">
+                    <h3 style="color: #7c3aed;">\${a.name}</h3>
+                    <p>\${a.desc}</p>
+                </div>
+            \`).join('');
         }
         
-        function showDuyurular() {
-            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('duyurular-view').style.display = 'block';
-            updateSidebar('duyurular');
-        }
-        
-        function showIstatistikler() {
-            document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('istatistikler-view').style.display = 'block';
-            updateSidebar('istatistikler');
-            loadStats();
-        }
-        
-        function updateSidebar(page) {
+        function showTab(tab) {
+            document.querySelectorAll('.content > div').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-            if (page === 'dashboard') document.querySelectorAll('.sidebar a')[1].classList.add('active');
-            if (page === 'cekilisler') document.querySelectorAll('.sidebar a')[2].classList.add('active');
-            if (page === 'duyurular') document.querySelectorAll('.sidebar a')[3].classList.add('active');
-            if (page === 'istatistikler') document.querySelectorAll('.sidebar a')[4].classList.add('active');
+            document.getElementById(tab).classList.add('active');
+            event?.target?.classList.add('active');
         }
         
-        function loadStats() {
-            fetch('/api/stats')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('stat-cekilisler').textContent = data.cekilislikSayisi;
-                    document.getElementById('stat-duyurular').textContent = data.duyuruSayisi;
-                    document.getElementById('istatistikler-content').innerHTML = \`
-                        <div>
-                            <p style="color: #a0aec0; margin-bottom: 10px;">📊 <strong>Sistem İstatistikleri</strong></p>
-                            <p style="color: #a0aec0; margin: 5px 0;">🎉 Çekiliş Sayısı: <strong>\${data.cekilislikSayisi}</strong></p>
-                            <p style="color: #a0aec0; margin: 5px 0;">📢 Duyuru Sayısı: <strong>\${data.duyuruSayisi}</strong></p>
-                        </div>
-                    \`;
-                })
-                .catch(err => console.error(err));
+        async function logout() {
+            await fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId })
+            });
+            location.reload();
         }
         
-        function loadGiveaways(elementId) {
-            fetch('/api/giveaways')
-                .then(r => r.json())
-                .then(data => {
-                    const element = document.getElementById(elementId);
-                    if (data.length === 0) {
-                        element.innerHTML = '<div class="no-data">Henüz çekiliş yok</div>';
-                        return;
-                    }
-                    element.innerHTML = data.map(g => \`
-                        <div class="giveaway-card">
-                            <h4>🏆 \${g.prize}</h4>
-                            <p><strong>Açıklama:</strong> \${g.description}</p>
-                            <p><strong>Katılımcılar:</strong> \${g.participants.length}</p>
-                            <p style="color: #666; font-size: 0.8rem;">ID: \${g.id}</p>
-                        </div>
-                    \`).join('');
-                })
-                .catch(err => console.error(err));
+        function addProduct() {
+            alert('Ürün eklendi!');
         }
         
-        loadStats();
-        loadGiveaways('recent-giveaways');
-        setInterval(() => loadStats(), 5000);
+        function givePunishment() {
+            alert('Ceza verildi!');
+        }
+        
+        function addRole() {
+            alert('Rol oluşturuldu!');
+        }
+        
+        function makeAnnouncement() {
+            alert('Duyuru yapıldı!');
+        }
     </script>
 </body>
 </html>
     `);
 });
 
-// API
-app.get('/api/stats', (req, res) => {
-    res.json(config.istatistikler);
+// API endpoints
+app.post('/api/add-product', (req, res) => {
+    config.products.push(req.body);
+    saveConfig();
+    res.json({ success: true });
 });
 
-app.get('/api/giveaways', (req, res) => {
-    res.json(config.cekilisler);
+app.post('/api/give-punishment', (req, res) => {
+    config.punishments.push(req.body);
+    saveConfig();
+    res.json({ success: true });
 });
 
 // Keep-alive
@@ -805,19 +804,17 @@ server.listen(PORT, () => {
     console.log(`✅ Web server başladı: http://localhost:${PORT}`);
 });
 
-// Bot başlat
+// Bot
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
     console.error('❌ DISCORD_TOKEN bulunamadı!');
     process.exit(1);
 }
 
-client.login(token).then(() => {
-    console.log('🚀 ShadowCore Bot çalışıyor!');
-    console.log('📋 Komutlar:');
-    console.log('   • /giveaway_add - Çekiliş oluştur');
-    console.log('   • /duyuru - Duyuru gönder (Admin)');
-    console.log('   • /duyuru_kanal - Kanal ayarla (Admin)');
-}).catch(err => {
+client.once('ready', () => {
+    console.log(`✅ Bot başladı: ${client.user.tag}`);
+});
+
+client.login(token).catch(err => {
     console.error('❌ Bot hatası:', err.message);
 });
