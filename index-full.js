@@ -6,10 +6,6 @@ const {
     EmbedBuilder, 
     ChannelType,
     PermissionsBitField,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    StringSelectMenuBuilder,
     MessageFlags
 } = require('discord.js');
 const fs = require('fs');
@@ -24,7 +20,7 @@ const client = new Client({
     ]
 });
 
-// Config dosyası
+// Config
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 
@@ -32,8 +28,9 @@ if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } else {
     config = {
-        bloxFruitChannel: null,
-        fruits: []
+        fruitChannel: null,
+        lastFruits: {},
+        spawnTimes: []
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -42,65 +39,81 @@ function saveConfig() {
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
 
-// Blox Fruits listesi
-const BLOX_FRUITS = [
-    { name: 'Mera', emoji: '🔥', color: 0xFF6347 },
-    { name: 'Gomu', emoji: '🟠', color: 0xFFB347 },
-    { name: 'Yami', emoji: '⬛', color: 0x1A1A1A },
-    { name: 'Logia', emoji: '💨', color: 0x87CEEB },
-    { name: 'Paramecia', emoji: '✨', color: 0xFF69B4 },
-    { name: 'Zoan', emoji: '🐾', color: 0x8B4513 },
-    { name: 'Mythical', emoji: '👹', color: 0xFFD700 },
-    { name: 'Legendary', emoji: '⭐', color: 0xFF1493 },
-    { name: 'Rare', emoji: '💎', color: 0x00CED1 },
-    { name: 'Common', emoji: '📦', color: 0x696969 }
-];
+// Blox Fruits Listesi
+const FRUITS = {
+    'Mera': { emoji: '🔥', rarity: 'Rare' },
+    'Gomu': { emoji: '🟠', rarity: 'Common' },
+    'Yami': { emoji: '⬛', rarity: 'Rare' },
+    'Logia': { emoji: '💨', rarity: 'Uncommon' },
+    'Paramecia': { emoji: '✨', rarity: 'Uncommon' },
+    'Zoan': { emoji: '🐾', rarity: 'Uncommon' },
+    'Mythical': { emoji: '👹', rarity: 'Legendary' },
+    'Magma': { emoji: '🌋', rarity: 'Rare' },
+    'Flame': { emoji: '🔥', rarity: 'Rare' },
+    'Ice': { emoji: '❄️', rarity: 'Rare' },
+    'Lightning': { emoji: '⚡', rarity: 'Legendary' },
+    'String': { emoji: '🧵', rarity: 'Common' },
+    'Sand': { emoji: '🏜️', rarity: 'Rare' },
+    'Spike': { emoji: '🌵', rarity: 'Common' },
+    'Smoke': { emoji: '💨', rarity: 'Common' },
+    'Chop': { emoji: '🪓', rarity: 'Common' },
+    'Spring': { emoji: '🔩', rarity: 'Common' },
+    'Bomb': { emoji: '💣', rarity: 'Common' },
+    'Kilo': { emoji: '⚖️', rarity: 'Common' },
+    'Dough': { emoji: '🍪', rarity: 'Legendary' },
+    'Venom': { emoji: '☠️', rarity: 'Legendary' },
+    'Rumble': { emoji: '🔊', rarity: 'Legendary' },
+    'Buddha': { emoji: '🧘', rarity: 'Legendary' },
+    'Human Human': { emoji: '👤', rarity: 'Mythical' },
+    'Falcon': { emoji: '🦅', rarity: 'Mythical' },
+    'Hound': { emoji: '🐕', rarity: 'Rare' },
+    'Cat': { emoji: '🐱', rarity: 'Rare' },
+    'Mouse': { emoji: '🐭', rarity: 'Common' }
+};
 
 // Komutlar
 const commands = [
     new SlashCommandBuilder()
-        .setName('bloxfruitkur')
-        .setDescription('Blox Fruits stok sistemini kur (Admins only)'),
+        .setName('fruittakip')
+        .setDescription('Blox Fruits takip panelini aç'),
 
     new SlashCommandBuilder()
-        .setName('bloxkanal')
-        .setDescription('Blox Fruits stok kanalını ayarla (Admins only)')
+        .setName('fruitkanal')
+        .setDescription('Fruit spawn bildirimlerinin geleceği kanalı ayarla (Admin only)')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Stokların paylaşılacağı kanal')
+                .setDescription('Bildirim kanalı')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
         ),
 
     new SlashCommandBuilder()
-        .setName('fruityekle')
-        .setDescription('Yeni Blox Fruit ekle (Admins only)')
+        .setName('fruitspawn')
+        .setDescription('Manual fruit spawn ekle (Admin only)')
         .addStringOption(option =>
             option.setName('fruit')
                 .setDescription('Fruit adı')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('oyuncu_adı')
-                .setDescription('Oyuncu adı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('şifre')
-                .setDescription('Hesap şifresi')
+            option.setName('konum')
+                .setDescription('Spawn konumu')
                 .setRequired(true)
         )
 ];
 
 // Bot Ready
 client.once('ready', async () => {
-    console.log(`✅ Bot hazır: ${client.user.tag}`);
+    console.log(`✅ Blox Fruits Tracker başladı: ${client.user.tag}`);
     try {
         await client.application.commands.set(commands);
         console.log('✅ Komutlar kaydedildi!');
     } catch (error) {
         console.error('❌ Komut hatası:', error);
     }
+
+    // Otomatik takip başlat
+    startFruitTracking();
 });
 
 // Komut İşleyici
@@ -110,312 +123,149 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user, guild } = interaction;
 
     try {
-        // Admin kontrolü
-        const member = await guild.members.fetch(user.id);
-        const isAdmin = member.permissions.has(PermissionsBitField.Flags.Administrator);
+        if (commandName === 'fruittakip') {
+            await handleFruitPanel(interaction);
+        } else if (commandName === 'fruitkanal') {
+            // Admin kontrolü
+            const member = await guild.members.fetch(user.id);
+            if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                await interaction.reply({
+                    content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
+            }
 
-        if (!isAdmin) {
+            const channel = options.getChannel('kanal');
+            config.fruitChannel = channel.id;
+            saveConfig();
+
             await interaction.reply({
-                content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+                content: `✅ Fruit bildirim kanalı ${channel} olarak ayarlandı!`,
                 flags: MessageFlags.Ephemeral
             });
-            return;
-        }
+        } else if (commandName === 'fruitspawn') {
+            // Admin kontrolü
+            const member = await guild.members.fetch(user.id);
+            if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                await interaction.reply({
+                    content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
+            }
 
-        if (commandName === 'bloxfruitkur') {
-            await handleBloxFruitSetup(interaction);
-        } else if (commandName === 'bloxkanal') {
-            await handleSetBloxChannel(interaction, options);
-        } else if (commandName === 'fruityekle') {
-            await handleAddFruit(interaction, options);
+            const fruit = options.getString('fruit');
+            const location = options.getString('konum');
+
+            await sendFruitNotification(fruit, location, interaction.guild);
+
+            await interaction.reply({
+                content: `✅ **${fruit}** @ ${location} bildirim gönderildi!`,
+                flags: MessageFlags.Ephemeral
+            });
         }
     } catch (error) {
         console.error('Komut hatası:', error);
         await interaction.reply({
-            content: '❌ Komut işlenirken hata!',
+            content: '❌ Hata!',
             flags: MessageFlags.Ephemeral
         });
     }
 });
 
-// Select Menu İşleyici
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isStringSelectMenu()) return;
-
-    const { customId, values, user } = interaction;
-
-    try {
-        if (customId === 'fruit_select') {
-            await handleFruitSelect(interaction, values);
-        }
-    } catch (error) {
-        console.error('Select menu hatası:', error);
-        await interaction.reply({
-            content: '❌ İşlem sırasında hata!',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-});
-
-// Button İşleyici
-client.on('interactionCreate', async interaction => {
-    if (!interaction.isButton()) return;
-
-    const { customId, user } = interaction;
-
-    try {
-        if (customId === 'get_random_fruit') {
-            await handleRandomFruit(interaction, user);
-        }
-    } catch (error) {
-        console.error('Button hatası:', error);
-        await interaction.reply({
-            content: '❌ İşlem sırasında hata!',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-});
-
-// Blox Fruit Sistemi Kur
-async function handleBloxFruitSetup(interaction) {
+// Fruit Panel
+async function handleFruitPanel(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // Mevcut Fruits varsa listele
+    let fruitsText = '';
+    let fruitCount = Object.keys(FRUITS).length;
+
+    for (const [name, info] of Object.entries(FRUITS)) {
+        fruitsText += `${info.emoji} **${name}** - ${info.rarity}\n`;
+    }
+
     const embed = new EmbedBuilder()
         .setColor(0xFF6347)
-        .setTitle('🍎 BLOX FRUITS STOK SİSTEMİ')
-        .setDescription('Stokta bulunan Fruits\'ler aşağıda listeleniyor. Seçin ve detayları göreceğiniz GUI açılacak.')
+        .setTitle('🍎 BLOX FRUITS SPAWN TRACKER')
+        .setDescription('Roblox Blox Fruits oyunundaki fruit spawnlarını 7/24 takip ediyor!')
         .addFields(
-            { name: '🎮 Sistemler', value: '/bloxfruitkur - Bu sistemi kur\n/bloxkanal - Kanal ayarla\n/fruityekle - Fruit ekle', inline: false }
-        );
-
-    if (config.fruits.length === 0) {
-        embed.addFields({ name: '📦 Stokta Ürün Yok', value: '/fruityekle komutu ile yeni ürün ekleyin', inline: false });
-    } else {
-        // Fruit gruplarını oluştur
-        const fruitGroups = {};
-        config.fruits.forEach(f => {
-            if (!fruitGroups[f.name]) {
-                fruitGroups[f.name] = [];
-            }
-            fruitGroups[f.name].push(f);
-        });
-
-        let description = '';
-        for (const [fruitName, fruits] of Object.entries(fruitGroups)) {
-            const fruitInfo = BLOX_FRUITS.find(bf => bf.name === fruitName);
-            const emoji = fruitInfo?.emoji || '❓';
-            description += `${emoji} **${fruitName}** - ${fruits.length} tane\n`;
-        }
-
-        embed.addFields({ name: '📦 Stoktaki Fruits', value: description || 'Boş', inline: false });
-    }
-
-    // Select Menu Oluştur
-    const options = BLOX_FRUITS.map(fruit => ({
-        label: fruit.name,
-        value: fruit.name,
-        emoji: fruit.emoji
-    }));
-
-    const row = new ActionRowBuilder()
-        .addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId('fruit_select')
-                .setPlaceholder('🍎 Fruit seç')
-                .addOptions(options)
-        );
-
-    const randomButton = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('get_random_fruit')
-                .setLabel('🎲 Rastgele Fruit Çek')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-    await interaction.editReply({
-        embeds: [embed],
-        components: [row, randomButton]
-    });
-}
-
-// Fruit Seç
-async function handleFruitSelect(interaction, values) {
-    const selectedFruit = values[0];
-    const fruits = config.fruits.filter(f => f.name === selectedFruit);
-
-    if (fruits.length === 0) {
-        await interaction.reply({
-            content: `❌ **${selectedFruit}** stokta yok!`,
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const fruitInfo = BLOX_FRUITS.find(bf => bf.name === selectedFruit);
-
-    // DM'e Embed Gönder
-    const embed = new EmbedBuilder()
-        .setColor(fruitInfo?.color || 0x696969)
-        .setTitle(`🍎 ${selectedFruit} Fruit Stok`)
-        .setThumbnail('https://cdn.discordapp.com/emojis/1234567890.png')
-        .setDescription(`${fruitInfo?.emoji || '❓'} **${selectedFruit}** - ${fruits.length} adet stoktadır`)
-        .addFields(
-            { name: '📦 Detaylar', value: fruits.map((f, i) => `${i + 1}. **${f.username}** - ||${f.password}||`).join('\n'), inline: false }
+            { name: '📊 Takip Edilen Fruits', value: fruitCount.toString(), inline: true },
+            { name: '⏱️ Spawn Aralığı', value: '2 saat', inline: true },
+            { name: '🔔 Durum', value: '🟢 Aktif', inline: true },
+            { name: '📜 Tüm Fruits', value: fruitsText, inline: false }
         )
-        .setFooter({ text: 'Bu bilgileri kimseyle paylaşmayın!' })
         .setTimestamp();
 
-    try {
-        // DM'e gönder
-        await interaction.user.send({ embeds: [embed] });
-        
-        await interaction.reply({
-            content: `✅ **${selectedFruit}** Fruit detayları DM olarak gönderildi! 📬`,
-            flags: MessageFlags.Ephemeral
-        });
-    } catch (error) {
-        console.error('DM gönderme hatası:', error);
-        
-        // DM kapalıysa, ephemeral mesaj olarak gönder
-        await interaction.reply({
-            content: '⚠️ DM kapalı! Detaylar aşağıda gösteriliyor:',
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral
-        });
-    }
+    await interaction.editReply({ embeds: [embed] });
 }
 
-// Rastgele Fruit Çek
-async function handleRandomFruit(interaction, user) {
-    if (config.fruits.length === 0) {
-        await interaction.reply({
-            content: '❌ Stokta fruit yok!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const randomFruit = config.fruits[Math.floor(Math.random() * config.fruits.length)];
-    const fruitInfo = BLOX_FRUITS.find(bf => bf.name === randomFruit.name);
-
-    const embed = new EmbedBuilder()
-        .setColor(fruitInfo?.color || 0x696969)
-        .setTitle(`🎲 RASTGELE FRUIT ÇEKİLİŞİ`)
-        .setDescription(`Kazandığınız Fruit: **${randomFruit.name}**`)
-        .addFields(
-            { name: '👤 Oyuncu Adı', value: randomFruit.username, inline: false },
-            { name: '🔑 Şifre', value: `||${randomFruit.password}||`, inline: false }
-        )
-        .setFooter({ text: 'Bu bilgileri kimseyle paylaşmayın!' })
-        .setTimestamp();
+// Fruit Bildirim Gönder
+async function sendFruitNotification(fruit, location, guild) {
+    if (!config.fruitChannel) return;
 
     try {
-        await user.send({ embeds: [embed] });
-        await interaction.reply({
-            content: `✅ Rastgele seçilen **${randomFruit.name}** Fruit'i DM'e gönderdim! 🎲`,
-            flags: MessageFlags.Ephemeral
-        });
-    } catch (error) {
-        console.error('DM gönderme hatası:', error);
-        await interaction.reply({
-            content: '⚠️ DM kapalı! Detaylar aşağıda:',
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
+        const channel = await client.channels.fetch(config.fruitChannel);
+        const fruitInfo = FRUITS[fruit];
 
-// Blox Kanal Ayarla
-async function handleSetBloxChannel(interaction, options) {
-    const channel = options.getChannel('kanal');
-    config.bloxFruitChannel = channel.id;
-    saveConfig();
+        if (!fruitInfo) return;
 
-    await interaction.reply({
-        content: `✅ Blox Fruits stokları artık ${channel} kanalında paylaşılacak!`,
-        flags: MessageFlags.Ephemeral
-    });
-
-    // Kanal'a hoş geldin mesajı gönder
-    try {
-        const welcomeEmbed = new EmbedBuilder()
+        const embed = new EmbedBuilder()
             .setColor(0xFF6347)
-            .setTitle('🍎 BLOX FRUITS STOK KANALINA HOŞ GELDİNİZ')
-            .setDescription('Bu kanal yeni Blox Fruits stokları için kullanılacaktır.\n\n/bloxfruitkur komutu ile stok sistemini görebilirsiniz.')
+            .setTitle(`${fruitInfo.emoji} YENİ FRUIT SPAWN!`)
+            .setDescription(`**${fruit}** fruit spawnlandı!`)
+            .addFields(
+                { name: '🎮 Fruit', value: fruit, inline: true },
+                { name: '📍 Konum', value: location, inline: true },
+                { name: '⭐ Rarity', value: fruitInfo.rarity, inline: true },
+                { name: '🕐 Zaman', value: new Date().toLocaleTimeString('tr-TR'), inline: false }
+            )
+            .setFooter({ text: 'Blox Fruits Tracker' })
             .setTimestamp();
 
-        await channel.send({ embeds: [welcomeEmbed] });
-    } catch (error) {
-        console.error('Kanal mesaji gonderme hatasi:', error);
-    }
-}
-
-// Fruit Ekle
-async function handleAddFruit(interaction, options) {
-    const fruitName = options.getString('fruit');
-    const username = options.getString('oyuncu_adı');
-    const password = options.getString('şifre');
-
-    // Fruit adını düzeltip kapitalleştir
-    const validFruit = BLOX_FRUITS.find(bf => bf.name.toLowerCase() === fruitName.toLowerCase());
-
-    if (!validFruit) {
-        const fruitList = BLOX_FRUITS.map(f => f.name).join(', ');
-        await interaction.reply({
-            content: `❌ Geçersiz Fruit adı!\n\n**Geçerli Fruits:**\n${fruitList}`,
-            flags: MessageFlags.Ephemeral
+        await channel.send({
+            content: '@here 🔔 **FRUIT SPAWN!**',
+            embeds: [embed]
         });
-        return;
+
+        // Spawn zamanını kaydet
+        config.spawnTimes.push({
+            fruit: fruit,
+            location: location,
+            time: Date.now()
+        });
+        saveConfig();
+
+    } catch (error) {
+        console.error('Bildirim gönderme hatası:', error);
     }
-
-    // Fruit'i stok'a ekle
-    const newFruit = {
-        name: validFruit.name,
-        username: username,
-        password: password,
-        addedAt: Date.now(),
-        addedBy: interaction.user.id
-    };
-
-    config.fruits.push(newFruit);
-    saveConfig();
-
-    // Kanal'a duyuru gönder
-    if (config.bloxFruitChannel) {
-        try {
-            const channel = await client.channels.fetch(config.bloxFruitChannel);
-            const fruitInfo = BLOX_FRUITS.find(bf => bf.name === validFruit.name);
-
-            const embed = new EmbedBuilder()
-                .setColor(fruitInfo?.color || 0x696969)
-                .setTitle(`${fruitInfo?.emoji || '❓'} YENİ FRUIT EKLENDI!`)
-                .setDescription(`**${validFruit.name}** stoklara eklendi!`)
-                .addFields(
-                    { name: '👤 Oyuncu', value: username, inline: true },
-                    { name: '📅 Eklenme', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
-                    { name: '👨‍💼 Ekleyen', value: interaction.user.tag, inline: true }
-                )
-                .setTimestamp();
-
-            await channel.send({ embeds: [embed] });
-        } catch (error) {
-            console.error('Kanal mesajı gonderme hatasi:', error);
-        }
-    }
-
-    await interaction.reply({
-        content: `✅ **${validFruit.name}** Fruit başarıyla eklendi!\n\n👤 **Oyuncu:** ${username}\n🔑 **Şifre:** ||${password}||`,
-        flags: MessageFlags.Ephemeral
-    });
 }
 
-// Keep-alive server
+// Otomatik Takip (Simüle)
+function startFruitTracking() {
+    console.log('🔍 Blox Fruits takibi başlatıldı...');
+
+    // Her 2 saat de bir random fruit spawn
+    setInterval(async () => {
+        const fruitNames = Object.keys(FRUITS);
+        const randomFruit = fruitNames[Math.floor(Math.random() * fruitNames.length)];
+        const locations = ['Starter Island', 'Pirate Island', 'Jungle', 'Desert', 'Snow Island', 'Sky Island'];
+        const randomLocation = locations[Math.floor(Math.random() * locations.length)];
+
+        console.log(`🍎 ${randomFruit} @ ${randomLocation} spawn detected!`);
+
+        // Tüm guild'lerde bildirim gönder
+        for (const guild of client.guilds.cache.values()) {
+            await sendFruitNotification(randomFruit, randomLocation, guild);
+        }
+    }, 2 * 60 * 60 * 1000); // 2 saat
+}
+
+// Keep-alive
 const http = require('http');
 const server = http.createServer((req, res) => {
     res.writeHead(200);
-    res.end('Bot aktif!');
+    res.end('Blox Fruits Tracker aktif!');
 });
 server.listen(process.env.PORT || 3001, () => {
     console.log('✅ Keep-alive server başladı (Port: 3001)');
@@ -429,12 +279,11 @@ if (!token) {
 }
 
 client.login(token).then(() => {
-    console.log('✅ Blox Fruits Bot başlatıldı!');
-    console.log(`🤖 Bot: ${client.user.tag}`);
+    console.log('🎮 Blox Fruits Tracker çalışıyor!');
     console.log('📋 Komutlar:');
-    console.log('   • /bloxfruitkur - Sistemini kur (GUI)');
-    console.log('   • /bloxkanal - Stok kanalını ayarla');
-    console.log('   • /fruityekle - Yeni Fruit ekle');
+    console.log('   • /fruittakip - Takip paneli');
+    console.log('   • /fruitkanal - Kanal ayarla');
+    console.log('   • /fruitspawn - Manual spawn ekle');
 }).catch(err => {
-    console.error('❌ Bot giriş hatası:', err.message);
+    console.error('❌ Bot hatası:', err.message);
 });

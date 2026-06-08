@@ -1,182 +1,93 @@
-# 🍎 Roblox Blox Fruits Stok Bot
+# 🍎 Roblox Blox Fruits Spawn Tracker Bot
 
-Discord sunucunuzda Roblox Blox Fruits hesaplarını yönetip paylaşan bot.
-
-## 🚀 Başlıyoruz!
-
-**EN KOLAY: Railway.app ile (Önerilen!)**
-
-```bash
-# 1. Railway.app aç: https://railway.app
-# 2. GitHub ile giriş yap
-# 3. Repository seç
-# 4. Token ekle
-# 5. Deploy et
-
-# Tamamlandı! Bot 24/7 çalışıyor 🎉
-```
-
-📖 **Detaylı:** [RAILWAY-KURULUM.md](./RAILWAY-KURULUM.md)
-
----
-
-**Diğer Seçenekler:**
-
-- 💻 Bilgisayarda: `npm install && npm start`
-- ☁️ Render: [BAŞLAT.md](./BAŞLAT.md)
-- 🔄 GitHub Actions: [GITHUB-NASIL-KULLANILIR.md](./GITHUB-NASIL-KULLANILIR.md)
-
----
-
-## 📋 Komutlar
-
-### `/bloxfruitkur`
-Blox Fruits yönetim panelini açar.
-- Select menu ile Fruit seç
-- Rastgele Fruit çek
-- Detayları DM'e gönder
-
-### `/bloxkanal <kanal>`
-Stok kanalını ayarlar.
-- Yeni Fruit eklenince otomatik duyuru
-- Örnek: `/bloxkanal kanal: #stok`
-
-### `/fruityekle <fruit> <oyuncu_adı> <şifre>`
-Yeni Fruit ekler.
-- Örnek: `/fruityekle fruit: Mera oyuncu_adı: player123 şifre: pass123`
-
----
-
-## 🎮 Desteklenen Fruits
-
-- 🔥 Mera
-- 🟠 Gomu
-- ⬛ Yami
-- 💨 Logia
-- ✨ Paramecia
-- 🐾 Zoan
-- 👹 Mythical
-- ⭐ Legendary
-- 💎 Rare
-- 📦 Common
-
----
+Discord'da Roblox Blox Fruits oyunundaki fruit spawnlarını 7/24 takip eden bot.
 
 ## ✨ Özellikler
 
-### 🎯 Select Menu GUI
-- Dropdown'dan Fruit seç
-- Her Fruit için emoji
-- Stok sayısı göster
+- 🔔 **Real-time Bildirim** - Fruit spawn olunca anında Discord'a haber ver
+- 📊 **Otomatik Takip** - Her 2 saatte bir fruit spawn kontrolü
+- 🎮 **27+ Fruit Desteği** - Tüm Blox Fruits mevcut
+- ⚡ **Komut Tabanlı Yönetim** - Admin komutları ile kontrol et
+- 📍 **Konum Bilgisi** - Spawn konumunu belirt
 
-### 🎲 Rastgele Çekiliş
-- "Rastgele Fruit Çek" butonu
-- DM'e sonuç gönder
+## 🚀 Komutlar
 
-### 📬 DM Gönderme
-- Detayları kullanıcının DM'ine gönder
-- DM kapalıysa ephemeral mesaj
-- Güvenli şifre gösterimi
+### `/fruittakip`
+Blox Fruits takip panelini açar.
+- Takip edilen fruits listesi
+- Spawn aralığı bilgisi
+- Sistem durumu
 
-### 📢 Kanal Duyuruları
-- Yeni Fruit ekleme bildirimi
-- Renkli embed'ler
-- Ekleyen ve tarih bilgisi
+### `/fruitkanal <kanal>`
+Fruit spawn bildirimlerinin geleceği kanalı ayarlar.
+- Örnek: `/fruitkanal kanal: #fruit-spawnlar`
 
----
+### `/fruitspawn <fruit> <konum>`
+Manuel olarak fruit spawn ekler.
+- Örnek: `/fruitspawn fruit: Mera konum: Starter Island`
 
-## 🔧 Teknik Özellikler
+## 📋 Desteklenen Fruits
 
-- **Runtime:** Node.js 18+
-- **Framework:** Discord.js v14
-- **Database:** JSON (config.json)
-- **Hosting:** Kendi bilgisayar / GitHub Actions / Render
+🔥 Mera • 🟠 Gomu • ⬛ Yami • 💨 Logia • ✨ Paramecia • 🐾 Zoan • 👹 Mythical • 🌋 Magma • 🔥 Flame • ❄️ Ice • ⚡ Lightning • 🧵 String • 🏜️ Sand • 🌵 Spike • 💨 Smoke • 🪓 Chop • 🔩 Spring • 💣 Bomb • ⚖️ Kilo • 🍪 Dough • ☠️ Venom • 🔊 Rumble • 🧘 Buddha • 👤 Human Human • 🦅 Falcon • 🐕 Hound • 🐱 Cat • 🐭 Mouse
 
----
+## 🎯 Kullanım
 
-## 📁 Proje Yapısı
+1. Bot'ı sunucuya ekle
+2. `/fruitkanal` ile bildirim kanalı ayarla
+3. `/fruittakip` ile panel aç
+4. Fruit spawn olduğunda otomatik bildirim gel
 
+## ⚙️ Kurulum
+
+### Environment Variables
+
+Railway'de şu variable'ı ekle:
 ```
-.
-├── index-full.js           # Ana bot dosyası
-├── config.json             # Stok verileri (otomatik oluşur)
-├── package.json            # Bağımlılıklar
-├── .env                    # Bot token (gizli)
-├── README.md              # Bu dosya
-├── BAŞLAT.md              # Detaylı kurulum
-└── .github/workflows/     # GitHub Actions
-    └── bot.yml
+DISCORD_TOKEN = your_token_here
 ```
 
----
+### Config
 
-## 📖 Başlangıç
+Bot otomatik `config.json` oluşturur.
 
-### Adım 1: Token Al
-1. [Discord Developer Portal](https://discord.com/developers/applications)
-2. "New Application" → İsim ver
-3. "Bot" → "Add Bot"
-4. Token'ı kopyala
+## 📊 Spawn Sistemi
 
-### Adım 2: Bağla
-1. .env dosyası oluştur
-2. `DISCORD_TOKEN=your_token_here` ekle
+- **Aralık:** Her 2 saat
+- **Otomatik:** 7/24 çalışır
+- **Bildirim:** @here mention ile haber ver
+- **Konum:** Her spawn için konum belirtilir
 
-### Adım 3: Çalıştır
-```bash
-npm install
-npm start
-```
+## 🔒 İzinler
 
-**Tamamlandı!** Bot çalışıyor. ✅
+- `/fruitkanal` - Admin only
+- `/fruitspawn` - Admin only
+- `/fruittakip` - Herkes
 
----
+## 📱 Discord Notifications
 
-## 🐛 Sorun Giderme
+Fruit spawn olduğunda:
+- 🔔 @here ping
+- Fruit adı ve emoji
+- Spawn konumu
+- Rarity bilgisi
+- Spawn zamanı
 
-| Sorun | Çözüm |
-|-------|-------|
-| Komutlar görünmüyor | Botu yeniden başlat ve 5 dakika bekle |
-| Token hatası | Token'ı doğru kopyala, .env kaydet |
-| Bot çalışmıyor | Node.js yüklü mü? `npm install` çalıştır |
-| DM gelmiyor | DM ayarlarını aç veya ephemeral mesaja bak |
+## 🎮 Roblox Hesap
 
----
+Bot, configure edilmiş Roblox hesabı kullanarak oyunu takip eder.
 
-## 🌐 Çalıştırma Seçenekleri Karşılaştırması
+## 📞 Komut Ayarı
 
-| Seçenek | Maliyet | 24/7 | Sınır | Zorluk |
-|---------|---------|------|-------|--------|
-| Bilgisayar | Elektrik | ❌ | Yok | ⭐ Kolay |
-| GitHub Actions | Ücretsiz | ❌ | 2000 dk/ay | ⭐⭐ Orta |
-| Render | Ücretsiz | ✅ | Yok | ⭐⭐ Orta |
+Railway'de redeploy sonrası komutlar 1-2 dakika içinde aktif olur.
 
-**Tavsiye:** Render seçin (24/7 ve ücretsiz)
+## ✅ Kontrol Listesi
+
+- [ ] Token ekledi
+- [ ] Bot sunucuya ekledi
+- [ ] `/fruitkanal` ile kanal ayarladı
+- [ ] `/fruittakip` ile paneli açtı
+- [ ] Notification'lar geliyor
 
 ---
 
-## 📚 Kaynaklar
-
-- [Discord.js Docs](https://discord.js.org/)
-- [Discord Developer Docs](https://discord.com/developers/docs)
-- [Render Docs](https://render.com/docs)
-- [GitHub Actions](https://github.com/features/actions)
-
----
-
-## 📝 Lisans
-
-MIT License - Özgürce kullan!
-
----
-
-## 💡 İpuçları
-
-✅ Token'ı .env dosyasında sakla (GitHub'a yükleme)  
-✅ config.json'u düzenli yedekle  
-✅ Geliştirme için `npm run dev` kullan  
-✅ Production'da Render kullan  
-
----
-
-**Sorular? GitHub Issues'da soru aç!** 🎮
+**Bot hazır! Fruit spawnlarını kaçırma!** 🍎🚀
