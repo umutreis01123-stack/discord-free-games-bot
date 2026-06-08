@@ -732,6 +732,7 @@ app.get('/', (req, res) => {
                 <a onclick="showTab('support')">💬 Destek</a>
                 
                 <h3 id="admin-section" style="display: none;">Admin Paneli</h3>
+                <a onclick="showTab('settings')" id="admin-settings" style="display: none;">⚙️ Sunucu Ayarları</a>
                 <a onclick="showTab('products')" id="admin-products" style="display: none;">➕ Ürün Ekle</a>
                 <a onclick="showTab('punish')" id="admin-punish" style="display: none;">🔨 Ceza Ver</a>
                 <a onclick="showTab('roles')" id="admin-roles" style="display: none;">👑 Roller</a>
@@ -823,6 +824,20 @@ app.get('/', (req, res) => {
                             </thead>
                             <tbody></tbody>
                         </table>
+                    </div>
+                </div>
+                
+                <!-- Admin: Settings -->
+                <div id="settings">
+                    <div class="section">
+                        <h2>⚙️ Sunucu Ayarları</h2>
+                        <div class="form-grid">
+                            <input type="text" class="form-input" id="serverIP" placeholder="Sunucu IP (örn: play.example.com)">
+                            <input type="number" class="form-input" id="serverPort" placeholder="Port (25565)">
+                            <input type="number" class="form-input" id="maxPlayers" placeholder="Max Oyuncu">
+                            <input type="number" class="form-input" id="playersOnline" placeholder="Şu an Oyuncular">
+                            <button class="btn" onclick="saveServerSettings()">Kaydet</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -970,14 +985,50 @@ app.get('/', (req, res) => {
             
             if (isAdmin) {
                 document.getElementById('admin-section').style.display = 'block';
+                document.getElementById('admin-settings').style.display = 'block';
                 document.getElementById('admin-products').style.display = 'block';
                 document.getElementById('admin-punish').style.display = 'block';
                 document.getElementById('admin-roles').style.display = 'block';
                 document.getElementById('admin-announce').style.display = 'block';
+                loadServerSettings();
             }
             
             loadServerInfo();
             showTab('home');
+        }
+        
+        async function loadServerSettings() {
+            const res = await fetch('/api/admin/settings');
+            const data = await res.json();
+            
+            document.getElementById('serverIP').value = data.ip || '';
+            document.getElementById('serverPort').value = data.port || 25565;
+            document.getElementById('maxPlayers').value = data.maxPlayers || 100;
+            document.getElementById('playersOnline').value = data.playersOnline || 0;
+        }
+        
+        async function saveServerSettings() {
+            const ip = document.getElementById('serverIP').value;
+            const port = document.getElementById('serverPort').value;
+            const maxPlayers = document.getElementById('maxPlayers').value;
+            const playersOnline = document.getElementById('playersOnline').value;
+            
+            if (!ip) {
+                alert('IP adresi giriniz!');
+                return;
+            }
+            
+            const res = await fetch('/api/admin/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, port, maxPlayers, playersOnline })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Sunucu ayarları kaydedildi!');
+                loadServerInfo();
+            }
         }
         
         async function loadServerInfo() {
@@ -1042,17 +1093,21 @@ app.get('/', (req, res) => {
     `);
 });
 
-// API endpoints
-app.post('/api/add-product', (req, res) => {
-    config.products.push(req.body);
+// Admin settings endpoint
+app.post('/api/admin/settings', (req, res) => {
+    const { ip, port, maxPlayers, playersOnline } = req.body;
+    
+    config.server.ip = ip || config.server.ip;
+    config.server.port = port || config.server.port;
+    config.server.maxPlayers = maxPlayers || config.server.maxPlayers;
+    config.server.playersOnline = playersOnline || config.server.playersOnline;
+    
     saveConfig();
-    res.json({ success: true });
+    res.json({ success: true, server: config.server });
 });
 
-app.post('/api/give-punishment', (req, res) => {
-    config.punishments.push(req.body);
-    saveConfig();
-    res.json({ success: true });
+app.get('/api/admin/settings', (req, res) => {
+    res.json(config.server);
 });
 
 // Keep-alive
