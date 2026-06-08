@@ -1,50 +1,50 @@
-# 🎮 ShadowBot - Admin Panel Bot
+# 🎮 ShadowCore - Çekiliş & Duyuru Botu
 
-Discord sunucusu yönetim botu + Web Dashboard. Mesaj gönder, duyuru yap, istatistikleri takip et!
+Discord sunucusu yönetim botu. Çekiliş oluştur, duyuru gönder, istatistikleri takip et!
 
 ## ✨ Özellikler
 
-- 📨 **DM Gönder** - Tek kullanıcıya mesaj
-- 📬 **Toplu DM** - Sunucudaki herkese veya role mesaj
+- 🎉 **Çekiliş Sistemi** - Çekiliş oluştur, katılımcıları takip et
 - 📢 **Duyuru Sistemi** - Kanal'a renkli duyuru gönder
 - 📊 **Web Dashboard** - Admin paneli ve istatistikler
-- 🔐 **Admin Only** - Sadece yöneticiler kullanabilir
+- 🔐 **Admin Only** - Sadece yöneticiler duyuru gönderebilir
+- 💜 **ShadowCore Tasarımı** - Modern ve profesyonel arayüz
 
 ## 🚀 Komutlar
 
-### `/dm <kullanıcı> <mesaj>`
-Belirtilen kullanıcıya DM gönder.
-
-### `/topludm <mesaj> [rol]`
-Toplu DM gönder. Rol belirtilmezse herkese gönder.
+### `/çekiliş ekle <ödül> [açıklama]`
+Yeni çekiliş oluştur. Katılımcılar butonla çekilişe katılabilir.
 
 ### `/duyuru <başlık> <içerik> [renk]`
-Duyuru gönder (mavi, yeşil, kırmızı, mor).
+Duyuru gönder (Admin only). Renkler: mavi, yeşil, kırmızı, mor
 
-### `/duyurukanal <kanal>`
-Duyuruların geleceği kanalı ayarla.
-
-### `/panel`
-Admin panelini aç (istatistikler).
+### `/duyuru kanal ayarla <kanal>`
+Duyuruların geleceği kanalı ayarla (Admin only).
 
 ## 📊 Web Dashboard
 
 Bot çalışırken http://localhost:3001 adresine erişebilirsiniz.
 
-**Özellikler:**
-- İstatistikler (DM, Toplu DM, Duyuru)
-- Komut listesi
-- Sunucu yönetimi
-- Dark theme (ShadowMC tarzı)
+**Sayfalar:**
+- 📊 Dashboard - Ana sayfa, istatistikler
+- 🎉 Çekilişler - Tüm çekiliş aktiviteleri
+- 📢 Duyurular - Gönderilen duyurular
+- 📈 İstatistikler - Sistem aktivitesi
+
+**Tasarım:**
+- Dark theme (ShadowCore tarzı)
+- Responsive (mobil uyumlu)
+- Real-time istatistikler
 
 ## 🔧 Kurulum
 
 ### Railway'de
 
-1. Token ekle: `DISCORD_TOKEN=your_token`
-2. Redeploy et
-3. `/duyurukanal` ile kanal ayarla
-4. Komutları kullan!
+1. Repository'yi fork et
+2. Railway'e bağla
+3. Token ekle: `DISCORD_TOKEN=your_token`
+4. Deploy et
+5. Bot hazır!
 
 ### Lokalde
 
@@ -53,19 +53,19 @@ npm install
 npm start
 ```
 
+http://localhost:3001 adresine git
+
 ## 📋 Config Dosyası
 
 `config.json` otomatik oluşur:
 
 ```json
 {
-  "announceChannel": null,
-  "users": {},
-  "messages": [],
-  "stats": {
-    "dmsSent": 0,
-    "bulkDmsSent": 0,
-    "announcementsSent": 0
+  "duyuruKanali": null,
+  "cekilisler": [],
+  "istatistikler": {
+    "duyuruSayisi": 0,
+    "cekilislikSayisi": 0
   }
 }
 ```
@@ -73,21 +73,19 @@ npm start
 ## 🎯 Kullanım Örneği
 
 ```
-/dm @kullanıcı Merhaba!
-/topludm Sunucu duyurusu @role:Moderatör
-/duyuru "Sunucu Haber" "Sunucu güncellemesi..." mavi
-/duyurukanal #duyurular
-/panel
+/çekiliş ekle "Nitro 3 Ay" "Çekilişe katılmak için butona tıkla!"
+/duyuru "Sunucu Güncellemesi" "Yeni özellikler eklendi!" mor
+/duyuru kanal ayarla #duyurular
 ```
 
 ## 📱 Özellikler
 
-✅ Admin paneli arayüzü  
+✅ Çekiliş sistemi  
+✅ Duyuru gönderimi  
 ✅ Real-time istatistikler  
-✅ Toplu mesajlaşma  
-✅ Renkli duyurular  
 ✅ Web dashboard  
-✅ Railroad tarafından çalışacak  
+✅ Admin kontrolleri  
+✅ Railway tarafından deploy edilebilir  
 
 ## ⚙️ Gereksinimler
 
@@ -95,13 +93,14 @@ npm start
 - Discord Bot Token
 - Express.js (web server)
 
-## 📞 Destek
+## 📞 API
 
-Hata varsa logs'a bak:
-```
-/panel
-```
+### `GET /api/stats`
+İstatistikleri getir
+
+### `GET /api/giveaways`
+Tüm çekiliş verilerini getir
 
 ---
 
-**ShadowBot v1.0 - Sunucu Yönetim Botu** 🚀
+**ShadowCore v2.0 - Çekiliş & Duyuru Yönetim Sistemi** 💜
