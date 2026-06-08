@@ -307,6 +307,7 @@ app.get('/', (req, res) => {
         .topbar-buttons {
             display: flex;
             gap: 15px;
+            align-items: center;
         }
         
         .topbar-buttons button {
@@ -317,6 +318,42 @@ app.get('/', (req, res) => {
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .topbar-buttons button:hover {
+            background: #6d28d9;
+        }
+        
+        .topbar-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 0;
+            border-bottom: none;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        .topbar-tabs button {
+            padding: 8px 16px;
+            background: none;
+            border: none;
+            color: #a0aec0;
+            cursor: pointer;
+            font-weight: 600;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        
+        .topbar-tabs button.active {
+            color: #7c3aed;
+            border-bottom-color: #7c3aed;
+        }
+        
+        .topbar-tabs button:hover {
+            color: #7c3aed;
         }
         
         .main-container {
@@ -628,14 +665,17 @@ app.get('/', (req, res) => {
 <body>
     <!-- LOGIN PAGE -->
     <div class="login-page" id="loginPage">
-        <div class="login-container">
-            <h1>SHADOW<span>CORE</span></h1>
-            <p>Sunucu Yönetim Paneli</p>
-            
-            <div class="login-tabs">
+        <div class="topbar" style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
+            <div class="topbar-brand">SHADOW<span>CORE</span></div>
+            <div class="topbar-tabs">
                 <button class="tab-btn active" onclick="switchTab('login')">Giriş Yap</button>
                 <button class="tab-btn" onclick="switchTab('register')">Kayıt Ol</button>
             </div>
+        </div>
+        
+        <div class="login-container" style="margin-top: 80px;">
+            <h1>SHADOW<span>CORE</span></h1>
+            <p>Sunucu Yönetim Paneli</p>
             
             <!-- Login Form -->
             <div id="loginForm">
