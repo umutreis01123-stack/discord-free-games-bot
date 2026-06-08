@@ -4,25 +4,27 @@ Discord sunucunuzda Roblox Blox Fruits hesaplarını yönetip paylaşan bot.
 
 ## 🚀 Başlıyoruz!
 
-**3 Çalıştırma Seçeneği:**
+**EN KOLAY: Railway.app ile (Önerilen!)**
 
-### 1️⃣ Bilgisayarında Çalıştır (En Kolay)
 ```bash
-npm install
-npm start
+# 1. Railway.app aç: https://railway.app
+# 2. GitHub ile giriş yap
+# 3. Repository seç
+# 4. Token ekle
+# 5. Deploy et
+
+# Tamamlandı! Bot 24/7 çalışıyor 🎉
 ```
 
-### 2️⃣ GitHub Actions ile (Ücretsiz)
-- Token'ı secret olarak ekle
-- Workflow otomatik çalışır
-- Aylık 2,000 dakika limitli
+📖 **Detaylı:** [RAILWAY-KURULUM.md](./RAILWAY-KURULUM.md)
 
-### 3️⃣ Render.com ile (Önerilen - 24/7)
-- Repository'ni Render'a bağla
-- Token ekle
-- Deploy et
+---
 
-**📖 Detaylı kurulum: [BAŞLAT.md](./BAŞLAT.md)**
+**Diğer Seçenekler:**
+
+- 💻 Bilgisayarda: `npm install && npm start`
+- ☁️ Render: [BAŞLAT.md](./BAŞLAT.md)
+- 🔄 GitHub Actions: [GITHUB-NASIL-KULLANILIR.md](./GITHUB-NASIL-KULLANILIR.md)
 
 ---
 

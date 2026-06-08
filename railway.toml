@@ -1,0 +1,8 @@
+[build]
+builder = "nixpacks"
+watchPaths = ["src/**", "index-full.js"]
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 5
