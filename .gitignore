@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env
+# .env   <-- Açıkça açtık, token Railway'de de olacak
 .env.local
 .env.*.local
 
