@@ -49,15 +49,15 @@ function saveConfig() {
 // Komutlar
 const commands = [
     new SlashCommandBuilder()
-        .setName('çekiliş ekle')
+        .setName('giveaway_add')
         .setDescription('Yeni çekiliş oluştur')
         .addStringOption(option =>
-            option.setName('ödül')
+            option.setName('odül')
                 .setDescription('Çekiliş ödülü')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('açıklama')
+            option.setName('aciklama')
                 .setDescription('Çekiliş açıklaması')
                 .setRequired(false)
         ),
@@ -66,12 +66,12 @@ const commands = [
         .setName('duyuru')
         .setDescription('Duyuru gönder (Admin only)')
         .addStringOption(option =>
-            option.setName('başlık')
+            option.setName('baslik')
                 .setDescription('Duyuru başlığı')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('içerik')
+            option.setName('icerik')
                 .setDescription('Duyuru içeriği')
                 .setRequired(true)
         )
@@ -82,7 +82,7 @@ const commands = [
         ),
 
     new SlashCommandBuilder()
-        .setName('duyuru kanal ayarla')
+        .setName('duyuru_kanal')
         .setDescription('Duyuru kanalını ayarla (Admin only)')
         .addChannelOption(option =>
             option.setName('kanal')
@@ -110,11 +110,11 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user, guild } = interaction;
 
     try {
-        if (commandName === 'çekiliş ekle') {
+        if (commandName === 'giveaway_add') {
             await handleAddGiveaway(interaction, options);
         } else if (commandName === 'duyuru') {
             await handleAnnouncement(interaction, options, guild);
-        } else if (commandName === 'duyuru kanal ayarla') {
+        } else if (commandName === 'duyuru_kanal') {
             await handleSetAnnouncementChannel(interaction, options);
         }
     } catch (error) {
@@ -815,9 +815,9 @@ if (!token) {
 client.login(token).then(() => {
     console.log('🚀 ShadowCore Bot çalışıyor!');
     console.log('📋 Komutlar:');
-    console.log('   • /çekiliş ekle - Çekiliş oluştur');
+    console.log('   • /giveaway_add - Çekiliş oluştur');
     console.log('   • /duyuru - Duyuru gönder (Admin)');
-    console.log('   • /duyuru kanal ayarla - Kanal ayarla (Admin)');
+    console.log('   • /duyuru_kanal - Kanal ayarla (Admin)');
 }).catch(err => {
     console.error('❌ Bot hatası:', err.message);
 });
