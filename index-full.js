@@ -32,19 +32,32 @@ if (fs.existsSync(configPath)) {
 } else {
     config = {
         server: {
-            ip: 'play.example.com',
+            name: 'ShadowCore MC',
+            ip: 'play.shadowcore.com',
             port: 25565,
             maxPlayers: 100,
-            playersOnline: 0
+            playersOnline: 45,
+            version: '1.21.11',
+            maintenance: false,
+            maintenanceMessage: 'Sunucu bakımda...'
         },
         users: {},
         applications: [],
         punishments: [],
-        products: [],
-        announcements: [],
-        roles: [],
+        products: [
+            { name: 'VIP', price: 50, description: 'VIP yetkisi', image: 'https://via.placeholder.com/200x150' },
+            { name: 'MVP', price: 100, description: 'MVP yetkisi', image: 'https://via.placeholder.com/200x150' }
+        ],
+        announcements: [
+            { title: 'Sunucu Açıldı!', content: 'Yeni sunucumuz açıldı!', date: new Date().toISOString() }
+        ],
+        roles: ['Oyuncu', 'VIP', 'MVP', 'Moderatör', 'Admin'],
         support_tickets: [],
-        credits: {}
+        stats: {
+            totalUsers: 0,
+            totalApplications: 0,
+            totalPunishments: 0
+        }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -58,30 +71,25 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.json());
 
-// Session storage (simple)
+// Session storage
 const sessions = {};
-
-// Login endpointi
+// API Routes
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
     if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
         const sessionId = Date.now().toString();
         sessions[sessionId] = { admin: true, username: username };
-        res.json({ success: true, sessionId: sessionId });
+        res.json({ success: true, sessionId: sessionId, admin: true });
+    } else if (config.users[username] && config.users[username].password === password) {
+        const sessionId = Date.now().toString();
+        sessions[sessionId] = { admin: false, username: username };
+        res.json({ success: true, sessionId: sessionId, admin: false });
     } else {
-        // Normal user login
-        if (config.users[username] && config.users[username].password === password) {
-            const sessionId = Date.now().toString();
-            sessions[sessionId] = { admin: false, username: username };
-            res.json({ success: true, sessionId: sessionId });
-        } else {
-            res.json({ success: false, message: 'Hatalı kullanıcı adı veya şifre' });
-        }
+        res.json({ success: false, message: 'Hatalı kullanıcı adı veya şifre' });
     }
 });
 
-// Register endpointi
 app.post('/api/register', (req, res) => {
     const { username, password, email } = req.body;
     
@@ -99,15 +107,9 @@ app.post('/api/register', (req, res) => {
         roles: ['Oyuncu'],
         createdAt: new Date().toISOString()
     };
+    config.stats.totalUsers++;
     saveConfig();
     res.json({ success: true, message: 'Kayıt başarılı!' });
-});
-
-// Logout
-app.post('/api/logout', (req, res) => {
-    const { sessionId } = req.body;
-    delete sessions[sessionId];
-    res.json({ success: true });
 });
 
 // Server info
@@ -120,6 +122,79 @@ app.get('/api/announcements', (req, res) => {
     res.json(config.announcements);
 });
 
+// Applications
+app.post('/api/apply', (req, res) => {
+    const { username, position, reason } = req.body;
+    config.applications.push({
+        id: Date.now(),
+        username,
+        position,
+        reason,
+        status: 'Beklemede',
+        date: new Date().toISOString()
+    });
+    config.stats.totalApplications++;
+    saveConfig();
+    res.json({ success: true, message: 'Başvurunuz alınmıştır!' });
+});
+
+app.get('/api/applications', (req, res) => {
+    res.json(config.applications);
+});
+// Admin endpoints
+app.post('/api/admin/maintenance', (req, res) => {
+    const { maintenance, message } = req.body;
+    config.server.maintenance = maintenance;
+    if (message) config.server.maintenanceMessage = message;
+    saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/server-settings', (req, res) => {
+    const { name, ip, port, maxPlayers, playersOnline, version } = req.body;
+    
+    config.server.name = name || config.server.name;
+    config.server.ip = ip || config.server.ip;
+    config.server.port = port || config.server.port;
+    config.server.maxPlayers = maxPlayers || config.server.maxPlayers;
+    config.server.playersOnline = playersOnline || config.server.playersOnline;
+    config.server.version = version || config.server.version;
+    
+    saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/announcement', (req, res) => {
+    const { title, content } = req.body;
+    config.announcements.unshift({
+        id: Date.now(),
+        title,
+        content,
+        date: new Date().toISOString()
+    });
+    saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/application-status', (req, res) => {
+    const { appId, status } = req.body;
+    const app = config.applications.find(a => a.id === parseInt(appId));
+    if (app) {
+        app.status = status;
+        saveConfig();
+        res.json({ success: true });
+    } else {
+        res.json({ success: false, message: 'Başvuru bulunamadı' });
+    }
+});
+
+app.get('/api/products', (req, res) => {
+    res.json(config.products);
+});
+
+app.get('/api/stats', (req, res) => {
+    res.json(config.stats);
+});
 // Dashboard HTML
 app.get('/', (req, res) => {
     res.send(`
@@ -128,7 +203,7 @@ app.get('/', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShadowCore - Sunucu Yönetim Paneli</title>
+    <title>ShadowCore - Minecraft Sunucusu</title>
     <style>
         * {
             margin: 0;
@@ -139,13 +214,9 @@ app.get('/', (req, res) => {
         body {
             background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
             background-attachment: fixed;
-            background-image: 
-                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><filter id="blur"><feGaussianBlur in="SourceGraphic" stdDeviation="3"/></filter></defs><image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" width="1200" height="800" opacity="0.15" filter="url(%23blur)"/></svg>'),
-                linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 26, 62, 0.95) 100%);
             color: #e0e0e0;
             font-family: 'Inter', 'Segoe UI', sans-serif;
             min-height: 100vh;
-            position: relative;
         }
         
         body::before {
@@ -162,61 +233,134 @@ app.get('/', (req, res) => {
             z-index: 0;
         }
         
-        /* LOGIN PAGE */
-        .login-page {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: linear-gradient(135deg, rgba(10, 14, 39, 0.85) 0%, rgba(26, 26, 62, 0.85) 100%);
+        /* MAINTENANCE BANNER */
+        .maintenance-banner {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-weight: bold;
             position: relative;
-            z-index: 10;
+            z-index: 1000;
         }
         
-        .login-page::before {
-            content: '';
+        /* TOP NAVIGATION */
+        .navbar {
+            background: rgba(10, 14, 39, 0.95);
+            border-bottom: 1px solid #2d2b6b;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        
+        .navbar-brand {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 2px;
+        }
+        
+        .navbar-brand span {
+            color: #7c3aed;
+        }
+        
+        .nav-menu {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+            list-style: none;
+        }
+        
+        .nav-menu a {
+            color: #a0aec0;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        
+        .nav-menu a:hover, .nav-menu a.active {
+            color: #7c3aed;
+            background: rgba(124, 58, 237, 0.1);
+        }
+        
+        .login-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            background: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+        }
+        
+        .btn:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+        }
+        /* LOGIN MODAL */
+        .login-modal {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: 
-                radial-gradient(circle at 20% 50%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: -1;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
         }
         
-        .login-container {
+        .login-modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
             background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
             border: 2px solid #7c3aed;
             border-radius: 15px;
-            padding: 50px;
+            padding: 40px;
             width: 100%;
             max-width: 400px;
             text-align: center;
-            box-shadow: 0 20px 60px rgba(124, 58, 237, 0.3);
+            position: relative;
         }
         
-        .login-container h1 {
-            color: #7c3aed;
-            margin-bottom: 10px;
-            font-size: 2rem;
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
         }
         
-        .login-container p {
-            color: #a0aec0;
-            margin-bottom: 30px;
-        }
-        
-        .login-tabs {
+        .modal-tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
             border-bottom: 1px solid #3d3b7f;
         }
         
-        .login-tabs button {
+        .modal-tabs button {
             flex: 1;
             padding: 12px;
             background: none;
@@ -228,7 +372,7 @@ app.get('/', (req, res) => {
             transition: all 0.3s;
         }
         
-        .login-tabs button.active {
+        .modal-tabs button.active {
             color: #7c3aed;
             border-bottom-color: #7c3aed;
         }
@@ -245,7 +389,7 @@ app.get('/', (req, res) => {
             margin-bottom: 5px;
         }
         
-        .form-group input {
+        .form-input {
             width: 100%;
             padding: 12px;
             background: #0a0e27;
@@ -255,189 +399,14 @@ app.get('/', (req, res) => {
             font-size: 1rem;
         }
         
-        .form-group input::placeholder {
-            color: #666;
-        }
-        
-        .login-btn {
-            width: 100%;
-            padding: 12px;
-            background: #7c3aed;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s;
-            margin-top: 10px;
-        }
-        
-        .login-btn:hover {
-            background: #6d28d9;
-        }
-        
-        /* DASHBOARD */
-        .dashboard {
-            display: none;
-        }
-        
-        .topbar {
-            background: rgba(10, 14, 39, 0.95);
-            border-bottom: 1px solid #2d2b6b;
-            padding: 15px 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        
-        .topbar-brand {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: #fff;
-        }
-        
-        .topbar-brand span {
-            color: #7c3aed;
-        }
-        
-        .topbar-buttons {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-        
-        .topbar-buttons button {
-            padding: 8px 16px;
-            background: #7c3aed;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .topbar-buttons button:hover {
-            background: #6d28d9;
-        }
-        
-        .topbar-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 0;
-            border-bottom: none;
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        
-        .topbar-tabs button {
-            padding: 8px 16px;
-            background: none;
-            border: none;
-            color: #a0aec0;
-            cursor: pointer;
-            font-weight: 600;
-            border-bottom: 2px solid transparent;
-            transition: all 0.3s;
-            font-size: 0.9rem;
-        }
-        
-        .topbar-tabs button.active {
-            color: #7c3aed;
-            border-bottom-color: #7c3aed;
-        }
-        
-        .topbar-tabs button:hover {
-            color: #7c3aed;
-        }
-        
-        .main-container {
-            display: flex;
-            min-height: calc(100vh - 60px);
-        }
-        
-        .sidebar {
-            width: 250px;
-            background: #0f0e1e;
-            border-right: 1px solid #2d2b6b;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        
-        .sidebar h3 {
-            color: #7c3aed;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            letter-spacing: 1px;
-        }
-        
-        .sidebar a {
-            display: block;
-            color: #a0aec0;
-            text-decoration: none;
-            padding: 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 5px;
-        }
-        
-        .sidebar a:hover, .sidebar a.active {
-            background: #2d2b6b;
-            color: #7c3aed;
-        }
-        
-        .content {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-        }
-        
-        .content > div {
-            display: none;
-        }
-        
-        .content > div.active {
-            display: block;
-        }
-        
         /* HERO SECTION */
         .hero-section {
             text-align: center;
-            margin-bottom: 50px;
-            margin-top: -30px;
-            margin-left: -30px;
-            margin-right: -30px;
             padding: 100px 30px;
             background: linear-gradient(135deg, rgba(124, 58, 237, 0.05) 0%, rgba(59, 130, 246, 0.05) 100%);
             border-bottom: 1px solid #3d3b7f;
             position: relative;
-            overflow: hidden;
-        }
-        
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        
-        .hero-content {
-            position: relative;
-            z-index: 2;
+            z-index: 1;
         }
         
         .hero-badge {
@@ -458,10 +427,6 @@ app.get('/', (req, res) => {
             color: #fff;
             margin-bottom: 15px;
             letter-spacing: -1px;
-            background: linear-gradient(135deg, #fff 0%, #a0aec0 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
         
         .hero-subtitle {
@@ -469,7 +434,6 @@ app.get('/', (req, res) => {
             color: #a0aec0;
             margin-bottom: 40px;
         }
-        
         .hero-buttons {
             display: flex;
             gap: 15px;
@@ -490,11 +454,6 @@ app.get('/', (req, res) => {
             font-size: 1rem;
         }
         
-        .btn-primary:hover {
-            background: rgba(124, 58, 237, 0.2);
-            transform: translateY(-2px);
-        }
-        
         .btn-secondary {
             padding: 12px 30px;
             background: #7c3aed;
@@ -505,12 +464,6 @@ app.get('/', (req, res) => {
             font-weight: 600;
             transition: all 0.3s;
             font-size: 1rem;
-        }
-        
-        .btn-secondary:hover {
-            background: #6d28d9;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(124, 58, 237, 0.3);
         }
         
         .hero-stats {
@@ -529,17 +482,6 @@ app.get('/', (req, res) => {
             transition: all 0.3s;
         }
         
-        .hero-stat:hover {
-            background: rgba(124, 58, 237, 0.15);
-            transform: translateY(-5px);
-            border-color: #7c3aed;
-        }
-        
-        .stat-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-        }
-        
         .stat-value {
             font-size: 1.8rem;
             font-weight: bold;
@@ -553,382 +495,476 @@ app.get('/', (req, res) => {
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+        
+        /* MAIN CONTENT */
+        .main-content {
+            display: none;
+            padding: 50px 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
         
-        .info-card {
-            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
-            border: 1px solid #3d3b7f;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .info-card h3 {
-            color: #a0aec0;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-        
-        .info-card .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #7c3aed;
+        .main-content.active {
+            display: block;
         }
         
         .section {
             background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
             border: 1px solid #3d3b7f;
             border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
         }
         
         .section h2 {
             color: #fff;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
         }
         
-        .form-grid {
+        .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
         }
         
-        .form-input {
-            padding: 10px;
+        .card {
             background: #0a0e27;
             border: 1px solid #3d3b7f;
-            color: #fff;
-            border-radius: 6px;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
         }
         
-        .btn {
-            padding: 10px 20px;
-            background: #7c3aed;
-            color: white;
-            border: none;
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: #7c3aed;
+        }
+        /* ADMIN DASHBOARD */
+        .admin-dashboard {
+            display: none;
+            background: #0a0e27;
+            min-height: 100vh;
+            padding-top: 0;
+        }
+        
+        .admin-sidebar {
+            width: 250px;
+            background: #1a1a3e;
+            border-right: 1px solid #2d2b6b;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            padding: 20px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+        
+        .admin-content {
+            margin-left: 250px;
+            padding: 30px;
+        }
+        
+        .admin-sidebar h3 {
+            color: #7c3aed;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            margin: 20px 0 10px 0;
+            letter-spacing: 1px;
+        }
+        
+        .admin-sidebar a {
+            display: block;
+            color: #a0aec0;
+            text-decoration: none;
+            padding: 10px;
             border-radius: 6px;
             cursor: pointer;
-            font-weight: 600;
+            transition: all 0.3s;
+            margin-bottom: 5px;
         }
         
-        .btn:hover {
-            background: #6d28d9;
+        .admin-sidebar a:hover, .admin-sidebar a.active {
+            background: #2d2b6b;
+            color: #7c3aed;
+        }
+        
+        .admin-section {
+            display: none;
+        }
+        
+        .admin-section.active {
+            display: block;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
+            margin-top: 20px;
+            background: #1a1a3e;
+            border-radius: 8px;
+            overflow: hidden;
         }
         
         table th {
             background: #0a0e27;
             color: #7c3aed;
-            padding: 10px;
+            padding: 15px;
             text-align: left;
             border-bottom: 1px solid #3d3b7f;
         }
         
         table td {
-            padding: 10px;
+            padding: 15px;
             border-bottom: 1px solid #3d3b7f;
             color: #a0aec0;
         }
         
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .status-pending { background: rgba(251, 191, 36, 0.2); color: #f59e0b; }
+        .status-approved { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .status-rejected { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        
         @media (max-width: 768px) {
-            .sidebar {
+            .navbar {
+                padding: 15px 20px;
+            }
+            
+            .nav-menu {
+                gap: 15px;
+            }
+            
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .hero-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .admin-sidebar {
                 width: 100%;
                 height: auto;
-                border-right: none;
-                border-bottom: 1px solid #2d2b6b;
-                display: flex;
-                flex-wrap: wrap;
+                position: relative;
             }
             
-            .main-container {
-                flex-direction: column;
-            }
-            
-            .login-container {
-                padding: 30px;
-                max-width: 90%;
+            .admin-content {
+                margin-left: 0;
             }
         }
     </style>
 </head>
-<body>
-    <!-- LOGIN PAGE -->
-    <div class="login-page" id="loginPage">
-        <div class="topbar" style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
-            <div class="topbar-brand">SHADOW<span>CORE</span></div>
-            <div class="topbar-tabs">
-                <button class="tab-btn active" onclick="switchTab('login')">Giriş Yap</button>
-                <button class="tab-btn" onclick="switchTab('register')">Kayıt Ol</button>
-            </div>
+<body id="mainBody">
+    <!-- MAINTENANCE BANNER -->
+    <div id="maintenanceBanner" class="maintenance-banner" style="display: none;">
+        🔧 Sunucu bakımda! Lütfen daha sonra tekrar deneyiniz.
+    </div>
+    
+    <!-- NAVIGATION -->
+    <nav class="navbar">
+        <div class="navbar-brand">SHADOW<span>CORE</span></div>
+        <ul class="nav-menu">
+            <li><a href="#" onclick="showSection('home')" class="active">🏠 Ana Sayfa</a></li>
+            <li><a href="#" onclick="showSection('announcements')">📢 Duyurular</a></li>
+            <li><a href="#" onclick="showSection('applications')">📝 Başvurular</a></li>
+            <li><a href="#" onclick="showSection('shop')">🛒 Mağaza</a></li>
+        </ul>
+        <div class="login-buttons" id="loginButtons">
+            <button class="btn" onclick="openLoginModal('login')">Giriş Yap</button>
+            <button class="btn" onclick="openLoginModal('register')">Kayıt Ol</button>
         </div>
-        
-        <div class="login-container" style="margin-top: 80px;">
-            <h1>SHADOW<span>CORE</span></h1>
-            <p>Sunucu Yönetim Paneli</p>
+        <div class="login-buttons" id="userButtons" style="display: none;">
+            <span id="usernameDisplay" style="color: #a0aec0; margin-right: 15px;"></span>
+            <button class="btn" onclick="logout()">Çıkış</button>
+        </div>
+    </nav>
+    
+    <!-- LOGIN MODAL -->
+    <div class="login-modal" id="loginModal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeLoginModal()">✕</button>
+            <h2 style="color: #7c3aed; margin-bottom: 20px;">SHADOWCORE</h2>
+            
+            <div class="modal-tabs">
+                <button class="tab-btn active" onclick="switchModalTab('login')">Giriş Yap</button>
+                <button class="tab-btn" onclick="switchModalTab('register')">Kayıt Ol</button>
+            </div>
             
             <!-- Login Form -->
             <div id="loginForm">
                 <div class="form-group">
                     <label>Kullanıcı Adı</label>
-                    <input type="text" id="loginUsername" placeholder="Kullanıcı adını gir">
+                    <input type="text" class="form-input" id="loginUsername" placeholder="Kullanıcı adını gir">
                 </div>
                 <div class="form-group">
                     <label>Şifre</label>
-                    <input type="password" id="loginPassword" placeholder="Şifreni gir">
+                    <input type="password" class="form-input" id="loginPassword" placeholder="Şifreni gir">
                 </div>
-                <button class="login-btn" onclick="login()">Giriş Yap</button>
+                <button class="btn" onclick="login()" style="width: 100%; margin-top: 10px;">Giriş Yap</button>
             </div>
             
             <!-- Register Form -->
             <div id="registerForm" style="display: none;">
                 <div class="form-group">
                     <label>Kullanıcı Adı</label>
-                    <input type="text" id="regUsername" placeholder="Kullanıcı adı">
+                    <input type="text" class="form-input" id="regUsername" placeholder="Kullanıcı adı">
                 </div>
                 <div class="form-group">
                     <label>E-Mail</label>
-                    <input type="email" id="regEmail" placeholder="E-Mail adresin">
+                    <input type="email" class="form-input" id="regEmail" placeholder="E-Mail adresin">
                 </div>
                 <div class="form-group">
                     <label>Şifre</label>
-                    <input type="password" id="regPassword" placeholder="Şifre">
+                    <input type="password" class="form-input" id="regPassword" placeholder="Şifre">
                 </div>
-                <button class="login-btn" onclick="register()">Kayıt Ol</button>
+                <button class="btn" onclick="register()" style="width: 100%; margin-top: 10px;">Kayıt Ol</button>
             </div>
         </div>
     </div>
-    
-    <!-- DASHBOARD -->
-    <div class="dashboard" id="dashboard">
-        <!-- Top Bar -->
-        <div class="topbar">
-            <div class="topbar-brand">SHADOW<span>CORE</span></div>
-            <div class="topbar-buttons">
-                <span id="username-display" style="color: #a0aec0; padding: 10px;"></span>
-                <button onclick="logout()">Çıkış</button>
-            </div>
-        </div>
-        
-        <!-- Main Container -->
-        <div class="main-container">
-            <!-- Sidebar -->
-            <div class="sidebar">
-                <h3>Yönetim</h3>
-                <a onclick="showTab('home')" class="active">📊 Ana Sayfa</a>
-                <a onclick="showTab('applications')">📝 Başvurular</a>
-                <a onclick="showTab('punishments')">⚖️ Cezalar</a>
-                <a onclick="showTab('shop')">🛒 Mağaza</a>
-                <a onclick="showTab('support')">💬 Destek</a>
-                
-                <h3 id="admin-section" style="display: none;">Admin Paneli</h3>
-                <a onclick="showTab('settings')" id="admin-settings" style="display: none;">⚙️ Sunucu Ayarları</a>
-                <a onclick="showTab('products')" id="admin-products" style="display: none;">➕ Ürün Ekle</a>
-                <a onclick="showTab('punish')" id="admin-punish" style="display: none;">🔨 Ceza Ver</a>
-                <a onclick="showTab('roles')" id="admin-roles" style="display: none;">👑 Roller</a>
-                <a onclick="showTab('announcements')" id="admin-announce" style="display: none;">📢 Duyuru</a>
+    <!-- HOME SECTION -->
+    <div id="homeSection">
+        <div class="hero-section">
+            <div class="hero-badge" id="serverStatus">🎮 SUNUCU AKTİF</div>
+            <h1 class="hero-title" id="serverName">ShadowCore Minecraft Sunucusu</h1>
+            <p class="hero-subtitle">Türkiye'nin en iyi Minecraft sunucusunda maceraya hazır mısın?</p>
+            
+            <div class="hero-buttons">
+                <button class="btn-primary" id="serverIPBtn">📋 play.shadowcore.com</button>
+                <button class="btn-secondary">▶️ OYNA</button>
             </div>
             
-            <!-- Content -->
-            <div class="content">
-                <!-- Home -->
-                <div id="home">
-                    <div class="hero-section">
-                        <div class="hero-content">
-                            <div class="hero-badge">🎮 SUNUCU AKTİF</div>
-                            <h1 class="hero-title">Türkiye'nin En İyi Mc Sunucusu</h1>
-                            <p class="hero-subtitle">Mükemmel sistemler etkinlikleri her şey sizlerle</p>
-                            
-                            <div class="hero-buttons">
-                                <button class="btn-primary">📋 play.shadowcore.com</button>
-                                <button class="btn-secondary">▶️ OYNA</button>
-                            </div>
-                            
-                            <div class="hero-stats">
-                                <div class="hero-stat">
-                                    <div class="stat-icon">👥</div>
-                                    <div class="stat-value">125</div>
-                                    <div class="stat-label">Çevrimiçi</div>
-                                </div>
-                                <div class="hero-stat">
-                                    <div class="stat-icon">⚡</div>
-                                    <div class="stat-value">12ms</div>
-                                    <div class="stat-label">Ping</div>
-                                </div>
-                                <div class="hero-stat">
-                                    <div class="stat-icon">📦</div>
-                                    <div class="stat-value">1.21.11</div>
-                                    <div class="stat-label">Sürüm</div>
-                                </div>
-                            </div>
+            <div class="hero-stats" id="heroStats">
+                <div class="hero-stat">
+                    <div class="stat-value" id="playersOnline">45</div>
+                    <div class="stat-label">Çevrimiçi</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="stat-value">12ms</div>
+                    <div class="stat-label">Ping</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="stat-value" id="serverVersion">1.21.11</div>
+                    <div class="stat-label">Sürüm</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ANNOUNCEMENTS SECTION -->
+    <div class="main-content" id="announcementsSection">
+        <div class="section">
+            <h2>📢 Duyurular</h2>
+            <div id="announcementsList"></div>
+        </div>
+    </div>
+    
+    <!-- APPLICATIONS SECTION -->
+    <div class="main-content" id="applicationsSection">
+        <div class="section">
+            <h2>📝 Başvuru Yap</h2>
+            <div style="display: grid; gap: 15px; max-width: 500px;">
+                <input type="text" class="form-input" id="appUsername" placeholder="Minecraft Kullanıcı Adın">
+                <select class="form-input" id="appPosition">
+                    <option value="">Pozisyon Seç</option>
+                    <option value="Moderatör">Moderatör</option>
+                    <option value="Builder">Builder</option>
+                    <option value="Helper">Helper</option>
+                </select>
+                <textarea class="form-input" id="appReason" placeholder="Neden bu pozisyona uygun olduğunuzu açıklayın..." rows="5"></textarea>
+                <button class="btn" onclick="submitApplication()">Başvuru Gönder</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- SHOP SECTION -->
+    <div class="main-content" id="shopSection">
+        <div class="section">
+            <h2>🛒 Mağaza</h2>
+            <div class="grid" id="shopProducts"></div>
+        </div>
+    </div>
+    <!-- ADMIN DASHBOARD -->
+    <div class="admin-dashboard" id="adminDashboard">
+        <div class="admin-sidebar">
+            <h2 style="color: #7c3aed; margin-bottom: 30px;">Admin Panel</h2>
+            <h3>Sunucu</h3>
+            <a onclick="showAdminSection('serverSettings')" class="active">⚙️ Sunucu Ayarları</a>
+            <a onclick="showAdminSection('maintenance')">🔧 Bakım Modu</a>
+            
+            <h3>İçerik</h3>
+            <a onclick="showAdminSection('announcements')">📢 Duyurular</a>
+            <a onclick="showAdminSection('applications')">📝 Başvurular</a>
+            
+            <h3>Yönetim</h3>
+            <a onclick="showAdminSection('users')">👥 Kullanıcılar</a>
+            <a onclick="showAdminSection('statistics')">📊 İstatistikler</a>
+        </div>
+        
+        <div class="admin-content">
+            <!-- Server Settings -->
+            <div class="admin-section active" id="serverSettings">
+                <h2>⚙️ Sunucu Ayarları</h2>
+                <div class="section">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <input type="text" class="form-input" id="adminServerName" placeholder="Sunucu Adı">
+                        <input type="text" class="form-input" id="adminServerIP" placeholder="Sunucu IP">
+                        <input type="number" class="form-input" id="adminServerPort" placeholder="Port">
+                        <input type="number" class="form-input" id="adminMaxPlayers" placeholder="Max Oyuncu">
+                        <input type="number" class="form-input" id="adminPlayersOnline" placeholder="Çevrimiçi">
+                        <input type="text" class="form-input" id="adminServerVersion" placeholder="Sürüm">
+                        <button class="btn" onclick="saveServerSettings()">Kaydet</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Maintenance -->
+            <div class="admin-section" id="maintenance">
+                <h2>🔧 Bakım Modu</h2>
+                <div class="section">
+                    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
+                        <label style="color: #a0aec0;">
+                            <input type="checkbox" id="maintenanceToggle"> Bakım Modunu Aktif Et
+                        </label>
+                    </div>
+                    <textarea class="form-input" id="maintenanceMessage" placeholder="Bakım mesajı..." rows="3"></textarea>
+                    <button class="btn" onclick="toggleMaintenance()" style="margin-top: 15px;">Kaydet</button>
+                </div>
+            </div>
+            
+            <!-- Admin Announcements -->
+            <div class="admin-section" id="announcements">
+                <h2>📢 Duyuru Yönetimi</h2>
+                <div class="section">
+                    <div style="display: grid; gap: 15px; max-width: 500px; margin-bottom: 30px;">
+                        <input type="text" class="form-input" id="announcementTitle" placeholder="Duyuru Başlığı">
+                        <textarea class="form-input" id="announcementContent" placeholder="Duyuru İçeriği..." rows="4"></textarea>
+                        <button class="btn" onclick="addAnnouncement()">Duyuru Ekle</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Admin Applications -->
+            <div class="admin-section" id="applications">
+                <h2>📝 Başvuru Yönetimi</h2>
+                <div class="section">
+                    <table id="applicationsTable">
+                        <thead>
+                            <tr>
+                                <th>Kullanıcı</th>
+                                <th>Pozisyon</th>
+                                <th>Durum</th>
+                                <th>Tarih</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Users -->
+            <div class="admin-section" id="users">
+                <h2>👥 Kullanıcı Yönetimi</h2>
+                <div class="section">
+                    <table id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Kullanıcı Adı</th>
+                                <th>E-Mail</th>
+                                <th>Roller</th>
+                                <th>Kayıt Tarihi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Statistics -->
+            <div class="admin-section" id="statistics">
+                <h2>📊 İstatistikler</h2>
+                <div class="section">
+                    <div class="grid">
+                        <div class="card">
+                            <h3 style="color: #7c3aed;">Toplam Kullanıcılar</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #fff; margin-top: 10px;" id="totalUsers">0</div>
                         </div>
-                    </div>
-                    
-                    <div class="server-info" id="serverInfo"></div>
-                    
-                    <h3 style="color: #fff; margin-top: 50px; margin-bottom: 20px; font-size: 1.5rem;">📢 Duyurular</h3>
-                    <div id="announcements-list"></div>
-                </div>
-                
-                <!-- Applications -->
-                <div id="applications">
-                    <div class="section">
-                        <h2>📝 Başvurular</h2>
-                        <table id="appTable">
-                            <thead>
-                                <tr><th>Kullanıcı</th><th>Durum</th><th>Tarih</th></tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Punishments -->
-                <div id="punishments">
-                    <div class="section">
-                        <h2>⚖️ Cezalar</h2>
-                        <table id="punishTable">
-                            <thead>
-                                <tr><th>Kullanıcı</th><th>Ceza Türü</th><th>Neden</th><th>Tarih</th></tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Shop -->
-                <div id="shop">
-                    <div class="section">
-                        <h2>🛒 Mağaza</h2>
-                        <div class="form-grid" id="shopProducts"></div>
-                    </div>
-                </div>
-                
-                <!-- Support -->
-                <div id="support">
-                    <div class="section">
-                        <h2>💬 Destek Talepleri</h2>
-                        <table id="supportTable">
-                            <thead>
-                                <tr><th>Kullanıcı</th><th>Konu</th><th>Durum</th></tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Admin: Settings -->
-                <div id="settings">
-                    <div class="section">
-                        <h2>⚙️ Sunucu Ayarları</h2>
-                        <div class="form-grid">
-                            <input type="text" class="form-input" id="serverIP" placeholder="Sunucu IP (örn: play.example.com)">
-                            <input type="number" class="form-input" id="serverPort" placeholder="Port (25565)">
-                            <input type="number" class="form-input" id="maxPlayers" placeholder="Max Oyuncu">
-                            <input type="number" class="form-input" id="playersOnline" placeholder="Şu an Oyuncular">
-                            <button class="btn" onclick="saveServerSettings()">Kaydet</button>
+                        <div class="card">
+                            <h3 style="color: #7c3aed;">Toplam Başvurular</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #fff; margin-top: 10px;" id="totalApplications">0</div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Admin: Products -->
-                <div id="products">
-                    <div class="section">
-                        <h2>➕ Ürün Ekle</h2>
-                        <div class="form-grid">
-                            <input type="text" class="form-input" id="prodName" placeholder="Ürün Adı">
-                            <input type="text" class="form-input" id="prodImage" placeholder="Görsel Linki">
-                            <input type="text" class="form-input" id="prodDesc" placeholder="Açıklama">
-                            <input type="number" class="form-input" id="prodCredit" placeholder="Kredi">
-                            <button class="btn" onclick="addProduct()">Ekle</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Admin: Punish -->
-                <div id="punish">
-                    <div class="section">
-                        <h2>🔨 Ceza Ver</h2>
-                        <div class="form-grid">
-                            <input type="text" class="form-input" id="punishUser" placeholder="Kullanıcı Adı">
-                            <select class="form-input" id="punishType">
-                                <option>Timeout</option>
-                                <option>Ban</option>
-                            </select>
-                            <input type="number" class="form-input" id="punishDuration" placeholder="Süre (dakika)">
-                            <input type="text" class="form-input" id="punishReason" placeholder="Neden">
-                            <button class="btn" onclick="givePunishment()">Ceza Ver</button>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Admin: Roles -->
-                <div id="roles">
-                    <div class="section">
-                        <h2>👑 Roller</h2>
-                        <div class="form-grid">
-                            <input type="text" class="form-input" id="roleName" placeholder="Rol Adı">
-                            <input type="color" class="form-input" id="roleColor" value="#7c3aed">
-                            <button class="btn" onclick="addRole()">Rol Oluştur</button>
-                        </div>
-                        <table id="roleTable" style="margin-top: 20px;">
-                            <thead>
-                                <tr><th>Rol Adı</th><th>Renkle</th></tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Admin: Announcements -->
-                <div id="announcements">
-                    <div class="section">
-                        <h2>📢 Duyuru Yap</h2>
-                        <div class="form-grid">
-                            <input type="text" class="form-input" id="announceName" placeholder="Duyuru Adı">
-                            <input type="text" class="form-input" id="announceImage" placeholder="Görsel Linki">
-                            <textarea class="form-input" id="announceDesc" placeholder="Açıklama" rows="4"></textarea>
-                            <button class="btn" onclick="makeAnnouncement()">Duyur</button>
+                        <div class="card">
+                            <h3 style="color: #7c3aed;">Çevrimiçi Oyuncular</h3>
+                            <div style="font-size: 2rem; font-weight: bold; color: #fff; margin-top: 10px;" id="onlinePlayers">0</div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
     <script>
         let currentUser = null;
-        let sessionId = null;
         let isAdmin = false;
+        let sessionId = null;
         
-        function switchTab(tab) {
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
-            const tabBtns = document.querySelectorAll('.tab-btn');
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadServerInfo();
+            loadAnnouncements();
+            loadProducts();
             
-            tabBtns.forEach(btn => btn.classList.remove('active'));
+            // Copy IP to clipboard
+            document.getElementById('serverIPBtn').addEventListener('click', function() {
+                navigator.clipboard.writeText(this.textContent.replace('📋 ', ''));
+                alert('IP kopyalandı!');
+            });
+        });
+        
+        // Navigation
+        function showSection(section) {
+            document.querySelectorAll('.main-content, #homeSection').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-menu a').forEach(a => a.classList.remove('active'));
+            
+            if (section === 'home') {
+                document.getElementById('homeSection').style.display = 'block';
+            } else {
+                document.getElementById(section + 'Section').classList.add('active');
+            }
+            
+            event.target.classList.add('active');
+        }
+        
+        // Login Modal
+        function openLoginModal(tab) {
+            document.getElementById('loginModal').classList.add('active');
+            switchModalTab(tab);
+        }
+        
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+        }
+        
+        function switchModalTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+            document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
             
             if (tab === 'login') {
-                loginForm.style.display = 'block';
-                registerForm.style.display = 'none';
-                tabBtns[0].classList.add('active');
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
             } else {
-                loginForm.style.display = 'none';
-                registerForm.style.display = 'block';
-                tabBtns[1].classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
             }
         }
         
+        // Auth Functions
         async function login() {
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
@@ -947,9 +983,18 @@ app.get('/', (req, res) => {
             const data = await res.json();
             if (data.success) {
                 currentUser = username;
+                isAdmin = data.admin;
                 sessionId = data.sessionId;
-                isAdmin = username === 'umut';
-                showDashboard();
+                
+                document.getElementById('loginButtons').style.display = 'none';
+                document.getElementById('userButtons').style.display = 'flex';
+                document.getElementById('usernameDisplay').textContent = username + (isAdmin ? ' (Admin)' : '');
+                
+                closeLoginModal();
+                
+                if (isAdmin) {
+                    showAdminDashboard();
+                }
             } else {
                 alert(data.message || 'Giriş başarısız');
             }
@@ -974,54 +1019,182 @@ app.get('/', (req, res) => {
             const data = await res.json();
             alert(data.message);
             if (data.success) {
-                switchTab('login');
+                switchModalTab('login');
             }
         }
         
-        function showDashboard() {
-            document.getElementById('loginPage').style.display = 'none';
-            document.getElementById('dashboard').style.display = 'block';
-            document.getElementById('username-display').textContent = currentUser;
+        function logout() {
+            currentUser = null;
+            isAdmin = false;
+            sessionId = null;
             
-            if (isAdmin) {
-                document.getElementById('admin-section').style.display = 'block';
-                document.getElementById('admin-settings').style.display = 'block';
-                document.getElementById('admin-products').style.display = 'block';
-                document.getElementById('admin-punish').style.display = 'block';
-                document.getElementById('admin-roles').style.display = 'block';
-                document.getElementById('admin-announce').style.display = 'block';
-                loadServerSettings();
-            }
+            document.getElementById('loginButtons').style.display = 'flex';
+            document.getElementById('userButtons').style.display = 'none';
+            document.getElementById('adminDashboard').style.display = 'none';
+            document.getElementById('homeSection').style.display = 'block';
             
-            loadServerInfo();
-            showTab('home');
+            alert('Çıkış yapıldı!');
         }
         
-        async function loadServerSettings() {
-            const res = await fetch('/api/admin/settings');
+        // Load Server Info
+        async function loadServerInfo() {
+            const res = await fetch('/api/server-info');
             const data = await res.json();
             
-            document.getElementById('serverIP').value = data.ip || '';
-            document.getElementById('serverPort').value = data.port || 25565;
-            document.getElementById('maxPlayers').value = data.maxPlayers || 100;
-            document.getElementById('playersOnline').value = data.playersOnline || 0;
+            document.getElementById('serverName').textContent = data.name;
+            document.getElementById('serverIPBtn').textContent = '📋 ' + data.ip;
+            document.getElementById('playersOnline').textContent = data.playersOnline;
+            document.getElementById('serverVersion').textContent = data.version;
+            
+            if (data.maintenance) {
+                const banner = document.getElementById('maintenanceBanner');
+                banner.style.display = 'block';
+                banner.textContent = '🔧 ' + data.maintenanceMessage;
+                document.getElementById('heroStats').style.opacity = '0.5';
+            }
         }
         
-        async function saveServerSettings() {
-            const ip = document.getElementById('serverIP').value;
-            const port = document.getElementById('serverPort').value;
-            const maxPlayers = document.getElementById('maxPlayers').value;
-            const playersOnline = document.getElementById('playersOnline').value;
+        // Load Announcements
+        async function loadAnnouncements() {
+            const res = await fetch('/api/announcements');
+            const data = await res.json();
             
-            if (!ip) {
-                alert('IP adresi giriniz!');
+            const html = data.map(a => \`
+                <div class="card">
+                    <h3 style="color: #7c3aed;">\${a.title}</h3>
+                    <p style="margin-top: 10px;">\${a.content}</p>
+                    <small style="color: #666;">
+                        \${new Date(a.date).toLocaleDateString('tr-TR')}
+                    </small>
+                </div>
+            \`).join('');
+            
+            document.getElementById('announcementsList').innerHTML = html;
+        }
+        
+        // Load Products
+        async function loadProducts() {
+            const res = await fetch('/api/products');
+            const data = await res.json();
+            
+            const html = data.map(p => \`
+                <div class="card">
+                    <h3 style="color: #7c3aed;">\${p.name}</h3>
+                    <p style="margin-top: 10px;">\${p.description}</p>
+                    <div style="color: #10b981; font-weight: bold; margin-top: 10px;">₺\${p.price}</div>
+                    <button class="btn" style="width: 100%; margin-top: 10px;">Satın Al</button>
+                </div>
+            \`).join('');
+            
+            document.getElementById('shopProducts').innerHTML = html;
+        }
+        
+        // Submit Application
+        async function submitApplication() {
+            const username = document.getElementById('appUsername').value;
+            const position = document.getElementById('appPosition').value;
+            const reason = document.getElementById('appReason').value;
+            
+            if (!username || !position || !reason) {
+                alert('Tüm alanları doldurun!');
                 return;
             }
             
-            const res = await fetch('/api/admin/settings', {
+            const res = await fetch('/api/apply', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ip, port, maxPlayers, playersOnline })
+                body: JSON.stringify({ username, position, reason })
+            });
+            
+            const data = await res.json();
+            alert(data.message);
+            if (data.success) {
+                document.getElementById('appUsername').value = '';
+                document.getElementById('appPosition').value = '';
+                document.getElementById('appReason').value = '';
+            }
+        }
+        
+        // Admin Functions
+        function showAdminDashboard() {
+            document.getElementById('homeSection').style.display = 'none';
+            document.querySelectorAll('.main-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('adminDashboard').style.display = 'flex';
+            loadAdminData();
+        }
+        
+        function showAdminSection(section) {
+            document.querySelectorAll('.admin-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.admin-sidebar a').forEach(a => a.classList.remove('active'));
+            
+            document.getElementById(section).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function loadAdminData() {
+            const serverRes = await fetch('/api/server-info');
+            const serverData = await serverRes.json();
+            
+            document.getElementById('adminServerName').value = serverData.name;
+            document.getElementById('adminServerIP').value = serverData.ip;
+            document.getElementById('adminServerPort').value = serverData.port;
+            document.getElementById('adminMaxPlayers').value = serverData.maxPlayers;
+            document.getElementById('adminPlayersOnline').value = serverData.playersOnline;
+            document.getElementById('adminServerVersion').value = serverData.version;
+            
+            document.getElementById('maintenanceToggle').checked = serverData.maintenance;
+            document.getElementById('maintenanceMessage').value = serverData.maintenanceMessage;
+            
+            // Load applications table
+            const appRes = await fetch('/api/applications');
+            const apps = await appRes.json();
+            
+            const appHtml = apps.map(a => \`
+                <tr>
+                    <td>\${a.username}</td>
+                    <td>\${a.position}</td>
+                    <td><span class="status-badge status-\${a.status.toLowerCase().replace(' ', '_')}">\${a.status}</span></td>
+                    <td>\${new Date(a.date).toLocaleDateString('tr-TR')}</td>
+                    <td>
+                        <button class="btn" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 5px;" onclick="updateApplicationStatus(\${a.id}, 'Onaylandı')">✓</button>
+                        <button class="btn" style="padding: 5px 10px; font-size: 0.8rem; background: #ef4444;" onclick="updateApplicationStatus(\${a.id}, 'Reddedildi')">✕</button>
+                    </td>
+                </tr>
+            \`).join('');
+            
+            document.getElementById('applicationsTable').querySelector('tbody').innerHTML = appHtml;
+            
+            // Load users table
+            const usersHtml = Object.values(config.users || {}).map(u => \`
+                <tr>
+                    <td>\${u.username}</td>
+                    <td>\${u.email}</td>
+                    <td>\${u.roles.join(', ')}</td>
+                    <td>\${new Date(u.createdAt).toLocaleDateString('tr-TR')}</td>
+                </tr>
+            \`).join('');
+            
+            // Load stats
+            const statsRes = await fetch('/api/stats');
+            const stats = await statsRes.json();
+            
+            document.getElementById('totalUsers').textContent = stats.totalUsers;
+            document.getElementById('totalApplications').textContent = stats.totalApplications;
+            document.getElementById('onlinePlayers').textContent = serverData.playersOnline;
+        }
+        
+        async function saveServerSettings() {
+            const name = document.getElementById('adminServerName').value;
+            const ip = document.getElementById('adminServerIP').value;
+            const port = document.getElementById('adminServerPort').value;
+            const maxPlayers = document.getElementById('adminMaxPlayers').value;
+            const playersOnline = document.getElementById('adminPlayersOnline').value;
+            const version = document.getElementById('adminServerVersion').value;
+            
+            const res = await fetch('/api/admin/server-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, ip, port, maxPlayers, playersOnline, version })
             });
             
             const data = await res.json();
@@ -1031,83 +1204,64 @@ app.get('/', (req, res) => {
             }
         }
         
-        async function loadServerInfo() {
-            const res = await fetch('/api/server-info');
-            const data = await res.json();
+        async function toggleMaintenance() {
+            const maintenance = document.getElementById('maintenanceToggle').checked;
+            const message = document.getElementById('maintenanceMessage').value;
             
-            document.getElementById('serverInfo').innerHTML = \`
-                <div class="info-card">
-                    <h3>🖥️ Sunucu IP</h3>
-                    <div class="value">\${data.ip}</div>
-                </div>
-                <div class="info-card">
-                    <h3>👥 Oyuncular</h3>
-                    <div class="value">\${data.playersOnline} / \${data.maxPlayers}</div>
-                </div>
-            \`;
-            
-            const announcements = await fetch('/api/announcements');
-            const annData = await announcements.json();
-            document.getElementById('announcements-list').innerHTML = annData.map(a => \`
-                <div class="section" style="margin-bottom: 10px;">
-                    <h3 style="color: #7c3aed;">\${a.name}</h3>
-                    <p>\${a.desc}</p>
-                </div>
-            \`).join('');
-        }
-        
-        function showTab(tab) {
-            document.querySelectorAll('.content > div').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-            document.getElementById(tab).classList.add('active');
-            event?.target?.classList.add('active');
-        }
-        
-        async function logout() {
-            await fetch('/api/logout', {
+            const res = await fetch('/api/admin/maintenance', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId })
+                body: JSON.stringify({ maintenance, message })
             });
-            location.reload();
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Bakım modu güncellendi!');
+                loadServerInfo();
+            }
         }
         
-        function addProduct() {
-            alert('Ürün eklendi!');
+        async function addAnnouncement() {
+            const title = document.getElementById('announcementTitle').value;
+            const content = document.getElementById('announcementContent').value;
+            
+            if (!title || !content) {
+                alert('Tüm alanları doldurun!');
+                return;
+            }
+            
+            const res = await fetch('/api/admin/announcement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Duyuru eklendi!');
+                document.getElementById('announcementTitle').value = '';
+                document.getElementById('announcementContent').value = '';
+                loadAnnouncements();
+            }
         }
         
-        function givePunishment() {
-            alert('Ceza verildi!');
-        }
-        
-        function addRole() {
-            alert('Rol oluşturuldu!');
-        }
-        
-        function makeAnnouncement() {
-            alert('Duyuru yapıldı!');
+        async function updateApplicationStatus(appId, status) {
+            const res = await fetch('/api/admin/application-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appId, status })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Başvuru durumu güncellendi!');
+                loadAdminData();
+            }
         }
     </script>
 </body>
 </html>
     `);
-});
-
-// Admin settings endpoint
-app.post('/api/admin/settings', (req, res) => {
-    const { ip, port, maxPlayers, playersOnline } = req.body;
-    
-    config.server.ip = ip || config.server.ip;
-    config.server.port = port || config.server.port;
-    config.server.maxPlayers = maxPlayers || config.server.maxPlayers;
-    config.server.playersOnline = playersOnline || config.server.playersOnline;
-    
-    saveConfig();
-    res.json({ success: true, server: config.server });
-});
-
-app.get('/api/admin/settings', (req, res) => {
-    res.json(config.server);
 });
 
 // Keep-alive
@@ -1116,20 +1270,17 @@ const PORT = process.env.PORT || 3001;
 
 const server = http.createServer(app);
 server.listen(PORT, () => {
-    console.log(`✅ Web server başladı: http://localhost:${PORT}`);
+    console.log(`✅ Minecraft Sunucu Sitesi başladı: http://localhost:${PORT}`);
 });
 
-// Bot
+// Discord Bot
 const token = process.env.DISCORD_TOKEN;
-if (!token) {
-    console.error('❌ DISCORD_TOKEN bulunamadı!');
-    process.exit(1);
+if (token) {
+    client.once('ready', () => {
+        console.log(`✅ Discord Bot başladı: ${client.user.tag}`);
+    });
+    
+    client.login(token).catch(err => {
+        console.error('❌ Bot hatası:', err.message);
+    });
 }
-
-client.once('ready', () => {
-    console.log(`✅ Bot başladı: ${client.user.tag}`);
-});
-
-client.login(token).catch(err => {
-    console.error('❌ Bot hatası:', err.message);
-});
