@@ -348,7 +348,7 @@ async function handleSetBloxChannel(interaction, options) {
 
         await channel.send({ embeds: [welcomeEmbed] });
     } catch (error) {
-        console.error('Kanal mesajı gönderme hatası:', error);
+        console.error('Kanal mesaji gonderme hatasi:', error);
     }
 }
 
@@ -401,7 +401,7 @@ async function handleAddFruit(interaction, options) {
 
             await channel.send({ embeds: [embed] });
         } catch (error) {
-            console.error('Kanal'a duyuru gönderme hatası:', error);
+            console.error('Kanal mesajı gonderme hatasi:', error);
         }
     }
 
