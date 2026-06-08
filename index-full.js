@@ -28,22 +28,15 @@ const client = new Client({
 const configPath = path.join(__dirname, 'config.json');
 let config = {};
 
-const OWNER_ID = 'umutpapa123';
-
 if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 } else {
     config = {
-        stockChannel: null,
-        products: [],
-        accounts: [],
-        users: {},
-        giveaways: [],
-        dailyAttempts: {}, // { userId: { date: '2024-01-01', used: true } }
-        stats: {
-            freeAccountsGiven: 0,
-            registeredUsers: 0,
-            stockUpdates: 0
+        duyuruKanali: null,
+        cekilisler: [],
+        istatistikler: {
+            duyuruSayisi: 0,
+            cekilislikSayisi: 0
         }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
@@ -56,58 +49,8 @@ function saveConfig() {
 // Komutlar
 const commands = [
     new SlashCommandBuilder()
-        .setName('bedavahesap')
-        .setDescription('Düşük şansla ücretsiz hesap kazan!')
-        .addStringOption(option =>
-            option.setName('roblox_kullanıcı')
-                .setDescription('Hesabı alacak Roblox kullanıcı adı')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('ürünekle')
-        .setDescription('Ürün ekle')
-        .addStringOption(option =>
-            option.setName('ürün_adı')
-                .setDescription('Ürün adı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('açıklama')
-                .setDescription('Ürün açıklaması')
-                .setRequired(false)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('stokekle')
-        .setDescription('Stok ekle (Roblox hesabı bilgileriyle)')
-        .addStringOption(option =>
-            option.setName('ürün')
-                .setDescription('Stok eklenecek ürün')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('roblox_kullanıcı')
-                .setDescription('Roblox kullanıcı adı')
-                .setRequired(true)
-        )
-        .addStringOption(option =>
-            option.setName('roblox_şifre')
-                .setDescription('Roblox şifresi (güvenli tutulur)')
-                .setRequired(true)
-        ),
-
-    new SlashCommandBuilder()
-        .setName('kayıt ol')
-        .setDescription('Yeni hesap oluştur'),
-
-    new SlashCommandBuilder()
-        .setName('hesapgiriş')
-        .setDescription('Hesaba giriş yap'),
-
-    new SlashCommandBuilder()
         .setName('çekiliş ekle')
-        .setDescription('Çekiliş ekle (Sadece umutpapa123)')
+        .setDescription('Yeni çekiliş oluştur')
         .addStringOption(option =>
             option.setName('ödül')
                 .setDescription('Çekiliş ödülü')
@@ -120,11 +63,30 @@ const commands = [
         ),
 
     new SlashCommandBuilder()
-        .setName('stokkanalekle')
-        .setDescription('Stok duyuru kanalını ayarla (Admin only)')
+        .setName('duyuru')
+        .setDescription('Duyuru gönder (Admin only)')
+        .addStringOption(option =>
+            option.setName('başlık')
+                .setDescription('Duyuru başlığı')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('içerik')
+                .setDescription('Duyuru içeriği')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('renk')
+                .setDescription('Renk (mavi/yeşil/kırmızı/mor)')
+                .setRequired(false)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('duyuru kanal ayarla')
+        .setDescription('Duyuru kanalını ayarla (Admin only)')
         .addChannelOption(option =>
             option.setName('kanal')
-                .setDescription('Stok duyuruları gönderilecek kanal')
+                .setDescription('Duyuru kanalı')
                 .setRequired(true)
                 .addChannelTypes(ChannelType.GuildText)
         )
@@ -148,20 +110,12 @@ client.on('interactionCreate', async interaction => {
     const { commandName, options, user, guild } = interaction;
 
     try {
-        if (commandName === 'bedavahesap') {
-            await handleFreeAccount(interaction, options);
-        } else if (commandName === 'ürünekle') {
-            await handleAddProduct(interaction, options);
-        } else if (commandName === 'stokekle') {
-            await handleAddStock(interaction, options);
-        } else if (commandName === 'kayıt ol') {
-            await handleRegister(interaction);
-        } else if (commandName === 'hesapgiriş') {
-            await handleLogin(interaction);
-        } else if (commandName === 'çekiliş ekle') {
+        if (commandName === 'çekiliş ekle') {
             await handleAddGiveaway(interaction, options);
-        } else if (commandName === 'stokkanalekle') {
-            await handleSetStockChannel(interaction, options);
+        } else if (commandName === 'duyuru') {
+            await handleAnnouncement(interaction, options, guild);
+        } else if (commandName === 'duyuru kanal ayarla') {
+            await handleSetAnnouncementChannel(interaction, options);
         }
     } catch (error) {
         console.error('Komut hatası:', error);
@@ -172,254 +126,41 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Bedava Hesap Komutu
-async function handleFreeAccount(interaction, options) {
-    const robloxUsername = options.getString('roblox_kullanıcı');
-    const userId = interaction.user.id;
-    const today = new Date().toISOString().split('T')[0];
-
-    // Günlük deneme kontrolü
-    if (!config.dailyAttempts[userId]) {
-        config.dailyAttempts[userId] = { date: today, used: false };
-    }
-
-    if (config.dailyAttempts[userId].date === today && 
-        config.dailyAttempts[userId].used && 
-        interaction.user.username !== OWNER_ID) {
-        
-        await interaction.reply({
-            content: '❌ Günde 1 kere hak vardır! Yarın tekrar deneyebilirsiniz.',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    // Günü değiştiyse resetle
-    if (config.dailyAttempts[userId].date !== today) {
-        config.dailyAttempts[userId] = { date: today, used: false };
-    }
-
-    // Düşük şansa tabi tut (% 15 şans)
-    const chance = Math.random() < 0.15;
-
-    if (!chance) {
-        await interaction.reply({
-            content: '❌ Puan yetersiz! Daha sonra tekrar deneyin.',
-            flags: MessageFlags.Ephemeral
-        });
-        config.dailyAttempts[userId].used = true;
-        saveConfig();
-        return;
-    }
-
-    // Hesap varsa seç
-    if (config.accounts.length === 0) {
-        await interaction.reply({
-            content: '❌ Şu anda dağıtılacak hesap yok!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const account = config.accounts.pop();
-    config.stats.freeAccountsGiven++;
-    config.dailyAttempts[userId].used = true;
-    saveConfig();
-
-    // Özel mesaj olarak gönder
-    try {
-        const embed = new EmbedBuilder()
-            .setColor(0x00ff88)
-            .setTitle('🎉 Tebrikler! Ücretsiz Hesap Kazandınız!')
-            .setDescription('Başarıyla bir hesap kazandınız!')
-            .addFields(
-                { name: 'Roblox Kullanıcı Adı', value: account.username, inline: false },
-                { name: 'Şifre', value: account.password, inline: false },
-                { name: 'Notlar', value: account.notes || 'Hesabı kullanmak için Roblox\'a giriş yapınız.', inline: false }
-            )
-            .setFooter({ text: 'Bu bilgileri kimseyle paylaşmayın!' })
-            .setTimestamp();
-
-        await interaction.user.send({ embeds: [embed] });
-
-        await interaction.reply({
-            content: '✅ Tebrikler! Hesap özel mesajınıza gönderildi!',
-            flags: MessageFlags.Ephemeral
-        });
-    } catch (error) {
-        await interaction.reply({
-            content: '⚠️ Hesap kazandınız ama özel mesaj gönderilemedi. DM\'leriniz kapalı olabilir.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
-
-// Ürün Ekle
-async function handleAddProduct(interaction, options) {
-    const productName = options.getString('ürün_adı');
-    const description = options.getString('açıklama') || 'Açıklama yok';
-
-    config.products.push({
-        name: productName,
-        description: description,
-        addedBy: interaction.user.tag,
-        addedAt: new Date().toISOString()
-    });
-    saveConfig();
-
-    await interaction.reply({
-        content: `✅ Ürün "${productName}" başarıyla eklendi!`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// Stok Ekle (umutpapa123 only)
-async function handleAddStock(interaction, options) {
-    if (interaction.user.username !== OWNER_ID) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    const product = options.getString('ürün');
-    const robloxUsername = options.getString('roblox_kullanıcı');
-    const robloxPassword = options.getString('roblox_şifre');
-
-    config.accounts.push({
-        username: robloxUsername,
-        password: robloxPassword,
-        product: product,
-        addedAt: new Date().toISOString()
-    });
-    config.stats.stockUpdates++;
-    saveConfig();
-
-    await interaction.reply({
-        content: `✅ Stok eklendi!\n📦 Ürün: ${product}\n👤 Hesap: ${robloxUsername}`,
-        flags: MessageFlags.Ephemeral
-    });
-
-    // Stok kanalına duyuru gönder
-    if (config.stockChannel) {
-        try {
-            const channel = await client.channels.fetch(config.stockChannel);
-            const embed = new EmbedBuilder()
-                .setColor(0x00ff88)
-                .setTitle('📦 Yeni Stok Eklendi!')
-                .setDescription(`${product} ürünü için yeni hesap eklendi!`)
-                .addFields(
-                    { name: 'Stok Durumu', value: `${config.accounts.length} hesap mevcut`, inline: false }
-                )
-                .setTimestamp();
-
-            await channel.send({ embeds: [embed] });
-        } catch (error) {
-            console.error('Stok kanalı hatası:', error);
-        }
-    }
-}
-
-// Kayıt Ol
-async function handleRegister(interaction) {
-    const userId = interaction.user.id;
-
-    if (config.users[userId]) {
-        await interaction.reply({
-            content: '❌ Zaten kayıtlı biri bulunuyor!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    config.users[userId] = {
-        username: interaction.user.username,
-        registeredAt: new Date().toISOString(),
-        loggedIn: true,
-        accounts: []
-    };
-    config.stats.registeredUsers++;
-    saveConfig();
-
-    await interaction.reply({
-        content: `✅ Hesap oluşturuldu! Kullanıcı: ${interaction.user.username}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// Hesap Giriş
-async function handleLogin(interaction) {
-    const userId = interaction.user.id;
-
-    if (!config.users[userId]) {
-        await interaction.reply({
-            content: '❌ Önce /kayıt ol komutu ile hesap oluşturun!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
-    config.users[userId].loggedIn = true;
-    saveConfig();
-
-    const embed = new EmbedBuilder()
-        .setColor(0x7289DA)
-        .setTitle('✅ Başarıyla Giriş Yaptınız!')
-        .setDescription(`Hoşgeldiniz ${interaction.user.username}!`)
-        .addFields(
-            { name: 'Hesap Durumu', value: 'Aktif', inline: true },
-            { name: 'Giriş Zamanı', value: new Date().toLocaleString('tr-TR'), inline: true }
-        )
-        .setFooter({ text: 'ShadowBot Free Account System' })
-        .setTimestamp();
-
-    await interaction.reply({
-        embeds: [embed],
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// Çekiliş Ekle (umutpapa123 only)
+// Çekiliş Ekle
 async function handleAddGiveaway(interaction, options) {
-    if (interaction.user.username !== OWNER_ID) {
-        await interaction.reply({
-            content: '❌ Bu komutu sadece umutpapa123 kullanabilir!',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
     const prize = options.getString('ödül');
-    const description = options.getString('açıklama') || 'Katılmak için aşağıdaki butona tıklayın!';
+    const description = options.getString('açıklama') || 'Çekilişe katılmak için aşağıdaki butona tıkla!';
 
     const giveaway = {
         id: Date.now().toString(),
         prize: prize,
         description: description,
         createdAt: new Date().toISOString(),
+        createdBy: interaction.user.tag,
         participants: []
     };
 
-    config.giveaways.push(giveaway);
+    config.cekilisler.push(giveaway);
+    config.istatistikler.cekilislikSayisi++;
     saveConfig();
 
     const button = new ButtonBuilder()
         .setCustomId(`giveaway_${giveaway.id}`)
         .setLabel('🎉 Çekilişe Katıl')
-        .setStyle(ButtonStyle.Green);
+        .setStyle(ButtonStyle.Primary);
 
     const row = new ActionRowBuilder().addComponents(button);
 
     const embed = new EmbedBuilder()
-        .setColor(0xFFD700)
+        .setColor(0x7c3aed)
         .setTitle('🎉 YENİ ÇEKİLİŞ!')
         .setDescription(description)
         .addFields(
-            { name: 'Ödül', value: prize, inline: false },
-            { name: 'Katılımcılar', value: '0', inline: true }
+            { name: '🏆 Ödül', value: prize, inline: false },
+            { name: '👥 Katılımcılar', value: '0', inline: true },
+            { name: '📅 Oluşturan', value: interaction.user.tag, inline: true }
         )
-        .setFooter({ text: 'ShadowBot Çekiliş Sistemi' })
+        .setFooter({ text: 'ShadowCore - Çekiliş Sistemi' })
         .setTimestamp();
 
     await interaction.reply({
@@ -428,8 +169,69 @@ async function handleAddGiveaway(interaction, options) {
     });
 }
 
-// Stok Kanalı Ayarla
-async function handleSetStockChannel(interaction, options) {
+// Duyuru Gönder
+async function handleAnnouncement(interaction, options, guild) {
+    const member = await guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece yöneticiler kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (!config.duyuruKanali) {
+        await interaction.reply({
+            content: '❌ Duyuru kanalı ayarlanmamış! `/duyuru kanal ayarla` kullanın.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const title = options.getString('başlık');
+    const content = options.getString('içerik');
+    const colorStr = options.getString('renk') || 'mavi';
+
+    const colors = {
+        'mavi': 0x3b82f6,
+        'yeşil': 0x10b981,
+        'kırmızı': 0xef4444,
+        'mor': 0x7c3aed
+    };
+
+    try {
+        const channel = await client.channels.fetch(config.duyuruKanali);
+
+        const embed = new EmbedBuilder()
+            .setColor(colors[colorStr] || colors['mavi'])
+            .setTitle('📢 ' + title)
+            .setDescription(content)
+            .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+            .setFooter({ text: 'ShadowCore' })
+            .setTimestamp();
+
+        await channel.send({
+            content: '@everyone',
+            embeds: [embed]
+        });
+
+        config.istatistikler.duyuruSayisi++;
+        saveConfig();
+
+        await interaction.reply({
+            content: '✅ Duyuru gönderildi!',
+            flags: MessageFlags.Ephemeral
+        });
+    } catch (error) {
+        await interaction.reply({
+            content: `❌ Duyuru gönderilemedi: ${error.message}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
+
+// Duyuru Kanalı Ayarla
+async function handleSetAnnouncementChannel(interaction, options) {
     const member = await interaction.guild.members.fetch(interaction.user.id);
     if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         await interaction.reply({
@@ -440,11 +242,11 @@ async function handleSetStockChannel(interaction, options) {
     }
 
     const channel = options.getChannel('kanal');
-    config.stockChannel = channel.id;
+    config.duyuruKanali = channel.id;
     saveConfig();
 
     await interaction.reply({
-        content: `✅ Stok duyuru kanalı ${channel} olarak ayarlandı!`,
+        content: `✅ Duyuru kanalı ${channel} olarak ayarlandı!`,
         flags: MessageFlags.Ephemeral
     });
 }
@@ -454,22 +256,15 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.json());
 
-// Session kontrol
-function isAuthenticated(req) {
-    return req.session && req.session.userId;
-}
-
-// Dashboard HTML - Login Sayfası / Dashboard
+// Dashboard HTML
 app.get('/', (req, res) => {
-    const isLoggedIn = localStorage ? true : false;
-    
     res.send(`
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bedava Hesap Sistemi - SHADOWMC</title>
+    <title>ShadowCore - Yönetim Paneli</title>
     <style>
         * {
             margin: 0;
@@ -495,6 +290,7 @@ app.get('/', (req, res) => {
             position: sticky;
             top: 0;
             z-index: 100;
+            backdrop-filter: blur(10px);
         }
         
         .navbar-brand {
@@ -527,101 +323,7 @@ app.get('/', (req, res) => {
             color: #7c3aed;
         }
         
-        .login-btn {
-            background: #7c3aed;
-            color: white;
-            padding: 8px 20px;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background 0.3s;
-        }
-        
-        .login-btn:hover {
-            background: #6d28d9;
-        }
-        
-        /* LOGIN PAGE */
-        .login-container {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(10, 14, 39, 0.95);
-            justify-content: center;
-            align-items: center;
-            z-index: 200;
-        }
-        
-        .login-container.active {
-            display: flex;
-        }
-        
-        .login-box {
-            background: linear-gradient(135deg, #1a1a3e 0%, #2d2b6b 100%);
-            border: 1px solid #3d3b7f;
-            border-radius: 15px;
-            padding: 50px;
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        }
-        
-        .login-box h2 {
-            color: #fff;
-            margin-bottom: 30px;
-            font-size: 1.8rem;
-        }
-        
-        .login-box input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 15px;
-            background: #0a0e27;
-            border: 1px solid #3d3b7f;
-            color: #fff;
-            border-radius: 6px;
-            font-size: 1rem;
-        }
-        
-        .login-box input::placeholder {
-            color: #666;
-        }
-        
-        .login-box button {
-            width: 100%;
-            padding: 12px;
-            background: #7c3aed;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background 0.3s;
-            margin-top: 10px;
-        }
-        
-        .login-box button:hover {
-            background: #6d28d9;
-        }
-        
-        .close-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 2rem;
-            color: #fff;
-            cursor: pointer;
-            background: none;
-            border: none;
-        }
-        
-        /* DASHBOARD CONTAINER */
+        /* CONTAINER */
         .container {
             display: flex;
             min-height: calc(100vh - 60px);
@@ -688,7 +390,7 @@ app.get('/', (req, res) => {
         /* STAT CARDS */
         .stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             margin-bottom: 30px;
         }
@@ -701,10 +403,8 @@ app.get('/', (req, res) => {
             text-align: center;
         }
         
-        .stat-card.green { border-top: 3px solid #10b981; }
-        .stat-card.blue { border-top: 3px solid #3b82f6; }
-        .stat-card.yellow { border-top: 3px solid #f59e0b; }
         .stat-card.purple { border-top: 3px solid #a855f7; }
+        .stat-card.blue { border-top: 3px solid #3b82f6; }
         
         .stat-card h3 {
             color: #a0aec0;
@@ -735,34 +435,29 @@ app.get('/', (req, res) => {
             font-size: 1.1rem;
         }
         
-        .item-grid {
+        .giveaway-list {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 15px;
         }
         
-        .item-card {
+        .giveaway-card {
             background: #0a0e27;
             border: 1px solid #3d3b7f;
             border-radius: 8px;
             padding: 15px;
-            text-align: center;
         }
         
-        .item-card .icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-        }
-        
-        .item-card h4 {
-            color: #fff;
-            font-size: 0.95rem;
+        .giveaway-card h4 {
+            color: #7c3aed;
+            font-size: 1rem;
             margin-bottom: 8px;
         }
         
-        .item-card p {
+        .giveaway-card p {
             color: #a0aec0;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
         }
         
         .no-data {
@@ -797,46 +492,24 @@ app.get('/', (req, res) => {
 <body>
     <!-- NAV BAR -->
     <div class="navbar">
-        <div class="navbar-brand">SHADOW<span>MC</span></div>
+        <div class="navbar-brand">SHADOW<span>CORE</span></div>
         <ul class="nav-menu">
             <li><a onclick="showDashboard()">Anasayfa</a></li>
-            <li><a onclick="showAccounts()">Hesaplar</a></li>
-            <li><a onclick="showProducts()">Ürünler</a></li>
-            <li><a onclick="showStats()">İstatistikler</a></li>
-            <li><button class="login-btn" onclick="toggleLogin()">Giriş Yap</button></li>
+            <li><a onclick="showCekilisler()">Çekilişler</a></li>
+            <li><a onclick="showDuyurular()">Duyurular</a></li>
+            <li><a onclick="showIstatistikler()">İstatistikler</a></li>
         </ul>
-    </div>
-    
-    <!-- LOGIN MODAL -->
-    <div class="login-container" id="loginModal">
-        <button class="close-btn" onclick="toggleLogin()">✕</button>
-        <div class="login-box">
-            <h2>🔐 Giriş Yap</h2>
-            <input type="text" id="username" placeholder="Kullanıcı Adı" />
-            <input type="password" id="password" placeholder="Şifre" />
-            <button onclick="login()">Giriş Yap</button>
-            <div style="margin-top: 15px; color: #7c3aed;">
-                <p>Hesabınız yok mu? <a href="#" onclick="toggleRegister()" style="color: #fff; text-decoration: underline;">Kayıt Ol</a></p>
-            </div>
-        </div>
     </div>
     
     <!-- MAIN CONTAINER -->
     <div class="container">
         <!-- SIDEBAR -->
         <div class="sidebar">
-            <h3>Yönetim Paneli</h3>
+            <h3>Yönetim</h3>
             <a onclick="showDashboard()" class="active">📊 Dashboard</a>
-            <a onclick="showAccounts()">👤 Hesaplar</a>
-            <a onclick="showProducts()">📦 Ürünler</a>
-            
-            <h3>İçerik</h3>
-            <a onclick="showStats()">📈 İstatistikler</a>
-            <a onclick="showGiveaways()">🎁 Çekilişler</a>
-            
-            <h3>Kullanıcı</h3>
-            <a onclick="showProfile()">👥 Profil</a>
-            <a onclick="logout()">🚪 Çıkış</a>
+            <a onclick="showCekilisler()">🎉 Çekilişler</a>
+            <a onclick="showDuyurular()">📢 Duyurular</a>
+            <a onclick="showIstatistikler()">📈 İstatistikler</a>
         </div>
         
         <!-- MAIN CONTENT -->
@@ -845,77 +518,62 @@ app.get('/', (req, res) => {
             <div id="dashboard-view">
                 <div class="header">
                     <h2>Dashboard</h2>
-                    <p>Bedava Hesap Sistemi</p>
+                    <p>ShadowCore Yönetim Sistemi</p>
                 </div>
                 
                 <div class="stats">
-                    <div class="stat-card green">
-                        <h3>🎁 Dağıtılan</h3>
-                        <div class="number" id="stat-given">0</div>
-                    </div>
-                    <div class="stat-card blue">
-                        <h3>👥 Kullanıcı</h3>
-                        <div class="number" id="stat-users">0</div>
-                    </div>
-                    <div class="stat-card yellow">
-                        <h3>📦 Stok</h3>
-                        <div class="number" id="stat-stock">0</div>
-                    </div>
                     <div class="stat-card purple">
                         <h3>🎉 Çekiliş</h3>
-                        <div class="number" id="stat-giveaways">0</div>
+                        <div class="number" id="stat-cekilisler">0</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <h3>📢 Duyuru</h3>
+                        <div class="number" id="stat-duyurular">0</div>
                     </div>
                 </div>
                 
                 <div class="section">
-                    <h3>📝 Son Başvurular</h3>
-                    <div class="item-grid">
-                        <div class="no-data">Henüz başvuru yok</div>
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <h3>🎉 Aktif Çekilişler</h3>
-                    <div id="giveaways-list" class="item-grid">
-                        <div class="no-data">Aktif çekiliş yok</div>
+                    <h3>🎉 Son Çekilişler</h3>
+                    <div id="recent-giveaways" class="giveaway-list">
+                        <div class="no-data">Henüz çekiliş yok</div>
                     </div>
                 </div>
             </div>
             
-            <!-- ACCOUNTS VIEW -->
-            <div id="accounts-view" style="display: none;">
+            <!-- CEKILISLER VIEW -->
+            <div id="cekilisler-view" style="display: none;">
                 <div class="header">
-                    <h2>Hesaplar</h2>
-                    <p>Dağıtılan Bedava Hesaplar</p>
+                    <h2>Çekilişler</h2>
+                    <p>Tüm Çekiliş Aktiviteleri</p>
                 </div>
                 <div class="section">
-                    <div id="accounts-list" class="item-grid">
-                        <div class="no-data">Henüz hesap yok</div>
+                    <div id="all-giveaways" class="giveaway-list">
+                        <div class="no-data">Henüz çekiliş yok</div>
                     </div>
                 </div>
             </div>
             
-            <!-- PRODUCTS VIEW -->
-            <div id="products-view" style="display: none;">
+            <!-- DUYURULAR VIEW -->
+            <div id="duyurular-view" style="display: none;">
                 <div class="header">
-                    <h2>Ürünler</h2>
-                    <p>Stokta Bulunan Ürünler</p>
+                    <h2>Duyurular</h2>
+                    <p>Gönderilen Duyurular</p>
                 </div>
                 <div class="section">
-                    <div id="products-list" class="item-grid">
-                        <div class="no-data">Henüz ürün yok</div>
+                    <div id="duyurular-list">
+                        <p style="color: #a0aec0;">Duyurular buraya görüntülenecek</p>
                     </div>
                 </div>
             </div>
             
-            <!-- STATS VIEW -->
-            <div id="stats-view" style="display: none;">
+            <!-- ISTATISTIKLER VIEW -->
+            <div id="istatistikler-view" style="display: none;">
                 <div class="header">
                     <h2>İstatistikler</h2>
                     <p>Sistem Aktivitesi</p>
                 </div>
                 <div class="section">
-                    <div id="stats-content">
+                    <div id="istatistikler-content">
                         <p style="color: #a0aec0;">İstatistikler yükleniyor...</p>
                     </div>
                 </div>
@@ -927,58 +585,79 @@ app.get('/', (req, res) => {
         function showDashboard() {
             document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
             document.getElementById('dashboard-view').style.display = 'block';
+            updateSidebar('dashboard');
             loadStats();
         }
         
-        function showAccounts() {
+        function showCekilisler() {
             document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('accounts-view').style.display = 'block';
+            document.getElementById('cekilisler-view').style.display = 'block';
+            updateSidebar('cekilisler');
+            loadGiveaways('all-giveaways');
         }
         
-        function showProducts() {
+        function showDuyurular() {
             document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('products-view').style.display = 'block';
+            document.getElementById('duyurular-view').style.display = 'block';
+            updateSidebar('duyurular');
         }
         
-        function showStats() {
+        function showIstatistikler() {
             document.querySelectorAll('[id$="-view"]').forEach(el => el.style.display = 'none');
-            document.getElementById('stats-view').style.display = 'block';
+            document.getElementById('istatistikler-view').style.display = 'block';
+            updateSidebar('istatistikler');
+            loadStats();
         }
         
-        function showGiveaways() {
-            alert('Çekilişler bölümü yakında...');
-        }
-        
-        function showProfile() {
-            alert('Profil bölümü yakında...');
-        }
-        
-        function toggleLogin() {
-            document.getElementById('loginModal').classList.toggle('active');
-        }
-        
-        function login() {
-            alert('Giriş sistemi yakında aktif olacak...');
-            toggleLogin();
-        }
-        
-        function logout() {
-            alert('Çıkış yaptınız!');
+        function updateSidebar(page) {
+            document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+            if (page === 'dashboard') document.querySelectorAll('.sidebar a')[1].classList.add('active');
+            if (page === 'cekilisler') document.querySelectorAll('.sidebar a')[2].classList.add('active');
+            if (page === 'duyurular') document.querySelectorAll('.sidebar a')[3].classList.add('active');
+            if (page === 'istatistikler') document.querySelectorAll('.sidebar a')[4].classList.add('active');
         }
         
         function loadStats() {
             fetch('/api/stats')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('stat-given').textContent = data.freeAccountsGiven;
-                    document.getElementById('stat-users').textContent = data.registeredUsers;
-                    document.getElementById('stat-stock').textContent = data.stockUpdates;
-                    document.getElementById('stat-giveaways').textContent = '0';
+                    document.getElementById('stat-cekilisler').textContent = data.cekilislikSayisi;
+                    document.getElementById('stat-duyurular').textContent = data.duyuruSayisi;
+                    document.getElementById('istatistikler-content').innerHTML = \`
+                        <div>
+                            <p style="color: #a0aec0; margin-bottom: 10px;">📊 <strong>Sistem İstatistikleri</strong></p>
+                            <p style="color: #a0aec0; margin: 5px 0;">🎉 Çekiliş Sayısı: <strong>\${data.cekilislikSayisi}</strong></p>
+                            <p style="color: #a0aec0; margin: 5px 0;">📢 Duyuru Sayısı: <strong>\${data.duyuruSayisi}</strong></p>
+                        </div>
+                    \`;
+                })
+                .catch(err => console.error(err));
+        }
+        
+        function loadGiveaways(elementId) {
+            fetch('/api/giveaways')
+                .then(r => r.json())
+                .then(data => {
+                    const element = document.getElementById(elementId);
+                    if (data.length === 0) {
+                        element.innerHTML = '<div class="no-data">Henüz çekiliş yok</div>';
+                        return;
+                    }
+                    element.innerHTML = data.map(g => \`
+                        <div class="giveaway-card">
+                            <h4>🏆 \${g.prize}</h4>
+                            <p><strong>Açıklama:</strong> \${g.description}</p>
+                            <p><strong>Katılımcılar:</strong> \${g.participants.length}</p>
+                            <p style="color: #666; font-size: 0.8rem;">ID: \${g.id}</p>
+                        </div>
+                    \`).join('');
                 })
                 .catch(err => console.error(err));
         }
         
         loadStats();
+        loadGiveaways('recent-giveaways');
+        setInterval(() => loadStats(), 5000);
     </script>
 </body>
 </html>
@@ -987,7 +666,11 @@ app.get('/', (req, res) => {
 
 // API
 app.get('/api/stats', (req, res) => {
-    res.json(config.stats);
+    res.json(config.istatistikler);
+});
+
+app.get('/api/giveaways', (req, res) => {
+    res.json(config.cekilisler);
 });
 
 // Keep-alive
@@ -1007,15 +690,11 @@ if (!token) {
 }
 
 client.login(token).then(() => {
-    console.log('🚀 Bedava Hesap Bot çalışıyor!');
+    console.log('🚀 ShadowCore Bot çalışıyor!');
     console.log('📋 Komutlar:');
-    console.log('   • /bedavahesap - Ücretsiz hesap kazan');
-    console.log('   • /ürünekle - Ürün ekle');
-    console.log('   • /stokekle - Stok ekle (umutpapa123)');
-    console.log('   • /kayıt ol - Hesap oluştur');
-    console.log('   • /hesapgiriş - Hesaba giriş yap');
-    console.log('   • /çekiliş ekle - Çekiliş oluştur (umutpapa123)');
-    console.log('   • /stokkanalekle - Stok kanalı ayarla (Admin)');
+    console.log('   • /çekiliş ekle - Çekiliş oluştur');
+    console.log('   • /duyuru - Duyuru gönder (Admin)');
+    console.log('   • /duyuru kanal ayarla - Kanal ayarla (Admin)');
 }).catch(err => {
     console.error('❌ Bot hatası:', err.message);
 });
