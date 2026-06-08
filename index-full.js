@@ -138,9 +138,28 @@ app.get('/', (req, res) => {
         
         body {
             background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+            background-attachment: fixed;
+            background-image: 
+                url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><filter id="blur"><feGaussianBlur in="SourceGraphic" stdDeviation="3"/></filter></defs><image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" width="1200" height="800" opacity="0.15" filter="url(%23blur)"/></svg>'),
+                linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(26, 26, 62, 0.95) 100%);
             color: #e0e0e0;
             font-family: 'Inter', 'Segoe UI', sans-serif;
             min-height: 100vh;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
         }
         
         /* LOGIN PAGE */
@@ -149,7 +168,23 @@ app.get('/', (req, res) => {
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+            background: linear-gradient(135deg, rgba(10, 14, 39, 0.85) 0%, rgba(26, 26, 62, 0.85) 100%);
+            position: relative;
+            z-index: 10;
+        }
+        
+        .login-page::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(124, 58, 237, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
         }
         
         .login-container {
