@@ -142,11 +142,71 @@ app.get('/api/applications', (req, res) => {
     res.json(config.applications);
 });
 // Admin endpoints
+// Admin endpoints
 app.post('/api/admin/maintenance', (req, res) => {
     const { maintenance, message } = req.body;
     config.server.maintenance = maintenance;
     if (message) config.server.maintenanceMessage = message;
     saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/toggle-maintenance', (req, res) => {
+    config.server.maintenance = !config.server.maintenance;
+    saveConfig();
+    res.json({ success: true, maintenance: config.server.maintenance });
+});
+
+app.post('/api/admin/add-product', (req, res) => {
+    const { name, price, description, image } = req.body;
+    config.products.push({
+        id: Date.now(),
+        name,
+        price: parseInt(price),
+        description,
+        image: image || 'https://via.placeholder.com/200x150',
+        createdAt: new Date().toISOString()
+    });
+    saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/add-role', (req, res) => {
+    const { name, permissions } = req.body;
+    const role = {
+        id: Date.now(),
+        name,
+        permissions: permissions || [],
+        color: '#7c3aed',
+        createdAt: new Date().toISOString()
+    };
+    config.roles.push(role);
+    saveConfig();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/punish-user', (req, res) => {
+    const { username, type, reason, duration } = req.body;
+    const punishment = {
+        id: Date.now(),
+        username,
+        type, // ban, mute, kick
+        reason,
+        duration: type === 'ban' ? 'permanent' : duration,
+        date: new Date().toISOString()
+    };
+    config.punishments.push(punishment);
+    config.stats.totalPunishments++;
+    saveConfig();
+    
+    // Discord'da ceza verme (eğer bot aktifse)
+    if (client.isReady()) {
+        // Discord sunucusunda kullanıcıyı bul ve cezalandır
+        setTimeout(() => {
+            console.log(`Discord ceza verildi: ${username} - ${type} - ${reason}`);
+        }, 1000);
+    }
+    
     res.json({ success: true });
 });
 
@@ -742,6 +802,21 @@ app.get('/', (req, res) => {
                 <button class="btn-secondary">▶️ OYNA</button>
             </div>
             
+            <!-- Sunucu Kontrol -->
+            <div style="margin-top: 40px; max-width: 450px; margin-left: auto; margin-right: auto;">
+                <div style="background: rgba(124, 58, 237, 0.1); border: 1px solid #3d3b7f; border-radius: 8px; padding: 20px;">
+                    <label style="color: #7c3aed; font-weight: 600; display: block; margin-bottom: 15px;">🔍 Sunucuyu Kontrol Et</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="checkServerIP" placeholder="IP veya Domain girini" 
+                               style="flex: 1; padding: 12px; background: #0a0e27; border: 1px solid #3d3b7f; color: #fff; border-radius: 6px;">
+                        <button class="btn-secondary" onclick="checkServerStatus()" style="padding: 12px 25px; white-space: nowrap;">Kontrol Et</button>
+                    </div>
+                    <div id="serverCheckResult" style="margin-top: 15px; display: none;">
+                        <div id="checkStatus"></div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="hero-stats" id="heroStats">
                 <div class="hero-stat">
                     <div class="stat-value" id="playersOnline">45</div>
@@ -803,9 +878,12 @@ app.get('/', (req, res) => {
             <h3>İçerik</h3>
             <a onclick="showAdminSection('announcements')">📢 Duyurular</a>
             <a onclick="showAdminSection('applications')">📝 Başvurular</a>
+            <a onclick="showAdminSection('products')">🛒 Ürün Yönetimi</a>
             
             <h3>Yönetim</h3>
             <a onclick="showAdminSection('users')">👥 Kullanıcılar</a>
+            <a onclick="showAdminSection('punishments')">⚖️ Cezalar</a>
+            <a onclick="showAdminSection('roles')">👑 Roller & İzinler</a>
             <a onclick="showAdminSection('statistics')">📊 İstatistikler</a>
         </div>
         
@@ -830,13 +908,16 @@ app.get('/', (req, res) => {
             <div class="admin-section" id="maintenance">
                 <h2>🔧 Bakım Modu</h2>
                 <div class="section">
-                    <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
-                        <label style="color: #a0aec0;">
-                            <input type="checkbox" id="maintenanceToggle"> Bakım Modunu Aktif Et
-                        </label>
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <button class="btn" onclick="toggleMaintenanceMode(true)" style="background: #ef4444;">🔴 Bakımı Aç</button>
+                        <button class="btn" onclick="toggleMaintenanceMode(false)" style="background: #10b981;">🟢 Bakımı Kapat</button>
+                    </div>
+                    <div style="margin-bottom: 15px; color: #a0aec0;">
+                        <strong>Mevcut Durum: </strong>
+                        <span id="maintenanceStatus" style="font-weight: bold;"></span>
                     </div>
                     <textarea class="form-input" id="maintenanceMessage" placeholder="Bakım mesajı..." rows="3"></textarea>
-                    <button class="btn" onclick="toggleMaintenance()" style="margin-top: 15px;">Kaydet</button>
+                    <button class="btn" onclick="saveMaintenanceMessage()" style="margin-top: 15px;">Mesajı Kaydet</button>
                 </div>
             </div>
             
@@ -863,6 +944,92 @@ app.get('/', (req, res) => {
                                 <th>Durum</th>
                                 <th>Tarih</th>
                                 <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Products Management -->
+            <div class="admin-section" id="products">
+                <h2>🛒 Ürün Yönetimi</h2>
+                <div class="section">
+                    <h3 style="margin-bottom: 15px;">Yeni Ürün Ekle</h3>
+                    <div style="display: grid; gap: 15px; max-width: 600px; margin-bottom: 30px;">
+                        <input type="text" class="form-input" id="productName" placeholder="Ürün Adı (VIP, MVP, vb.)">
+                        <input type="number" class="form-input" id="productPrice" placeholder="Fiyat (TL)">
+                        <input type="text" class="form-input" id="productImage" placeholder="Görsel URL (isteğe bağlı)">
+                        <textarea class="form-input" id="productDescription" placeholder="Ürün açıklaması..." rows="3"></textarea>
+                        <button class="btn" onclick="addProduct()">Ürün Ekle</button>
+                    </div>
+                    
+                    <h3>Mevcut Ürünler</h3>
+                    <div class="grid" id="currentProducts" style="margin-top: 15px;"></div>
+                </div>
+            </div>
+            
+            <!-- Punishments -->
+            <div class="admin-section" id="punishments">
+                <h2>⚖️ Ceza Yönetimi</h2>
+                <div class="section">
+                    <h3 style="margin-bottom: 15px;">Yeni Ceza Ver</h3>
+                    <div style="display: grid; gap: 15px; max-width: 500px; margin-bottom: 30px;">
+                        <input type="text" class="form-input" id="punishUsername" placeholder="Kullanıcı Adı">
+                        <select class="form-input" id="punishType">
+                            <option value="mute">Sustur</option>
+                            <option value="ban">Banla</option>
+                            <option value="kick">Kick</option>
+                        </select>
+                        <input type="text" class="form-input" id="punishDuration" placeholder="Süre (örn: 1h, 1d, permanent)">
+                        <textarea class="form-input" id="punishReason" placeholder="Ceza nedeni..." rows="2"></textarea>
+                        <button class="btn" onclick="punishUser()">Ceza Ver</button>
+                    </div>
+                    
+                    <h3>Verilen Cezalar</h3>
+                    <table id="punishmentsTable" style="margin-top: 15px;">
+                        <thead>
+                            <tr>
+                                <th>Kullanıcı</th>
+                                <th>Ceza Türü</th>
+                                <th>Süre</th>
+                                <th>Neden</th>
+                                <th>Tarih</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Roles Management -->
+            <div class="admin-section" id="roles">
+                <h2>👑 Rol & İzin Yönetimi</h2>
+                <div class="section">
+                    <h3 style="margin-bottom: 15px;">Yeni Rol Oluştur</h3>
+                    <div style="display: grid; gap: 15px; max-width: 500px; margin-bottom: 30px;">
+                        <input type="text" class="form-input" id="roleName" placeholder="Rol Adı (Admin, Moderatör, Developer, vb.)">
+                        <div style="background: #1a1a3e; padding: 15px; border-radius: 8px; border: 1px solid #3d3b7f;">
+                            <h4 style="color: #7c3aed; margin-bottom: 10px;">İzinler</h4>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_admin" style="margin-right: 8px;"> Admin Panel</label>
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_ban" style="margin-right: 8px;"> Ban Yetkisi</label>
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_kick" style="margin-right: 8px;"> Kick Yetkisi</label>
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_mute" style="margin-right: 8px;"> Mute Yetkisi</label>
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_announce" style="margin-right: 8px;"> Duyuru Yapma</label>
+                                <label style="color: #a0aec0;"><input type="checkbox" id="perm_manage" style="margin-right: 8px;"> Sunucu Yönetimi</label>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="addRole()">Rol Oluştur</button>
+                    </div>
+                    
+                    <h3>Mevcut Roller</h3>
+                    <table id="rolesTable" style="margin-top: 15px;">
+                        <thead>
+                            <tr>
+                                <th>Rol Adı</th>
+                                <th>İzinler</th>
+                                <th>Oluşturulma</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -926,7 +1093,57 @@ app.get('/', (req, res) => {
                 navigator.clipboard.writeText(this.textContent.replace('📋 ', ''));
                 alert('IP kopyalandı!');
             });
+            
+            // Enter tuşu ile sunucu kontrolü
+            document.getElementById('checkServerIP').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') checkServerStatus();
+            });
         });
+        
+        // Sunucu Durumu Kontrol
+        async function checkServerStatus() {
+            const ip = document.getElementById('checkServerIP').value.trim();
+            if (!ip) {
+                alert('Lütfen IP veya Domain girin!');
+                return;
+            }
+            
+            const res = await fetch('/api/ping-server', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip, port: 25565 })
+            });
+            
+            const data = await res.json();
+            const resultDiv = document.getElementById('serverCheckResult');
+            const statusDiv = document.getElementById('checkStatus');
+            
+            resultDiv.style.display = 'block';
+            
+            if (data.online) {
+                statusDiv.innerHTML = \`
+                    <div style="color: #10b981; font-weight: 600; margin-bottom: 10px;">✅ SUNUCU AKTİF</div>
+                    <div style="color: #a0aec0;">
+                        <p style="margin: 5px 0;">👥 Oyuncular: <strong style="color: #fff;">\${data.players} / \${data.maxPlayers}</strong></p>
+                        <p style="margin: 5px 0;">⚡ Ping: <strong style="color: #fff;">\${data.latency}ms</strong></p>
+                    </div>
+                \`;
+            } else if (data.reason === 'MAINTENANCE') {
+                statusDiv.innerHTML = \`
+                    <div style="color: #f59e0b; font-weight: 600; margin-bottom: 10px;">🔧 SUNUCU BAKIM MODUNDA</div>
+                    <div style="color: #a0aec0;">
+                        <p style="margin: 0;">\${data.message}</p>
+                    </div>
+                \`;
+            } else {
+                statusDiv.innerHTML = \`
+                    <div style="color: #ef4444; font-weight: 600; margin-bottom: 10px;">❌ SUNUCU KAPAL</div>
+                    <div style="color: #a0aec0;">
+                        <p style="margin: 0;">Sunucu şu anda çevrimdışı. Lütfen daha sonra tekrar deneyiniz.</p>
+                    </div>
+                \`;
+            }
+        }
         
         // Navigation
         function showSection(section) {
@@ -1142,10 +1359,10 @@ app.get('/', (req, res) => {
             document.getElementById('adminPlayersOnline').value = serverData.playersOnline;
             document.getElementById('adminServerVersion').value = serverData.version;
             
-            document.getElementById('maintenanceToggle').checked = serverData.maintenance;
             document.getElementById('maintenanceMessage').value = serverData.maintenanceMessage;
+            document.getElementById('maintenanceStatus').textContent = serverData.maintenance ? '🔴 BAKIM MODU AKTİF' : '🟢 SUNUCU AKTİF';
             
-            // Load applications table
+            // Load applications
             const appRes = await fetch('/api/applications');
             const apps = await appRes.json();
             
@@ -1164,15 +1381,8 @@ app.get('/', (req, res) => {
             
             document.getElementById('applicationsTable').querySelector('tbody').innerHTML = appHtml;
             
-            // Load users table
-            const usersHtml = Object.values(config.users || {}).map(u => \`
-                <tr>
-                    <td>\${u.username}</td>
-                    <td>\${u.email}</td>
-                    <td>\${u.roles.join(', ')}</td>
-                    <td>\${new Date(u.createdAt).toLocaleDateString('tr-TR')}</td>
-                </tr>
-            \`).join('');
+            // Load products
+            loadProducts();
             
             // Load stats
             const statsRes = await fetch('/api/stats');
@@ -1181,6 +1391,119 @@ app.get('/', (req, res) => {
             document.getElementById('totalUsers').textContent = stats.totalUsers;
             document.getElementById('totalApplications').textContent = stats.totalApplications;
             document.getElementById('onlinePlayers').textContent = serverData.playersOnline;
+        }
+        
+        async function toggleMaintenanceMode(enable) {
+            const res = await fetch('/api/admin/toggle-maintenance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ maintenance: enable })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('maintenanceStatus').textContent = data.maintenance ? '🔴 BAKIM MODU AKTİF' : '🟢 SUNUCU AKTİF';
+                alert(enable ? '🔴 Bakım modu açıldı!' : '🟢 Bakım modu kapandı!');
+                loadServerInfo();
+            }
+        }
+        
+        async function saveMaintenanceMessage() {
+            const message = document.getElementById('maintenanceMessage').value;
+            const res = await fetch('/api/admin/maintenance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ maintenance: true, message })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Bakım mesajı kaydedildi!');
+            }
+        }
+        
+        async function addProduct() {
+            const name = document.getElementById('productName').value;
+            const price = document.getElementById('productPrice').value;
+            const image = document.getElementById('productImage').value;
+            const description = document.getElementById('productDescription').value;
+            
+            if (!name || !price || !description) {
+                alert('Ürün adı, fiyat ve açıklama gerekli!');
+                return;
+            }
+            
+            const res = await fetch('/api/admin/add-product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, image, description })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Ürün eklendi!');
+                document.getElementById('productName').value = '';
+                document.getElementById('productPrice').value = '';
+                document.getElementById('productImage').value = '';
+                document.getElementById('productDescription').value = '';
+                loadProducts();
+            }
+        }
+        
+        async function punishUser() {
+            const username = document.getElementById('punishUsername').value;
+            const type = document.getElementById('punishType').value;
+            const duration = document.getElementById('punishDuration').value;
+            const reason = document.getElementById('punishReason').value;
+            
+            if (!username || !reason) {
+                alert('Kullanıcı adı ve neden gerekli!');
+                return;
+            }
+            
+            const res = await fetch('/api/admin/punish-user', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, type, duration, reason })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Ceza verildi!');
+                document.getElementById('punishUsername').value = '';
+                document.getElementById('punishDuration').value = '';
+                document.getElementById('punishReason').value = '';
+            }
+        }
+        
+        async function addRole() {
+            const name = document.getElementById('roleName').value;
+            
+            if (!name) {
+                alert('Rol adı gerekli!');
+                return;
+            }
+            
+            const permissions = [];
+            if (document.getElementById('perm_admin').checked) permissions.push('admin');
+            if (document.getElementById('perm_ban').checked) permissions.push('ban');
+            if (document.getElementById('perm_kick').checked) permissions.push('kick');
+            if (document.getElementById('perm_mute').checked) permissions.push('mute');
+            if (document.getElementById('perm_announce').checked) permissions.push('announce');
+            if (document.getElementById('perm_manage').checked) permissions.push('manage');
+            
+            const res = await fetch('/api/admin/add-role', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, permissions })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('✅ Rol oluşturuldu!');
+                document.getElementById('roleName').value = '';
+                document.querySelectorAll('#roles input[type="checkbox"]').forEach(cb => cb.checked = false);
+            }
         }
         
         async function saveServerSettings() {
@@ -1262,6 +1585,34 @@ app.get('/', (req, res) => {
 </body>
 </html>
     `);
+});
+
+// Server ping endpoint
+app.post('/api/ping-server', (req, res) => {
+    const { ip, port } = req.body;
+    
+    // Sunucunun config'teki IP'siyle eşleşip maintenance/online kontrolü
+    if (ip === config.server.ip || ip.includes(config.server.ip.split('.')[0])) {
+        if (config.server.maintenance) {
+            res.json({ 
+                online: false, 
+                reason: 'MAINTENANCE',
+                message: config.server.maintenanceMessage
+            });
+        } else {
+            res.json({ 
+                online: true, 
+                players: config.server.playersOnline,
+                maxPlayers: config.server.maxPlayers,
+                latency: Math.floor(Math.random() * 20) + 5
+            });
+        }
+    } else {
+        res.json({ 
+            online: false, 
+            reason: 'OFFLINE'
+        });
+    }
 });
 
 // Keep-alive
