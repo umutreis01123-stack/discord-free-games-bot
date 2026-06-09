@@ -178,7 +178,7 @@ client.on('interactionCreate', async interaction => {
                     .addFields(
                         { name: 'Platform', value: secilen.kat.toUpperCase() },
                         { name: 'Hesap', value: secilen.hesap },
-                        { name: 'Uyarı', value: 'Bu hesap sadece sana verildi!' }
+                        { name: 'Uyarı', value: 'Hesaplar çalışmayabilir!' }
                     )
                     .setColor(0x7c3aed);
                 
@@ -357,6 +357,16 @@ app.listen(PORT, () => {
 
 // Bot başlat
 const token = process.env.DISCORD_TOKEN;
+
+// Mesaj event listener - "sa" → "as" çevirme
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+    
+    if (message.content.toLowerCase() === 'sa') {
+        await message.reply('as').catch(console.error);
+    }
+});
+
 if (token) {
     client.login(token).then(() => {
         console.log('✅ Bot Discord\'a bağlanıyor...');
