@@ -29,7 +29,7 @@ const client = new Client({
 const commands = [
     new SlashCommandBuilder()
         .setName('ticketkur')
-        .setDescription('Ticket sistemi kur (Admin only)')
+        .setDescription('Ticket sistemi kur (umutpapa123u only)')
         .addChannelOption(option =>
             option.setName('kanal')
                 .setDescription('Ticket acilacak kanal')
@@ -38,13 +38,22 @@ const commands = [
         ),
 
     new SlashCommandBuilder()
-        .setName('bedavahesap')
-        .setDescription('Bedava hesap sistemi (umutpapa123u only)')
+        .setName('urunekle')
+        .setDescription('Stoka urun ekle (umutpapa123u only)')
+        .addStringOption(option =>
+            option.setName('tur')
+                .setDescription('Urun turu (netflix, spotify, disney, vb.)')
+                .setRequired(true)
+        )
         .addStringOption(option =>
             option.setName('hesap')
                 .setDescription('Hesap bilgileri (kullanici:sifre)')
                 .setRequired(true)
         ),
+
+    new SlashCommandBuilder()
+        .setName('bedavahesap')
+        .setDescription('Random bedava hesap al (Herkes kullanabilir)'),
 
     new SlashCommandBuilder()
         .setName('duyurugenel')
@@ -99,8 +108,10 @@ client.on('interactionCreate', async interaction => {
         try {
             if (commandName === 'ticketkur') {
                 await handleTicketSetup(interaction, options, guild);
+            } else if (commandName === 'urunekle') {
+                await handleAddProduct(interaction, options);
             } else if (commandName === 'bedavahesap') {
-                await handleFreeAccount(interaction, options);
+                await handleGetFreeAccount(interaction);
             } else if (commandName === 'duyurugenel') {
                 await handleGeneralAnnouncement(interaction, options, guild);
             } else if (commandName === 'cekilis') {
@@ -127,12 +138,11 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Ticket Setup
+// Ticket Setup (umutpapa123u only)
 async function handleTicketSetup(interaction, options, guild) {
-    const member = await guild.members.fetch(interaction.user.id);
-    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+    if (interaction.user.username !== 'umutpapa123u') {
         await interaction.reply({
-            content: '❌ Bu komutu sadece adminler kullanabilir!',
+            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -264,6 +274,137 @@ async function handleFreeAccount(interaction, options) {
         console.log(`Bedava hesap ${sentCount} kişiye DM olarak gönderildi.`);
     } catch (error) {
         console.error('DM gönderme hatası:', error);
+    }
+}
+
+// Add Product to Stock (umutpapa123u only)
+async function handleAddProduct(interaction, options) {
+    if (interaction.user.username !== 'umutpapa123u') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const tur = options.getString('tur').toLowerCase();
+    const hesap = options.getString('hesap');
+
+    // Ürün türünü kontrol et ve stoka ekle
+    const validTypes = ['netflix', 'spotify', 'disney', 'amazon', 'youtube', 'other'];
+    let productType = validTypes.includes(tur) ? tur : 'other';
+
+    const accountData = {
+        id: Date.now(),
+        account: hesap,
+        addedBy: interaction.user.tag,
+        addedAt: new Date().toISOString()
+    };
+
+    config.accountStock[productType].push(accountData);
+    saveConfig();
+
+    const embed = new EmbedBuilder()
+        .setTitle('✅ Ürün Stoka Eklendi!')
+        .setDescription(`**${productType.toUpperCase()}** kategorisine yeni hesap eklendi!`)
+        .addFields(
+            { name: '📦 Kategori', value: productType.toUpperCase(), inline: true },
+            { name: '📊 Stok Durumu', value: `${config.accountStock[productType].length} hesap`, inline: true },
+            { name: '👤 Ekleyen', value: interaction.user.tag, inline: true }
+        )
+        .setColor(0x10b981)
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Get Free Account (Everyone can use)
+async function handleGetFreeAccount(interaction) {
+    // Tüm stokları topla
+    const allAccounts = [];
+    Object.keys(config.accountStock).forEach(type => {
+        config.accountStock[type].forEach(account => {
+            allAccounts.push({
+                ...account,
+                type: type
+            });
+        });
+    });
+
+    if (allAccounts.length === 0) {
+        await interaction.reply({
+            content: '❌ Şu anda stokta hesap bulunmuyor! Daha sonra tekrar dene.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    // Random hesap seç
+    const randomIndex = Math.floor(Math.random() * allAccounts.length);
+    const selectedAccount = allAccounts[randomIndex];
+
+    // Seçilen hesabı stoktan çıkar
+    const typeStock = config.accountStock[selectedAccount.type];
+    const accountIndex = typeStock.findIndex(acc => acc.id === selectedAccount.id);
+    if (accountIndex !== -1) {
+        typeStock.splice(accountIndex, 1);
+    }
+
+    config.stats.totalAccountsGiven++;
+    saveConfig();
+
+    // DM gönder
+    const embed = new EmbedBuilder()
+        .setTitle('🎁 Bedava Hesap!')
+        .setDescription('Senin için random bir hesap seçtim!')
+        .addFields(
+            { name: '📦 Platform', value: selectedAccount.type.toUpperCase(), inline: true },
+            { name: '📋 Hesap Bilgileri', value: selectedAccount.account, inline: false },
+            { name: '⚠️ Önemli', value: 'Bu hesap sadece sana verildi. Paylaşma!', inline: false }
+        )
+        .setColor(0x7c3aed)
+        .setTimestamp();
+
+    try {
+        await interaction.user.send({
+            embeds: [embed]
+        });
+
+        await interaction.reply({
+            content: '✅ Hesap bilgilerini DM\'den kontrol et! 📩',
+            flags: MessageFlags.Ephemeral
+        });
+
+        // Kanal'a genel bilgilendirme
+        const publicEmbed = new EmbedBuilder()
+            .setTitle('🎉 Bedava Hesap Verildi!')
+            .setDescription(`${interaction.user} adlı kullanıcı **${selectedAccount.type.toUpperCase()}** hesabı aldı!`)
+            .addFields(
+                { name: '📊 Kalan Stok', value: `${allAccounts.length - 1} hesap`, inline: true },
+                { name: '🎯 Sen de İste!', value: '`/bedavahesap` yazarak sen de hesap alabilirsin!', inline: true }
+            )
+            .setColor(0x10b981)
+            .setTimestamp();
+
+        setTimeout(() => {
+            interaction.followUp({
+                embeds: [publicEmbed]
+            });
+        }, 1000);
+
+    } catch (error) {
+        await interaction.reply({
+            content: '❌ DM\'lerin kapalı! DM\'lerini aç ve tekrar dene.',
+            flags: MessageFlags.Ephemeral
+        });
+        
+        // Hesabı geri stoka koy
+        config.accountStock[selectedAccount.type].push(selectedAccount);
+        config.stats.totalAccountsGiven--;
+        saveConfig();
     }
 }
 
@@ -555,10 +696,20 @@ if (fs.existsSync(configPath)) {
         ],
         roles: ['Oyuncu', 'VIP', 'MVP', 'Moderatör', 'Admin'],
         support_tickets: [],
+        // Bedava hesap stokları
+        accountStock: {
+            netflix: [],
+            spotify: [],
+            disney: [],
+            amazon: [],
+            youtube: [],
+            other: []
+        },
         stats: {
             totalUsers: 0,
             totalApplications: 0,
-            totalPunishments: 0
+            totalPunishments: 0,
+            totalAccountsGiven: 0
         }
     };
     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
