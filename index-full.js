@@ -2,9 +2,14 @@ require('dotenv').config();
 const { 
     Client, 
     GatewayIntentBits, 
+    SlashCommandBuilder,
     EmbedBuilder, 
     PermissionsBitField,
-    MessageFlags
+    MessageFlags,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    ChannelType
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -19,6 +24,503 @@ const client = new Client({
         GatewayIntentBits.GuildMembers
     ]
 });
+
+// Discord Commands - İngilizce karakterler kullanıldı çünkü Discord API'si Türkçe karakterleri desteklemiyor
+const commands = [
+    new SlashCommandBuilder()
+        .setName('ticketkur')
+        .setDescription('Ticket sistemi kur (Admin only)')
+        .addChannelOption(option =>
+            option.setName('kanal')
+                .setDescription('Ticket acilacak kanal')
+                .setRequired(true)
+                .addChannelTypes(ChannelType.GuildText)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('bedavahesap')
+        .setDescription('Bedava hesap sistemi (umutpapa123u only)')
+        .addStringOption(option =>
+            option.setName('hesap')
+                .setDescription('Hesap bilgileri (kullanici:sifre)')
+                .setRequired(true)
+        ),
+
+    new SlashCommandBuilder()
+        .setName('duyurugenel')
+        .setDescription('Genel duyuru gonder (umutpapa123u only)')
+        .addStringOption(option =>
+            option.setName('baslik')
+                .setDescription('Duyuru basligi')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('icerik')
+                .setDescription('Duyuru icerigi')
+                .setRequired(true)
+        ),
+        
+    new SlashCommandBuilder()
+        .setName('cekilis')
+        .setDescription('Cekilis olustur (umutpapa123u only)')
+        .addStringOption(option =>
+            option.setName('baslik')
+                .setDescription('Cekilis basligi')
+                .setRequired(true)
+        )
+        .addStringOption(option =>
+            option.setName('odul')
+                .setDescription('Cekilis odulu')
+                .setRequired(true)
+        )
+        .addIntegerOption(option =>
+            option.setName('sure')
+                .setDescription('Cekilis suresi (dakika)')
+                .setRequired(true)
+        )
+];
+
+// Bot Ready
+client.once('ready', async () => {
+    console.log(`✅ Bot başladı: ${client.user.tag}`);
+    try {
+        await client.application.commands.set(commands);
+        console.log('✅ Discord komutları kaydedildi!');
+    } catch (error) {
+        console.error('❌ Komut kaydı hatası:', error);
+    }
+});
+
+// Command Handler
+client.on('interactionCreate', async interaction => {
+    if (interaction.isCommand()) {
+        const { commandName, options, user, guild } = interaction;
+
+        try {
+            if (commandName === 'ticketkur') {
+                await handleTicketSetup(interaction, options, guild);
+            } else if (commandName === 'bedavahesap') {
+                await handleFreeAccount(interaction, options);
+            } else if (commandName === 'duyurugenel') {
+                await handleGeneralAnnouncement(interaction, options, guild);
+            } else if (commandName === 'cekilis') {
+                await handleGiveaway(interaction, options, guild);
+            }
+        } catch (error) {
+            console.error('Komut hatası:', error);
+            await interaction.reply({
+                content: '❌ Komut yürütülürken hata oluştu!',
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+    } else if (interaction.isButton()) {
+        // Button handlers
+        if (interaction.customId === 'create_ticket') {
+            await handleCreateTicket(interaction);
+        } else if (interaction.customId === 'close_ticket') {
+            await handleCloseTicket(interaction);
+        } else if (interaction.customId === 'claim_ticket') {
+            await handleClaimTicket(interaction);
+        } else if (interaction.customId.startsWith('giveaway_')) {
+            await handleGiveawayJoin(interaction);
+        }
+    }
+});
+
+// Ticket Setup
+async function handleTicketSetup(interaction, options, guild) {
+    const member = await guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece adminler kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const channel = options.getChannel('kanal');
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🎫 Destek Talebi Oluştur')
+        .setDescription('Destek almak için aşağıdaki butona tıklayın!')
+        .setColor(0x7c3aed)
+        .setFooter({ text: 'ShadowCore Destek Sistemi' })
+        .setTimestamp();
+
+    const button = new ButtonBuilder()
+        .setCustomId('create_ticket')
+        .setLabel('🎫 Ticket Oluştur')
+        .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder().addComponents(button);
+
+    await channel.send({
+        embeds: [embed],
+        components: [row]
+    });
+
+    await interaction.reply({
+        content: `✅ Ticket sistemi ${channel} kanalına kuruldu!`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Create Ticket
+async function handleCreateTicket(interaction) {
+    const guild = interaction.guild;
+    const user = interaction.user;
+
+    // Ticket kanalı oluştur
+    const ticketChannel = await guild.channels.create({
+        name: `ticket-${user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+            {
+                id: guild.roles.everyone.id,
+                deny: [PermissionsBitField.Flags.ViewChannel]
+            },
+            {
+                id: user.id,
+                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+            }
+        ]
+    });
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎫 Destek Talebi')
+        .setDescription(`Merhaba ${user}! Destek ekibi en kısa sürede sizinle ilgilenecek.`)
+        .setColor(0x10b981)
+        .setTimestamp();
+
+    const closeButton = new ButtonBuilder()
+        .setCustomId('close_ticket')
+        .setLabel('🔒 Talebi Kapat')
+        .setStyle(ButtonStyle.Danger);
+
+    const claimButton = new ButtonBuilder()
+        .setCustomId('claim_ticket')
+        .setLabel('✋ Talebi Üstlen')
+        .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
+
+    await ticketChannel.send({
+        content: `${user}`,
+        embeds: [embed],
+        components: [row]
+    });
+
+    await interaction.reply({
+        content: `✅ Ticket oluşturuldu: ${ticketChannel}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// Free Account (umutpapa123u only)
+async function handleFreeAccount(interaction, options) {
+    if (interaction.user.username !== 'umutpapa123u') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const hesapBilgisi = options.getString('hesap');
+    
+    const embed = new EmbedBuilder()
+        .setTitle('🎁 Bedava Hesap!')
+        .setDescription('Yeni bedava hesap eklendi!')
+        .addFields(
+            { name: '📋 Hesap Bilgileri', value: hesapBilgisi, inline: false },
+            { name: '👤 Ekleyen', value: interaction.user.tag, inline: true }
+        )
+        .setColor(0x10b981)
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed]
+    });
+
+    // DM olarak da gönder
+    try {
+        const guild = interaction.guild;
+        const members = await guild.members.fetch();
+        
+        let sentCount = 0;
+        for (const member of members.values()) {
+            if (!member.user.bot) {
+                try {
+                    await member.send({
+                        embeds: [embed]
+                    });
+                    sentCount++;
+                } catch (e) {
+                    // DM kapalıysa geç
+                }
+            }
+        }
+        
+        console.log(`Bedava hesap ${sentCount} kişiye DM olarak gönderildi.`);
+    } catch (error) {
+        console.error('DM gönderme hatası:', error);
+    }
+}
+
+// General Announcement (umutpapa123u only)
+async function handleGeneralAnnouncement(interaction, options, guild) {
+    if (interaction.user.username !== 'umutpapa123u') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const baslik = options.getString('baslik');
+    const icerik = options.getString('icerik');
+
+    const embed = new EmbedBuilder()
+        .setTitle('📢 ' + baslik)
+        .setDescription(icerik)
+        .setColor(0x7c3aed)
+        .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+        .setTimestamp();
+
+    // Kanala gönder
+    await interaction.reply({
+        content: '@everyone',
+        embeds: [embed]
+    });
+
+    // DM olarak da gönder
+    try {
+        const members = await guild.members.fetch();
+        
+        let sentCount = 0;
+        for (const member of members.values()) {
+            if (!member.user.bot) {
+                try {
+                    await member.send({
+                        embeds: [embed]
+                    });
+                    sentCount++;
+                } catch (e) {
+                    // DM kapalıysa geç
+                }
+            }
+        }
+        
+        console.log(`Duyuru ${sentCount} kişiye DM olarak gönderildi.`);
+    } catch (error) {
+        console.error('DM gönderme hatası:', error);
+    }
+}
+
+// Giveaway Handler (umutpapa123u only)
+async function handleGiveaway(interaction, options, guild) {
+    if (interaction.user.username !== 'umutpapa123u') {
+        await interaction.reply({
+            content: '❌ Bu komutu sadece umutpapa123u kullanabilir!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const baslik = options.getString('baslik');
+    const odul = options.getString('odul');
+    const sure = options.getInteger('sure');
+
+    const giveawayId = `giveaway_${Date.now()}`;
+    const endTime = Date.now() + (sure * 60 * 1000);
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎉 ÇEKİLİŞ BAŞLADI!')
+        .setDescription(`**${baslik}**\n\n🎁 **Ödül:** ${odul}\n⏰ **Süre:** ${sure} dakika\n\n**Katılmak için aşağıdaki butona tıkla!**`)
+        .setColor(0x10b981)
+        .setFooter({ text: `Çekiliş ID: ${giveawayId}` })
+        .setTimestamp(new Date(endTime));
+
+    const participateButton = new ButtonBuilder()
+        .setCustomId(giveawayId)
+        .setLabel('🎉 Katıl')
+        .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder().addComponents(participateButton);
+
+    await interaction.reply({
+        content: '@everyone **YENİ ÇEKİLİŞ!**',
+        embeds: [embed],
+        components: [row]
+    });
+
+    // Çekiliş verilerini kaydet
+    const giveawayData = {
+        id: giveawayId,
+        title: baslik,
+        prize: odul,
+        endTime: endTime,
+        participants: [],
+        channel: interaction.channel.id,
+        message: null
+    };
+
+    // Global çekiliş listesi
+    if (!global.activeGiveaways) {
+        global.activeGiveaways = {};
+    }
+    global.activeGiveaways[giveawayId] = giveawayData;
+
+    // Çekiliş bitirme zamanlayıcısı
+    setTimeout(() => {
+        endGiveaway(giveawayId, guild);
+    }, sure * 60 * 1000);
+}
+
+// Giveaway Join Handler
+async function handleGiveawayJoin(interaction) {
+    const giveawayId = interaction.customId;
+    
+    if (!global.activeGiveaways || !global.activeGiveaways[giveawayId]) {
+        await interaction.reply({
+            content: '❌ Bu çekiliş artık aktif değil!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const giveaway = global.activeGiveaways[giveawayId];
+    const userId = interaction.user.id;
+
+    // Zaten katılmış mı kontrol et
+    if (giveaway.participants.includes(userId)) {
+        await interaction.reply({
+            content: '❌ Zaten bu çekilişe katılmışsın!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    // Katılımcı ekle
+    giveaway.participants.push(userId);
+
+    await interaction.reply({
+        content: '✅ Çekilişe başarıyla katıldın! Bol şans!',
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+// End Giveaway
+async function endGiveaway(giveawayId, guild) {
+    if (!global.activeGiveaways || !global.activeGiveaways[giveawayId]) {
+        return;
+    }
+
+    const giveaway = global.activeGiveaways[giveawayId];
+    
+    if (giveaway.participants.length === 0) {
+        // Katılımcı yok
+        const channel = await guild.channels.fetch(giveaway.channel);
+        await channel.send({
+            embeds: [new EmbedBuilder()
+                .setTitle('😞 Çekiliş Bitti')
+                .setDescription(`**${giveaway.title}** çekilişine kimse katılmadı!`)
+                .setColor(0xef4444)
+                .setTimestamp()]
+        });
+    } else {
+        // Kazananı seç
+        const randomIndex = Math.floor(Math.random() * giveaway.participants.length);
+        const winnerId = giveaway.participants[randomIndex];
+        
+        try {
+            const winner = await guild.members.fetch(winnerId);
+            const channel = await guild.channels.fetch(giveaway.channel);
+            
+            const winnerEmbed = new EmbedBuilder()
+                .setTitle('🎉 ÇEKİLİŞ SONUÇLANDI!')
+                .setDescription(`**${giveaway.title}**\n\n🎁 **Ödül:** ${giveaway.prize}\n👑 **Kazanan:** ${winner}\n\n**Tebrikler!**`)
+                .setColor(0x10b981)
+                .setTimestamp();
+
+            await channel.send({
+                content: `🎉 ${winner} **KAZANDIN!**`,
+                embeds: [winnerEmbed]
+            });
+
+            // Kazanana DM gönder
+            try {
+                await winner.send({
+                    embeds: [new EmbedBuilder()
+                        .setTitle('🎉 ÇEKİLİŞ KAZANDIN!')
+                        .setDescription(`**${giveaway.title}** çekilişini kazandın!\n\n🎁 **Ödülün:** ${giveaway.prize}\n\nTebrikler!`)
+                        .setColor(0x10b981)
+                        .setTimestamp()]
+                });
+            } catch (e) {
+                console.log('Kazanana DM gönderilemedi');
+            }
+        } catch (error) {
+            console.error('Çekiliş sonlandırma hatası:', error);
+        }
+    }
+
+    // Çekilişi listeden sil
+    delete global.activeGiveaways[giveawayId];
+}
+
+// Ticket Claim Handler
+async function handleClaimTicket(interaction) {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+        await interaction.reply({
+            content: '❌ Bu işlem için yeterli yetkiniz yok!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('✋ Talep Üstlenildi')
+        .setDescription(`Bu talep ${interaction.user} tarafından üstlenildi.`)
+        .setColor(0xf59e0b)
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed]
+    });
+}
+
+// Ticket Close Handler
+async function handleCloseTicket(interaction) {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    if (!member.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+        await interaction.reply({
+            content: '❌ Bu işlem için yeterli yetkiniz yok!',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('🔒 Talep Kapatılıyor')
+        .setDescription('Bu talep 5 saniye içinde kapatılacak...')
+        .setColor(0xef4444)
+        .setTimestamp();
+
+    await interaction.reply({
+        embeds: [embed]
+    });
+
+    // 5 saniye sonra kanalı sil
+    setTimeout(async () => {
+        try {
+            await interaction.channel.delete();
+        } catch (error) {
+            console.error('Kanal silinirken hata:', error);
+        }
+    }, 5000);
+}
 
 // Config
 const configPath = path.join(__dirname, 'config.json');
@@ -254,6 +756,23 @@ app.get('/api/products', (req, res) => {
 
 app.get('/api/stats', (req, res) => {
     res.json(config.stats);
+});
+
+// Server ping endpoint
+app.post('/api/ping-server', (req, res) => {
+    const { ip, port } = req.body;
+    
+    // Basit server ping simülasyonu - gerçek uygulamada minecraft server ping kütüphanesi kullanılmalı
+    const serverData = {
+        online: !config.server.maintenance,
+        players: config.server.maintenance ? 0 : config.server.playersOnline,
+        maxPlayers: config.server.maxPlayers,
+        latency: Math.floor(Math.random() * 50) + 10, // Random ping
+        reason: config.server.maintenance ? 'MAINTENANCE' : null,
+        message: config.server.maintenance ? config.server.maintenanceMessage : null
+    };
+    
+    res.json(serverData);
 });
 // Dashboard HTML
 app.get('/', (req, res) => {
