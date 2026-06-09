@@ -33,6 +33,8 @@ let accountStock = {
     other: []
 };
 
+// Bedava hesap cooldown - User ID -> Son kullanım zamanı
+let bedavaHesapCooldown = {};
 // Bot ready
 client.once('ready', async () => {
     console.log(`Bot başladı: ${client.user.tag}`);
@@ -148,6 +150,25 @@ client.on('interactionCreate', async interaction => {
                 await interaction.reply({ embeds: [embed], ephemeral: true });
                 
             } else if (commandName === 'bedavahesap') {
+                const userId = user.id;
+                const now = Date.now();
+                const oneDayMs = 24 * 60 * 60 * 1000; // 24 saat
+                
+                // Cooldown kontrolü
+                if (bedavaHesapCooldown[userId]) {
+                    const lastUsed = bedavaHesapCooldown[userId];
+                    const timePassed = now - lastUsed;
+                    
+                    if (timePassed < oneDayMs) {
+                        const hoursLeft = Math.ceil((oneDayMs - timePassed) / (60 * 60 * 1000));
+                        await interaction.reply({
+                            content: `⏰ Günde sadece 1 kez kullanabilirsin! **${hoursLeft} saat** sonra tekrar dene.`,
+                            ephemeral: true
+                        });
+                        return;
+                    }
+                }
+                
                 const tumHesaplar = [];
                 Object.keys(accountStock).forEach(kat => {
                     accountStock[kat].forEach(h => {
@@ -184,6 +205,10 @@ client.on('interactionCreate', async interaction => {
                 
                 try {
                     await user.send({ embeds: [dmEmbed] });
+                    
+                    // Cooldown'u kaydet
+                    bedavaHesapCooldown[userId] = now;
+                    
                     await interaction.reply({
                         content: '✅ Hesap DM\'den gönderildi!',
                         ephemeral: true
