@@ -86,9 +86,9 @@ client.on('interactionCreate', async interaction => {
             const { commandName, options, user } = interaction;
             
             if (commandName === 'ticketkur') {
-                if (user.username !== 'umutpapa123u') {
+                if (user.username !== 'umutpapa123') {
                     await interaction.reply({
-                        content: '❌ Sadece umutpapa123u kullanabilir!',
+                        content: '❌ Sadece umutpapa123 kullanabilir!',
                         ephemeral: true
                     });
                     return;
@@ -113,9 +113,9 @@ client.on('interactionCreate', async interaction => {
                 });
                 
             } else if (commandName === 'urunekle') {
-                if (user.username !== 'umutpapa123u') {
+                if (user.username !== 'umutpapa123') {
                     await interaction.reply({
-                        content: '❌ Sadece umutpapa123u kullanabilir!',
+                        content: '❌ Sadece umutpapa123 kullanabilir!',
                         ephemeral: true
                     });
                     return;
@@ -211,9 +211,9 @@ client.on('interactionCreate', async interaction => {
                 }
                 
             } else if (commandName === 'duyuru') {
-                if (user.username !== 'umutpapa123u') {
+                if (user.username !== 'umutpapa123') {
                     await interaction.reply({
-                        content: '❌ Sadece umutpapa123u kullanabilir!',
+                        content: '❌ Sadece umutpapa123 kullanabilir!',
                         ephemeral: true
                     });
                     return;
