@@ -82,6 +82,14 @@ client.once('ready', async () => {
                     .setRequired(true)),
             
         new SlashCommandBuilder()
+            .setName('sorumlu')
+            .setDescription('Sorumlu yetkili ekle')
+            .addUserOption(option =>
+                option.setName('kullanıcı')
+                    .setDescription('Sorumlu yetkili')
+                    .setRequired(true)),
+            
+        new SlashCommandBuilder()
             .setName('duyuru')
             .setDescription('Duyuru gonder')
             .addStringOption(option =>
@@ -278,9 +286,7 @@ client.on('interactionCreate', async interaction => {
                     .setDescription('Aşağıdaki formu doldurarak destek siparişi açabilirsiniz.')
                     .setColor(0x7c3aed)
                     .addFields(
-                        { name: '📝 Konu', value: 'Siparişinizin konusunu yazın', inline: false },
-                        { name: '📄 Açıklama', value: 'Detaylı açıklama yapın', inline: false },
-                        { name: '✅ Gönderme', value: 'Formu tamamladıktan sonra kanalınız oluşturulacak', inline: false }
+                        { name: '❓ Neden', value: 'Destek siparişi açmak istediğiniz nedeni yazın (opsiyonel)', inline: false }
                     )
                     .setFooter({ text: 'Admin tarafından incelendikten sonra size cevap verilecektir.' });
                 
@@ -289,28 +295,19 @@ client.on('interactionCreate', async interaction => {
                     .setCustomId('support_order_modal')
                     .setTitle('Destek Siparişi');
                 
-                const konu = new TextInputBuilder()
-                    .setCustomId('konu')
-                    .setLabel('Konu')
-                    .setPlaceholder('Siparişin konusu')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true);
-                
-                const aciklama = new TextInputBuilder()
-                    .setCustomId('aciklama')
-                    .setLabel('Açıklama')
-                    .setPlaceholder('Detaylı açıklama')
+                const neden = new TextInputBuilder()
+                    .setCustomId('neden')
+                    .setLabel('Neden? (Opsiyonel)')
+                    .setPlaceholder('Destek siparişi açmanızın nedenini kısaca yazın...')
                     .setStyle(TextInputStyle.Paragraph)
-                    .setRequired(true);
+                    .setRequired(false);
                 
-                const row1 = new ActionRowBuilder().addComponents(konu);
-                const row2 = new ActionRowBuilder().addComponents(aciklama);
-                
-                modal.addComponents(row1, row2);
+                const row1 = new ActionRowBuilder().addComponents(neden);
+                modal.addComponents(row1);
                 
                 // Bilgilendirme gönder
                 await interaction.reply({ embeds: [infoEmbed], ephemeral: true });
-                // Modal aç (tepki olarak)
+                // Modal aç
                 setTimeout(() => interaction.showModal(modal).catch(console.error), 100);
                 
             } else if (commandName === 'promosyonkodukullan') {
@@ -339,18 +336,39 @@ client.on('interactionCreate', async interaction => {
                 } catch (error) {
                     console.error('DM gönderme hatası:', error);
                 }
+                
+            } else if (commandName === 'sorumlu') {
+                if (user.username !== 'umutpapa123') {
+                    await interaction.reply({
+                        content: '❌ Sadece umutpapa123 kullanabilir!',
+                        ephemeral: true
+                    });
+                    return;
+                }
+                
+                const sorumluyetkili = options.getUser('kullanıcı');
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ Sorumlu Yetkili Eklendi')
+                    .setDescription(`${sorumluyetkili.tag} sorumlu yetkili olarak atandı`)
+                    .setColor(0x10b981)
+                    .addFields(
+                        { name: 'Yetkili', value: sorumluyetkili.tag, inline: true },
+                        { name: 'ID', value: sorumluyetkili.id, inline: true }
+                    )
+                    .setTimestamp();
+                
+                await interaction.reply({ embeds: [embed], ephemeral: true });
             }
             
         } else if (interaction.isModalSubmit()) {
             if (interaction.customId === 'support_order_modal') {
-                const konu = interaction.fields.getTextInputValue('konu');
-                const aciklama = interaction.fields.getTextInputValue('aciklama');
+                const neden = interaction.fields.getTextInputValue('neden') || 'Belirtilmedi';
                 const guild = interaction.guild;
                 const user = interaction.user;
                 
                 // Destek kanalı oluştur
                 const channel = await guild.channels.create({
-                    name: `sipariş-${user.username}`,
+                    name: `ticket-${user.username}`,
                     type: ChannelType.GuildText,
                     permissionOverwrites: [
                         {
@@ -371,22 +389,60 @@ client.on('interactionCreate', async interaction => {
                     .setColor(0x7c3aed)
                     .setThumbnail(user.displayAvatarURL())
                     .addFields(
-                        { name: '👤 Kullanıcı', value: user.tag, inline: true },
-                        { name: '📌 Konu', value: konu, inline: true },
-                        { name: '📝 Açıklama', value: aciklama }
+                        { name: '👤 Açan', value: user.tag, inline: true },
+                        { name: '🆔 ID', value: user.id, inline: true },
+                        { name: '❓ Neden', value: neden }
                     )
                     .setTimestamp();
                 
-                await channel.send({ embeds: [embed] });
+                // Butonlar
+                const closeBtn = new ButtonBuilder()
+                    .setCustomId(`close_ticket_${user.id}`)
+                    .setLabel('🔒 Ticket Kapat')
+                    .setStyle(ButtonStyle.Danger);
+                
+                const takeBtn = new ButtonBuilder()
+                    .setCustomId(`take_ticket_${user.id}`)
+                    .setLabel('📋 Talebi Üstlen')
+                    .setStyle(ButtonStyle.Primary);
+                
+                const row = new ActionRowBuilder().addComponents(closeBtn, takeBtn);
+                
+                await channel.send({ embeds: [embed], components: [row] });
                 
                 await interaction.reply({
-                    content: `✅ Destek siparişin oluşturuldu: ${channel}`,
+                    content: `✅ Destek siparişin açıldı: ${channel}`,
                     ephemeral: true
                 });
             }
             
         } else if (interaction.isButton()) {
-            if (interaction.customId === 'create_ticket') {
+            if (interaction.customId.startsWith('close_ticket_')) {
+                const embed = new EmbedBuilder()
+                    .setTitle('🔒 Ticket Kapatılıyor')
+                    .setDescription('5 saniye sonra kanal silinecek...')
+                    .setColor(0xff0000);
+                    
+                await interaction.reply({ embeds: [embed] });
+                
+                setTimeout(async () => {
+                    try {
+                        await interaction.channel.delete();
+                    } catch (error) {
+                        console.error('Kanal silme hatası:', error.message);
+                    }
+                }, 5000);
+                
+            } else if (interaction.customId.startsWith('take_ticket_')) {
+                const embed = new EmbedBuilder()
+                    .setTitle('📋 Talep Üstlenildi')
+                    .setDescription(`${interaction.user.tag} bu talebi üstlendi`)
+                    .setColor(0x10b981)
+                    .setTimestamp();
+                
+                await interaction.reply({ embeds: [embed] });
+                
+            } else if (interaction.customId === 'create_ticket') {
                 const guild = interaction.guild;
                 const user = interaction.user;
                 
