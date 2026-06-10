@@ -568,7 +568,7 @@
                 const data = await response.json();
                 if (data.success) {
                     localStorage.setItem('adminToken', data.token);
-                    window.location.href = '/admin/panel.html';
+                    window.location.href = '/admin';
                 } else {
                     document.getElementById('loginError').textContent = 'Hatalı giriş!';
                 }
