@@ -397,8 +397,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    adminToken = 'admin_token';
-                    localStorage.setItem('adminToken', adminToken);
+                    adminToken = data.token;
+                    localStorage.setItem('adminToken', data.token);
                     document.getElementById('loginContainer').style.display = 'none';
                     document.getElementById('adminPanel').style.display = 'block';
                     loadDashboard();
@@ -538,9 +538,17 @@
             loadProducts();
         }
 
+        function showMessage(message, type) {
+            const msgDiv = document.getElementById('loginMessage');
+            msgDiv.innerHTML = `<div class="message ${type}">${message}</div>`;
+            setTimeout(() => {
+                msgDiv.innerHTML = '';
+            }, 5000);
+        }
+
         window.onload = () => {
             const token = localStorage.getItem('adminToken');
-            if (token) {
+            if (token && token.startsWith('admin_token_')) {
                 adminToken = token;
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';

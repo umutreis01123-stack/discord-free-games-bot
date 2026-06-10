@@ -79,7 +79,8 @@ app.post('/api/admin-login', (req, res) => {
   const { username, password } = req.body;
   
   if (username === ADMIN_USER && password === ADMIN_PASS) {
-    res.json({ success: true, token: 'admin_token_' + Date.now() });
+    const token = 'admin_token_' + Date.now();
+    res.json({ success: true, token });
   } else {
     res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre' });
   }
@@ -89,7 +90,7 @@ app.post('/api/admin-login', (req, res) => {
 app.post('/api/admin/create-stock', (req, res) => {
   const { token, name } = req.body;
   
-  if (!token || token !== 'admin_token') {
+  if (!token || !token.startsWith('admin_token_')) {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
@@ -110,7 +111,7 @@ app.post('/api/admin/create-stock', (req, res) => {
 app.post('/api/admin/add-product', (req, res) => {
   const { token, name, stockId, details } = req.body;
   
-  if (!token || token !== 'admin_token') {
+  if (!token || !token.startsWith('admin_token_')) {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
@@ -134,7 +135,7 @@ app.delete('/api/admin/stock/:id', (req, res) => {
   const { token } = req.body;
   const { id } = req.params;
   
-  if (!token || token !== 'admin_token') {
+  if (!token || !token.startsWith('admin_token_')) {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
@@ -151,7 +152,7 @@ app.delete('/api/admin/product/:id', (req, res) => {
   const { token } = req.body;
   const { id } = req.params;
   
-  if (!token || token !== 'admin_token') {
+  if (!token || !token.startsWith('admin_token_')) {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
