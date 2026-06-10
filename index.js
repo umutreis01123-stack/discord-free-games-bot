@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Veritabanı dosyası (Railway için /tmp kullan)
-const DB_FILE = process.env.NODE_ENV === 'production' 
+const DB_FILE = (process.env.NODE_ENV || 'development') === 'production' 
   ? '/tmp/database.json' 
   : 'database.json';
 
