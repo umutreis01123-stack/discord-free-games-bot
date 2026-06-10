@@ -312,35 +312,44 @@ client.on('interactionCreate', async interaction => {
                 await interaction.reply({ content: '@everyone', embeds: [embed] });
                 
             } else if (commandName === 'desteksiparişkur') {
-                // Bilgilendirme mesajı
-                const infoEmbed = new EmbedBuilder()
-                    .setTitle('📋 Destek Siparişi Formu')
-                    .setDescription('Aşağıdaki formu doldurarak destek siparişi açabilirsiniz.')
+                // Destek kanalı oluştur
+                const supportChannel = await interaction.guild.channels.create({
+                    name: `destek-siparişi`,
+                    type: ChannelType.GuildText,
+                    permissionOverwrites: [
+                        {
+                            id: interaction.guild.roles.everyone.id,
+                            deny: [PermissionsBitField.Flags.SendMessages],
+                            allow: [PermissionsBitField.Flags.ViewChannel]
+                        }
+                    ]
+                });
+                
+                // Embed oluştur
+                const embed = new EmbedBuilder()
+                    .setTitle('🛠️ Destek Siparişi Sistemi')
+                    .setDescription('Destek siparişi açmak için aşağıdaki butona tıklayın')
                     .setColor(0x7c3aed)
                     .addFields(
-                        { name: '❓ Neden', value: 'Destek siparişi açmak istediğiniz nedeni yazın (opsiyonel)', inline: false }
+                        { name: '📝 Neden', value: 'Destek siparişi açmak istediğiniz nedeni belirtebileceksiniz', inline: false },
+                        { name: '✅ İşlem', value: 'Butona tıkladıktan sonra özel bir kanal açılacak', inline: false }
                     )
-                    .setFooter({ text: 'Admin tarafından incelendikten sonra size cevap verilecektir.' });
+                    .setTimestamp();
                 
-                // Modal oluştur
-                const modal = new ModalBuilder()
-                    .setCustomId('support_order_modal')
-                    .setTitle('Destek Siparişi');
+                // Buton oluştur
+                const openTicketBtn = new ButtonBuilder()
+                    .setCustomId('open_support_ticket')
+                    .setLabel('🎫 Destek Siparişi Aç')
+                    .setStyle(ButtonStyle.Primary);
                 
-                const neden = new TextInputBuilder()
-                    .setCustomId('neden')
-                    .setLabel('Neden? (Opsiyonel)')
-                    .setPlaceholder('Destek siparişi açmanızın nedenini kısaca yazın...')
-                    .setStyle(TextInputStyle.Paragraph)
-                    .setRequired(false);
+                const row = new ActionRowBuilder().addComponents(openTicketBtn);
                 
-                const row1 = new ActionRowBuilder().addComponents(neden);
-                modal.addComponents(row1);
+                await supportChannel.send({ embeds: [embed], components: [row] });
                 
-                // Bilgilendirme gönder
-                await interaction.reply({ embeds: [infoEmbed], ephemeral: true });
-                // Modal aç
-                setTimeout(() => interaction.showModal(modal).catch(console.error), 100);
+                await interaction.reply({
+                    content: `✅ Destek siparişi kanalı oluşturuldu: ${supportChannel}`,
+                    ephemeral: true
+                });
                 
             } else if (commandName === 'promosyonkodukullan') {
                 const kod = options.getString('kod').toUpperCase();
@@ -393,13 +402,13 @@ client.on('interactionCreate', async interaction => {
             }
             
         } else if (interaction.isModalSubmit()) {
-            if (interaction.customId === 'support_order_modal') {
-                const neden = interaction.fields.getTextInputValue('neden') || 'Belirtilmedi';
+            if (interaction.customId === 'support_ticket_modal') {
+                const neden = interaction.fields.getTextInputValue('ticket_neden') || 'Belirtilmedi';
                 const guild = interaction.guild;
                 const user = interaction.user;
                 
-                // Destek kanalı oluştur
-                const channel = await guild.channels.create({
+                // Ticket kanalı oluştur
+                const ticketChannel = await guild.channels.create({
                     name: `ticket-${user.username}`,
                     type: ChannelType.GuildText,
                     permissionOverwrites: [
@@ -440,16 +449,34 @@ client.on('interactionCreate', async interaction => {
                 
                 const row = new ActionRowBuilder().addComponents(closeBtn, takeBtn);
                 
-                await channel.send({ embeds: [embed], components: [row] });
+                await ticketChannel.send({ embeds: [embed], components: [row] });
                 
                 await interaction.reply({
-                    content: `✅ Destek siparişin açıldı: ${channel}`,
+                    content: `✅ Destek siparişin açıldı: ${ticketChannel}`,
                     ephemeral: true
                 });
             }
             
         } else if (interaction.isButton()) {
-            if (interaction.customId.startsWith('close_ticket_')) {
+            if (interaction.customId === 'open_support_ticket') {
+                // Modal göster
+                const modal = new ModalBuilder()
+                    .setCustomId('support_ticket_modal')
+                    .setTitle('Destek Siparişi Aç');
+                
+                const neden = new TextInputBuilder()
+                    .setCustomId('ticket_neden')
+                    .setLabel('Neden destek siparişi açıyorsunuz?')
+                    .setPlaceholder('Nedenini kısaca yazın...')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false);
+                
+                const row = new ActionRowBuilder().addComponents(neden);
+                modal.addComponents(row);
+                
+                await interaction.showModal(modal);
+                
+            } else if (interaction.customId.startsWith('close_ticket_')) {
                 const embed = new EmbedBuilder()
                     .setTitle('🔒 Ticket Kapatılıyor')
                     .setDescription('5 saniye sonra kanal silinecek...')
