@@ -673,9 +673,26 @@
                 return;
             }
             
-            showMessage('announcementsMessage', 'Duyuru gönderildi!', 'success');
-            document.getElementById('announcementTitle').value = '';
-            document.getElementById('announcementContent').value = '';
+            try {
+                const response = await fetch(`${API_BASE}/api/announcements`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title, content })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('announcementsMessage', 'Duyuru başarıyla gönderildi!', 'success');
+                    document.getElementById('announcementTitle').value = '';
+                    document.getElementById('announcementContent').value = '';
+                }
+            } catch (error) {
+                console.error('Add announcement error:', error);
+                showMessage('announcementsMessage', 'Duyuru gönderilirken hata oluştu!', 'error');
+            }
         }
         
         async function sendShipment() {
@@ -688,10 +705,27 @@
                 return;
             }
             
-            showMessage('shipmentsMessage', 'Ürün gönderildi! Kullanıcı Discord DM\'sinden mesaj alacak.', 'success');
-            document.getElementById('shipmentEmail').value = '';
-            document.getElementById('shipmentProduct').value = '';
-            document.getElementById('shipmentDetails').value = '';
+            try {
+                const response = await fetch(`${API_BASE}/api/shipments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ email, product, details })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('shipmentsMessage', 'Ürün başarıyla gönderildi! Kullanıcı Discord DM\'sinden mesaj alacak.', 'success');
+                    document.getElementById('shipmentEmail').value = '';
+                    document.getElementById('shipmentProduct').value = '';
+                    document.getElementById('shipmentDetails').value = '';
+                }
+            } catch (error) {
+                console.error('Send shipment error:', error);
+                showMessage('shipmentsMessage', 'Ürün gönderilirken hata oluştu!', 'error');
+            }
         }
         
         async function sendServerMessage() {
@@ -702,32 +736,49 @@
                 return;
             }
             
-            showMessage('serversMessage', 'Mesaj tüm sunuculara gönderiliyor...', 'success');
-            document.getElementById('serverMessage').value = '';
+            try {
+                const response = await fetch(`${API_BASE}/api/servers/message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('serversMessage', 'Mesaj tüm sunuculara başarıyla gönderildi!', 'success');
+                    document.getElementById('serverMessage').value = '';
+                }
+            } catch (error) {
+                console.error('Send server message error:', error);
+                showMessage('serversMessage', 'Mesaj gönderilirken hata oluştu!', 'error');
+            }
         }
         
         async function loadServers() {
-            // Demo sunucu sayısı
-            document.getElementById('serverCount').textContent = '5';
-            
-            const serversTable = document.getElementById('serversTable');
-            serversTable.innerHTML = `
-                <tr>
-                    <td>Gaming Community</td>
-                    <td>1,234</td>
-                    <td>✅ Aktif</td>
-                </tr>
-                <tr>
-                    <td>Support Server</td>
-                    <td>567</td>
-                    <td>✅ Aktif</td>
-                </tr>
-                <tr>
-                    <td>Test Server</td>
-                    <td>12</td>
-                    <td>✅ Aktif</td>
-                </tr>
-            `;
+            try {
+                const response = await fetch(`${API_BASE}/api/servers`);
+                const servers = await response.json();
+                
+                document.getElementById('serverCount').textContent = servers.length;
+                
+                const serversTable = document.getElementById('serversTable');
+                serversTable.innerHTML = servers.map(server => `
+                    <tr>
+                        <td>${server.name}</td>
+                        <td>${server.memberCount.toLocaleString()}</td>
+                        <td>${server.status === 'active' ? '✅ Aktif' : '❌ Pasif'}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Load servers error:', error);
+                // Fallback
+                document.getElementById('serverCount').textContent = '0';
+                const serversTable = document.getElementById('serversTable');
+                serversTable.innerHTML = '<tr><td colspan="3">Sunucu bilgileri yüklenemedi</td></tr>';
+            }
         }
         
         function showMessage(elementId, message, type) {

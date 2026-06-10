@@ -243,6 +243,59 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
     });
 });
 
+// Announcements - Add
+app.post('/api/announcements', authenticateToken, (req, res) => {
+    const { title, content } = req.body;
+    
+    db.run(
+        'INSERT INTO announcements (title, content) VALUES (?, ?)',
+        [title, content],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, id: this.lastID });
+        }
+    );
+});
+
+// Announcements - Get all
+app.get('/api/announcements', authenticateToken, (req, res) => {
+    db.all('SELECT * FROM announcements ORDER BY created_at DESC', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+// Shipments - Add
+app.post('/api/shipments', authenticateToken, (req, res) => {
+    const { email, product, details } = req.body;
+    
+    // Burada normalde Discord DM gönderme işlemi olur
+    console.log(`📦 Shipment sent to ${email}: ${product} - ${details}`);
+    
+    res.json({ success: true, message: 'Ürün kullanıcıya gönderildi!' });
+});
+
+// Servers info
+app.get('/api/servers', (req, res) => {
+    // Demo sunucu bilgileri - gerçekte Discord bot'tan alınır
+    const servers = [
+        { name: 'Gaming Community', memberCount: 1234, status: 'active' },
+        { name: 'Support Server', memberCount: 567, status: 'active' },
+        { name: 'Test Server', memberCount: 12, status: 'active' }
+    ];
+    res.json(servers);
+});
+
+// Send message to all servers
+app.post('/api/servers/message', authenticateToken, (req, res) => {
+    const { message } = req.body;
+    
+    // Burada Discord bot'a mesaj gönderme işlemi olur
+    console.log(`📢 Broadcasting message to all servers: ${message}`);
+    
+    res.json({ success: true, message: 'Mesaj tüm sunuculara gönderildi!' });
+});
+
 // Serve HTML
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'home.html'));
