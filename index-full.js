@@ -271,6 +271,19 @@ client.on('interactionCreate', async interaction => {
                 await interaction.reply({ content: '@everyone', embeds: [embed] });
                 
             } else if (commandName === 'desteksiparişkur') {
+                // Bilgilendirme mesajı
+                const infoEmbed = new EmbedBuilder()
+                    .setTitle('📋 Destek Siparişi Formu')
+                    .setDescription('Aşağıdaki formu doldurarak destek siparişi açabilirsiniz.')
+                    .setColor(0x7c3aed)
+                    .addFields(
+                        { name: '📝 Konu', value: 'Siparişinizin konusunu yazın', inline: false },
+                        { name: '📄 Açıklama', value: 'Detaylı açıklama yapın', inline: false },
+                        { name: '✅ Gönderme', value: 'Formu tamamladıktan sonra kanalınız oluşturulacak', inline: false }
+                    )
+                    .setFooter({ text: 'Admin tarafından incelendikten sonra size cevap verilecektir.' });
+                
+                // Modal oluştur
                 const modal = new ModalBuilder()
                     .setCustomId('support_order_modal')
                     .setTitle('Destek Siparişi');
@@ -293,7 +306,11 @@ client.on('interactionCreate', async interaction => {
                 const row2 = new ActionRowBuilder().addComponents(aciklama);
                 
                 modal.addComponents(row1, row2);
-                await interaction.showModal(modal);
+                
+                // Bilgilendirme gönder
+                await interaction.reply({ embeds: [infoEmbed], ephemeral: true });
+                // Modal aç (tepki olarak)
+                setTimeout(() => interaction.showModal(modal).catch(console.error), 100);
                 
             } else if (commandName === 'promosyonkodukullan') {
                 const kod = options.getString('kod').toUpperCase();
