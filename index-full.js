@@ -73,6 +73,14 @@ client.once('ready', async () => {
             .setDescription('Destek siparişi aç'),
             
         new SlashCommandBuilder()
+            .setName('promosyonkodukullan')
+            .setDescription('Promosyon kodu kullan')
+            .addStringOption(option =>
+                option.setName('kod')
+                    .setDescription('Promosyon kodu')
+                    .setRequired(true)),
+            
+        new SlashCommandBuilder()
             .setName('duyuru')
             .setDescription('Duyuru gonder')
             .addStringOption(option =>
@@ -286,6 +294,33 @@ client.on('interactionCreate', async interaction => {
                 
                 modal.addComponents(row1, row2);
                 await interaction.showModal(modal);
+                
+            } else if (commandName === 'promosyonkodukullan') {
+                const kod = options.getString('kod').toUpperCase();
+                
+                // TODO: Veritabanından kodu kontrol et
+                // Şimdilik demo cevap
+                const embed = new EmbedBuilder()
+                    .setTitle('🎟️ Promosyon Kodu')
+                    .setDescription(`Kod: **${kod}**`)
+                    .setColor(0x7c3aed)
+                    .addFields(
+                        { name: 'Durum', value: '✅ Geçerli' },
+                        { name: 'Hediye', value: 'Kontrol ediliyor...' }
+                    )
+                    .setTimestamp();
+                
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                
+                // DM'den hediye gönder (TODO: Admin panel'den alınacak)
+                try {
+                    await user.send({
+                        content: '🎁 Promosyon kodundan kazandığınız hediye:',
+                        embeds: [embed]
+                    });
+                } catch (error) {
+                    console.error('DM gönderme hatası:', error);
+                }
             }
             
         } else if (interaction.isModalSubmit()) {
