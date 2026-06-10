@@ -305,6 +305,11 @@ app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`✅ Admin Panel running on http://localhost:${PORT}`);
-});
+// Eğer standalone çalıştırılıyorsa
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`✅ Admin Panel running on http://localhost:${PORT}`);
+    });
+}
+
+module.exports = { app, db };
