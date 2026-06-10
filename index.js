@@ -282,18 +282,28 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
   
-  if (command === 'urunler') {
+  if (command === 'urunler' || command === 'stok') {
     const db = getDatabase();
     if (db.products.length === 0) {
-      return message.reply('Şu anda satılık ürün yok.');
+      return message.reply('🚫 Şu anda satılık ürün yok.');
     }
     
-    let list = '📦 **Satılık Ürünler:**\n';
-    db.products.forEach((prod, i) => {
-      list += `${i + 1}. **${prod.name}** - ${prod.price}₺ (${prod.stock} stok)\n`;
-    });
+    let embed = {
+      color: 0xe94560,
+      title: '📦 Satılık Ürünler',
+      description: 'Siteden ürün satın almak için tıkla!',
+      fields: db.products.map((prod, i) => ({
+        name: `${i + 1}. ${prod.image} ${prod.name}`,
+        value: `💰 **${prod.price}₺** | 📦 **${prod.stock} stok**${prod.link ? `\n🔗 [Bağlantı](${prod.link})` : ''}`,
+        inline: false
+      })),
+      footer: {
+        text: 'Zwozez Discord Botu'
+      },
+      timestamp: new Date()
+    };
     
-    message.reply(list);
+    message.reply({ embeds: [embed] });
   }
 });
 
