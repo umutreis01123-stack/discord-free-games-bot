@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +17,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// Veritabanı dosyası (Railway için /tmp kullan)
+// Veritabanı dosyası
 const DB_FILE = (process.env.NODE_ENV || 'development') === 'production' 
   ? '/tmp/database.json' 
   : 'database.json';
@@ -34,9 +34,11 @@ function getDatabase() {
   
   return {
     users: [],
-    credits: {}, // userId -> kredi miktarı
-    accounts: [], // satılacak hesaplar
-    servers: [] // sunucu listesi
+    products: [],
+    orders: [],
+    notifications: [],
+    supportTickets: [],
+    accountRequests: []
   };
 }
 
@@ -61,9 +63,9 @@ app.get('/', (req, res) => {
 
 // Kayıt Ol
 app.post('/api/register', (req, res) => {
-  const { name, discordId, email, password } = req.body;
+  const { username, discordId, email, password } = req.body;
   
-  if (!name || !discordId || !email || !password) {
+  if (!username || !discordId || !email || !password) {
     return res.status(400).json({ error: 'Tüm alanlar gerekli' });
   }
   
@@ -76,15 +78,15 @@ app.post('/api/register', (req, res) => {
   
   const user = {
     id: Date.now().toString(),
-    name,
+    username,
     discordId,
     email,
-    password, // Gerçek projede hash yapılmalı
+    password,
+    credits: 0,
     registeredAt: new Date()
   };
   
   db.users.push(user);
-  db.credits[user.id] = 0;
   saveDatabase(db);
   
   res.json({ success: true, message: 'Kayıt başarılı', userId: user.id });
@@ -108,8 +110,8 @@ app.post('/api/login', (req, res) => {
   res.json({ 
     success: true, 
     userId: user.id,
-    name: user.name,
-    credits: db.credits[user.id] || 0
+    username: user.username,
+    credits: user.credits
   });
 });
 
@@ -124,79 +126,147 @@ app.post('/api/admin-login', (req, res) => {
   }
 });
 
-// Sunucu Listesi (ana sayfada gösterilecek)
-app.get('/api/servers', (req, res) => {
+// Ürünleri Getir
+app.get('/api/products', (req, res) => {
   const db = getDatabase();
-  res.json(db.servers);
+  res.json(db.products);
 });
 
-// Hesap Gönder (kayıtlı kullanıcı)
-app.post('/api/send-account', (req, res) => {
-  const { userId, accountIndex } = req.body;
+// Admin: Ürün Ekle
+app.post('/api/admin/add-product', (req, res) => {
+  const { token, name, price, image, link, stock } = req.body;
   
-  if (!userId || accountIndex === undefined) {
-    return res.status(400).json({ error: 'Parametreler eksik' });
+  if (!token || token !== 'admin_token') {
+    return res.status(401).json({ error: 'Yetkiniz yok' });
+  }
+  
+  const db = getDatabase();
+  const product = {
+    id: Date.now().toString(),
+    name,
+    price,
+    image,
+    link,
+    stock: stock || 0,
+    createdAt: new Date()
+  };
+  
+  db.products.push(product);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Ürün eklendi', product });
+});
+
+// Kredi Ver (Admin)
+app.post('/api/admin/add-credit', (req, res) => {
+  const { token, userId, amount } = req.body;
+  
+  if (!token || token !== 'admin_token') {
+    return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
   const db = getDatabase();
   const user = db.users.find(u => u.id === userId);
   
   if (!user) {
-    return res.status(401).json({ error: 'Kullanıcı bulunamadı' });
+    return res.status(400).json({ error: 'Kullanıcı bulunamadı' });
   }
   
-  const account = db.accounts[accountIndex];
+  user.credits += parseInt(amount);
+  saveDatabase(db);
   
-  if (!account) {
-    return res.status(400).json({ error: 'Hesap bulunamadı' });
+  res.json({ success: true, message: 'Kredi verildi' });
+});
+
+// Hesap Gönder İsteği
+app.post('/api/request-account', (req, res) => {
+  const { userId, productId, customAccount } = req.body;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'Giriş yapınız' });
   }
   
-  // Bot'a mesaj gönder
-  const discordId = user.discordId;
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) {
+    return res.status(400).json({ error: 'Kullanıcı bulunamadı' });
+  }
+  
+  const request = {
+    id: Date.now().toString(),
+    userId,
+    username: user.username,
+    discordId: user.discordId,
+    productId,
+    customAccount: customAccount || null,
+    status: 'pending',
+    createdAt: new Date()
+  };
+  
+  db.accountRequests.push(request);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Hesap gönderme isteği oluşturuldu', requestId: request.id });
+});
+
+// Admin: Hesap İsteğini Onayla ve Gönder
+app.post('/api/admin/approve-account', (req, res) => {
+  const { token, requestId } = req.body;
+  
+  if (!token || token !== 'admin_token') {
+    return res.status(401).json({ error: 'Yetkiniz yok' });
+  }
+  
+  const db = getDatabase();
+  const request = db.accountRequests.find(r => r.id === requestId);
+  
+  if (!request) {
+    return res.status(400).json({ error: 'İstek bulunamadı' });
+  }
+  
+  request.status = 'approved';
+  saveDatabase(db);
+  
+  // Bot'a DM gönder
+  const discordId = request.discordId;
   client.users.fetch(discordId).then(userDM => {
+    const accountInfo = request.customAccount || `Ürün: ${request.productId}`;
     userDM.send(`
 ✅ **Hesap Gönderildi**
 
-🎮 **Hesap Bilgileri:**
-${account.details}
+📦 **Ürün Bilgisi:**
+\`\`\`
+${accountInfo}
+\`\`\`
 
-📧 **Gönderen:** ${user.name}
+**Zwozez Discord Botu**
     `);
   }).catch(err => {
     console.log('DM gönderilemedi:', err);
   });
   
-  res.json({ success: true, message: 'Hesap başarıyla gönderildi' });
+  res.json({ success: true, message: 'Hesap gönderildi' });
 });
 
-// Admin Panel - Hesap Ekle
-app.post('/api/admin/add-account', (req, res) => {
-  const { token, name, details } = req.body;
-  
-  if (!token || token !== 'admin_token') {
-    return res.status(401).json({ error: 'Yetkiniz yok' });
-  }
-  
+// Kullanıcıları Getir (Admin)
+app.get('/api/admin/users', (req, res) => {
   const db = getDatabase();
-  db.accounts.push({ name, details });
-  saveDatabase(db);
-  
-  res.json({ success: true, message: 'Hesap eklendi' });
+  res.json(db.users.map(u => ({
+    id: u.id,
+    username: u.username,
+    discordId: u.discordId,
+    email: u.email,
+    credits: u.credits,
+    registeredAt: u.registeredAt
+  })));
 });
 
-// Admin Panel - Sunucu Ekle
-app.post('/api/admin/add-server', (req, res) => {
-  const { token, name, playerCount } = req.body;
-  
-  if (!token || token !== 'admin_token') {
-    return res.status(401).json({ error: 'Yetkiniz yok' });
-  }
-  
+// Bekleyen İstekleri Getir (Admin)
+app.get('/api/admin/pending-requests', (req, res) => {
   const db = getDatabase();
-  db.servers.push({ name, playerCount, id: Date.now() });
-  saveDatabase(db);
-  
-  res.json({ success: true, message: 'Sunucu eklendi' });
+  const pending = db.accountRequests.filter(r => r.status === 'pending');
+  res.json(pending);
 });
 
 // ============ DISCORD BOT ============
@@ -207,22 +277,20 @@ client.on('ready', () => {
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  
-  // Prefix komutları
   if (!message.content.startsWith('!')) return;
   
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
   
-  if (command === 'hesaplar') {
+  if (command === 'urunler') {
     const db = getDatabase();
-    if (db.accounts.length === 0) {
-      return message.reply('Şu anda satılık hesap yok.');
+    if (db.products.length === 0) {
+      return message.reply('Şu anda satılık ürün yok.');
     }
     
-    let list = '📊 **Satılık Hesaplar:**\n';
-    db.accounts.forEach((acc, i) => {
-      list += `${i + 1}. **${acc.name}**\n`;
+    let list = '📦 **Satılık Ürünler:**\n';
+    db.products.forEach((prod, i) => {
+      list += `${i + 1}. **${prod.name}** - ${prod.price}₺ (${prod.stock} stok)\n`;
     });
     
     message.reply(list);
