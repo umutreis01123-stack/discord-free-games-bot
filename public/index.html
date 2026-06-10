@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zwozez Discord Botu - Canlı Stok</title>
+    <title>Zwozez - Canlı Stok</title>
     <style>
         * {
             margin: 0;
@@ -20,17 +20,13 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
         }
 
         header {
             text-align: center;
             margin-bottom: 40px;
-            padding: 30px;
-            background: #16213e;
-            border-radius: 10px;
-            border: 2px solid #e94560;
         }
 
         h1 {
@@ -44,11 +40,34 @@
             font-size: 1.1em;
         }
 
-        .stocks-grid {
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #e94560;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #d93654;
+        }
+
+        .stocks-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 20px;
-            margin-bottom: 40px;
         }
 
         .stock-card {
@@ -57,98 +76,147 @@
             border-radius: 10px;
             padding: 25px;
             transition: all 0.3s;
-            cursor: pointer;
         }
 
         .stock-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 5px 15px rgba(233, 69, 96, 0.3);
-            border-color: #d93654;
         }
 
-        .stock-card h2 {
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e94560;
+            padding-bottom: 10px;
+        }
+
+        .stock-name {
+            font-size: 1.4em;
             color: #e94560;
-            margin-bottom: 15px;
-            font-size: 1.5em;
+            font-weight: bold;
         }
 
-        .stock-info {
+        .stock-quantity {
             background: #0f3460;
-            padding: 15px;
+            padding: 8px 15px;
             border-radius: 5px;
-            margin-bottom: 15px;
-        }
-
-        .stock-info p {
-            color: #bdc3c7;
-            margin: 8px 0;
-        }
-
-        .product-count {
-            font-size: 1.3em;
             color: #2ecc71;
             font-weight: bold;
         }
 
-        .products-list {
-            max-height: 300px;
-            overflow-y: auto;
+        .products {
             background: #0f3460;
+            padding: 15px;
             border-radius: 5px;
-            padding: 10px;
+        }
+
+        .products-title {
+            color: #e94560;
+            margin-bottom: 10px;
+            font-weight: bold;
         }
 
         .product-item {
             background: #1a1a2e;
             padding: 10px;
             margin: 8px 0;
-            border-left: 3px solid #e94560;
+            border-left: 3px solid #2ecc71;
             border-radius: 3px;
-            font-size: 0.95em;
-            color: #ecf0f1;
         }
 
-        .product-name {
-            font-weight: bold;
-            color: #2ecc71;
-        }
-
-        .product-details {
-            font-size: 0.85em;
-            color: #95a5a6;
-            margin-top: 5px;
-            word-break: break-word;
-            white-space: pre-wrap;
-        }
-
-        .empty-message {
+        .empty {
             text-align: center;
             color: #7f8c8d;
             padding: 20px;
-            font-style: italic;
         }
 
-        .admin-link {
-            display: block;
+        .loading {
             text-align: center;
-            padding: 15px;
-            background: #f39c12;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background 0.3s;
+            color: #7f8c8d;
+            padding: 20px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #e94560;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content h2 {
+            color: #e94560;
             margin-bottom: 20px;
         }
 
-        .admin-link:hover {
-            background: #e67e22;
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ecf0f1;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #e94560;
+            border-radius: 5px;
+            background: #0f3460;
+            color: #ecf0f1;
+            font-family: inherit;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            box-shadow: 0 0 5px #e94560;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+        }
+
+        .btn-cancel {
+            background: #95a5a6;
+        }
+
+        .btn-cancel:hover {
+            background: #7f8c8d;
         }
 
         footer {
             text-align: center;
             color: #7f8c8d;
             padding: 20px;
+            margin-top: 40px;
             border-top: 1px solid #16213e;
         }
 
@@ -157,7 +225,7 @@
                 font-size: 1.8em;
             }
 
-            .stocks-grid {
+            .stocks-container {
                 grid-template-columns: 1fr;
             }
         }
@@ -166,19 +234,66 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎮 Zwozez Discord Botu</h1>
+            <h1>🎮 Zwozez</h1>
             <p class="subtitle">Canlı Stok Gösterimi</p>
         </header>
 
-        <a href="/admin" class="admin-link">⚙️ Yönetim Paneline Git</a>
+        <div class="btn-group">
+            <button onclick="openStockModal()">📦 Stok Ekle</button>
+            <button onclick="openProductModal()">🎮 Ürün Ekle</button>
+        </div>
 
-        <div class="stocks-grid" id="stocksContainer">
-            <p style="text-align: center; grid-column: 1/-1; color: #7f8c8d;">Stoklar yükleniyor...</p>
+        <div class="stocks-container" id="stocksContainer">
+            <p class="loading">Stoklar yükleniyor...</p>
         </div>
 
         <footer>
-            <p>&copy; 2026 Zwozez discord botu. Tüm hakları saklıdır.</p>
+            <p>&copy; 2026 Zwozez. Tüm hakları saklıdır.</p>
         </footer>
+    </div>
+
+    <!-- Stok Ekle Modal -->
+    <div class="modal" id="stockModal">
+        <div class="modal-content">
+            <h2>📦 Stok Ekle</h2>
+            <form onsubmit="addStock(event)">
+                <div class="form-group">
+                    <label>Stok Adı:</label>
+                    <input type="text" id="stockName" required>
+                </div>
+                <div class="form-group">
+                    <label>Miktar:</label>
+                    <input type="number" id="stockQuantity" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" onclick="closeStockModal()">İptal</button>
+                    <button type="submit">Ekle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ürün Ekle Modal -->
+    <div class="modal" id="productModal">
+        <div class="modal-content">
+            <h2>🎮 Ürün Ekle</h2>
+            <form onsubmit="addProduct(event)">
+                <div class="form-group">
+                    <label>Stok Seç:</label>
+                    <select id="productStock" required>
+                        <option value="">Yükleniyor...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Ürün Adı:</label>
+                    <input type="text" id="productName" required>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="btn-cancel" onclick="closeProductModal()">İptal</button>
+                    <button type="submit">Ekle</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -190,52 +305,119 @@
                 const container = document.getElementById('stocksContainer');
                 
                 if (stocks.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; grid-column: 1/-1; color: #7f8c8d;">Henüz stok eklenmemiş.</p>';
+                    container.innerHTML = '<p class="empty">Henüz stok eklenmemiş</p>';
+                    updateProductSelect([]);
                     return;
                 }
 
-                container.innerHTML = stocks.map(stock => {
-                    const products = getProductsForStock(stock.id);
-                    return `
-                        <div class="stock-card">
-                            <h2>📦 ${stock.name}</h2>
-                            <div class="stock-info">
-                                <p>Ürün Sayısı: <span class="product-count">${stock.productCount}</span></p>
-                            </div>
-                            <div class="products-list">
-                                ${products.length === 0 ? 
-                                    '<p class="empty-message">Bu stokta ürün yok</p>' :
-                                    products.map(product => `
-                                        <div class="product-item">
-                                            <div class="product-name">🎮 ${product.name}</div>
-                                            ${product.details ? `<div class="product-details">${product.details}</div>` : ''}
-                                        </div>
-                                    `).join('')
-                                }
-                            </div>
+                container.innerHTML = stocks.map(stock => `
+                    <div class="stock-card">
+                        <div class="stock-header">
+                            <div class="stock-name">${stock.name}</div>
+                            <div class="stock-quantity">📊 ${stock.quantity}</div>
                         </div>
-                    `;
-                }).join('');
+                        <div class="products">
+                            <div class="products-title">🎮 Ürünler (${stock.products.length})</div>
+                            ${stock.products.length === 0 ? 
+                                '<p class="empty" style="padding: 10px;">Ürün yok</p>' :
+                                stock.products.map(p => `<div class="product-item">• ${p.name}</div>`).join('')
+                            }
+                        </div>
+                    </div>
+                `).join('');
 
-                // Tüm ürünleri sakla global olarak
-                window.allStocks = stocks;
+                updateProductSelect(stocks);
             } catch (error) {
                 console.error('Stoklar yüklenemedi:', error);
                 document.getElementById('stocksContainer').innerHTML = 
-                    '<p style="text-align: center; grid-column: 1/-1; color: #e74c3c;">Stoklar yüklenemedi</p>';
+                    '<p class="empty">Stoklar yüklenemedi</p>';
             }
         }
 
-        function getProductsForStock(stockId) {
-            // API'den alınacak ürünleri filtreleme
-            // Şimdilik boş dönüş, loadStocks sırasında fetch yapılacak
-            return [];
+        function updateProductSelect(stocks) {
+            const select = document.getElementById('productStock');
+            select.innerHTML = '<option value="">Stok Seç</option>';
+            stocks.forEach(stock => {
+                select.innerHTML += `<option value="${stock.id}">${stock.name}</option>`;
+            });
+        }
+
+        function openStockModal() {
+            document.getElementById('stockModal').classList.add('active');
+        }
+
+        function closeStockModal() {
+            document.getElementById('stockModal').classList.remove('active');
+            document.getElementById('stockModal').querySelector('form').reset();
+        }
+
+        function openProductModal() {
+            document.getElementById('productModal').classList.add('active');
+        }
+
+        function closeProductModal() {
+            document.getElementById('productModal').classList.remove('active');
+            document.getElementById('productModal').querySelector('form').reset();
+        }
+
+        async function addStock(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('stockName').value;
+            const quantity = document.getElementById('stockQuantity').value;
+
+            try {
+                const response = await fetch('/api/stocks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, quantity })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Stok eklendi!');
+                    closeStockModal();
+                    loadStocks();
+                } else {
+                    alert('❌ Hata: ' + data.error);
+                }
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
+        }
+
+        async function addProduct(event) {
+            event.preventDefault();
+            
+            const stockId = document.getElementById('productStock').value;
+            const productName = document.getElementById('productName').value;
+
+            try {
+                const response = await fetch('/api/products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stockId, productName })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Ürün eklendi!');
+                    closeProductModal();
+                    loadStocks();
+                } else {
+                    alert('❌ Hata: ' + data.error);
+                }
+            } catch (error) {
+                alert('Hata: ' + error.message);
+            }
         }
 
         // Sayfa yüklendiğinde
         loadStocks();
-        // Her 5 saniyede bir yenile
-        setInterval(loadStocks, 5000);
+        // Her 3 saniyede bir yenile
+        setInterval(loadStocks, 3000);
     </script>
 </body>
 </html>
