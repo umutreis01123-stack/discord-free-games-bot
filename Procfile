@@ -1,2 +1,2 @@
-web: npm start
-worker: cd admin-panel && npm start
+web: node index.js
+worker: node index.js

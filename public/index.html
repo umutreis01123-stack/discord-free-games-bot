@@ -3,348 +3,512 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ShadowCore - Giriş</title>
+    <title>Ücretsiz Oyun Bot - Ana Sayfa</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
-            color: #fff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            color: #333;
         }
-        
-        .auth-container {
-            background: rgba(20, 20, 40, 0.9);
-            border: 2px solid #7c3aed;
-            border-radius: 15px;
-            padding: 40px;
-            width: 100%;
-            max-width: 400px;
-            box-shadow: 0 8px 32px rgba(124, 58, 237, 0.3);
-        }
-        
-        .logo {
+
+        header {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
             text-align: center;
-            margin-bottom: 30px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
-        
-        .logo h1 {
-            color: #7c3aed;
-            font-size: 32px;
+
+        header h1 {
+            font-size: 2.5em;
             margin-bottom: 10px;
         }
-        
-        .logo p {
-            color: #b0b0c0;
-            font-size: 14px;
-        }
-        
-        .form-tabs {
+
+        nav {
             display: flex;
-            margin-bottom: 30px;
-            border-radius: 8px;
-            overflow: hidden;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
         }
-        
-        .tab {
-            flex: 1;
-            padding: 12px;
-            background: rgba(124, 58, 237, 0.2);
+
+        nav a, nav button {
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
             border: none;
-            color: #7c3aed;
+            border-radius: 5px;
             cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s;
+            text-decoration: none;
+            font-size: 1em;
+            transition: background 0.3s;
         }
-        
-        .tab.active {
-            background: #7c3aed;
-            color: #fff;
+
+        nav a:hover, nav button:hover {
+            background: #764ba2;
         }
-        
-        .form-content {
+
+        nav a.admin {
+            background: #e74c3c;
+        }
+
+        nav a.admin:hover {
+            background: #c0392b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        .hero {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 2em;
+        }
+
+        .hero p {
+            color: #666;
+            font-size: 1.1em;
+            line-height: 1.6;
+        }
+
+        .modal {
             display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.3s;
         }
-        
-        .form-content.active {
-            display: block;
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
-        
-        .form-group {
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 10px;
+            width: 400px;
+            max-width: 95%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content h2 {
+            color: #667eea;
             margin-bottom: 20px;
         }
-        
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
         .form-group label {
             display: block;
-            margin-bottom: 8px;
-            color: #b0b0c0;
-            font-size: 14px;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
         }
-        
+
         .form-group input {
             width: 100%;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid #7c3aed;
-            border-radius: 8px;
-            color: #fff;
-            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
         }
-        
+
         .form-group input:focus {
             outline: none;
-            background: rgba(124, 58, 237, 0.1);
-            box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
         }
-        
-        .submit-btn {
+
+        .btn-submit {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            background: #667eea;
+            color: white;
             border: none;
-            border-radius: 8px;
-            color: #fff;
-            font-size: 16px;
-            font-weight: 600;
+            border-radius: 5px;
             cursor: pointer;
-            transition: all 0.3s;
+            font-size: 1em;
+            font-weight: bold;
+            transition: background 0.3s;
         }
-        
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+
+        .btn-submit:hover {
+            background: #764ba2;
         }
-        
-        .error {
-            color: #ff8888;
-            font-size: 12px;
-            margin-top: 10px;
+
+        .btn-close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .btn-close:hover {
+            color: #000;
+        }
+
+        .servers-section {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .servers-section h3 {
+            color: #667eea;
+            margin-bottom: 30px;
+            font-size: 1.8em;
             text-align: center;
         }
-        
-        .success {
-            color: #10b981;
-            font-size: 12px;
-            margin-top: 10px;
+
+        .servers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .server-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
             text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
         }
-        
-        .password-strength {
-            margin-top: 8px;
-            font-size: 12px;
+
+        .server-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
         }
-        
-        .strength-bar {
-            width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            margin-top: 5px;
-            overflow: hidden;
+
+        .server-card h4 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
         }
-        
-        .strength-fill {
-            height: 100%;
-            width: 0%;
-            background: #ff4444;
-            transition: all 0.3s;
+
+        .server-card p {
+            font-size: 1.1em;
+            opacity: 0.9;
         }
-        
-        .strength-fill.weak {
-            width: 33%;
-            background: #ff4444;
+
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
         }
-        
-        .strength-fill.medium {
-            width: 66%;
-            background: #ffaa00;
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
-        
-        .strength-fill.strong {
-            width: 100%;
-            background: #10b981;
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            margin-top: 40px;
         }
     </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="logo">
-            <h1>🤖 ShadowCore</h1>
-            <p>Oyun Hesapları Yönetim Sistemi</p>
+    <header>
+        <h1>🎮 Ücretsiz Oyun Bot</h1>
+        <nav>
+            <button onclick="openModal('loginModal')">Giriş Yap</button>
+            <button onclick="openModal('registerModal')">Kayıt Ol</button>
+            <button onclick="openModal('sendAccountModal')" id="sendAccountBtn" style="display:none;">Hesap Gönder</button>
+            <a href="admin.html" class="admin">Admin</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="hero">
+            <h2>Hoş Geldiniz!</h2>
+            <p>Kredi sistemini kullanarak hesap alıp satabilir, stok yönetimi yapabilirsiniz.</p>
         </div>
-        
-        <div class="form-tabs">
-            <button class="tab active" onclick="switchTab('login')">Giriş Yap</button>
-            <button class="tab" onclick="switchTab('register')">Kayıt Ol</button>
+
+        <div id="message"></div>
+
+        <div class="servers-section">
+            <h3>🖥️ Sunucularımız</h3>
+            <div class="servers-grid" id="serversList">
+                <p style="text-align: center; grid-column: 1/-1;">Sunucular yükleniyor...</p>
+            </div>
         </div>
-        
-        <!-- Login Form -->
-        <div class="form-content active" id="loginForm">
+    </div>
+
+    <!-- Giriş Yap Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="btn-close" onclick="closeModal('loginModal')">&times;</span>
+            <h2>Giriş Yap</h2>
             <form onsubmit="handleLogin(event)">
                 <div class="form-group">
-                    <label>E-Posta</label>
-                    <input type="email" id="loginEmail" required>
+                    <label>Discord ID:</label>
+                    <input type="text" id="loginDiscordId" required>
                 </div>
                 <div class="form-group">
-                    <label>Şifre</label>
+                    <label>Şifre:</label>
                     <input type="password" id="loginPassword" required>
                 </div>
-                <button type="submit" class="submit-btn">Giriş Yap</button>
-                <div id="loginMessage"></div>
-            </form>
-        </div>
-        
-        <!-- Register Form -->
-        <div class="form-content" id="registerForm">
-            <form onsubmit="handleRegister(event)">
-                <div class="form-group">
-                    <label>İsim</label>
-                    <input type="text" id="regName" required>
-                </div>
-                <div class="form-group">
-                    <label>E-Posta</label>
-                    <input type="email" id="regEmail" required>
-                </div>
-                <div class="form-group">
-                    <label>Şifre</label>
-                    <input type="password" id="regPassword" oninput="checkPasswordStrength()" required>
-                    <div class="password-strength">
-                        <span id="strengthText">Zayıf</span>
-                        <div class="strength-bar">
-                            <div class="strength-fill" id="strengthBar"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Şifre Tekrar</label>
-                    <input type="password" id="regPasswordConfirm" required>
-                </div>
-                <button type="submit" class="submit-btn">Kayıt Ol</button>
-                <div id="registerMessage"></div>
+                <button type="submit" class="btn-submit">Giriş Yap</button>
             </form>
         </div>
     </div>
-    
+
+    <!-- Kayıt Ol Modal -->
+    <div id="registerModal" class="modal">
+        <div class="modal-content">
+            <span class="btn-close" onclick="closeModal('registerModal')">&times;</span>
+            <h2>Kayıt Ol</h2>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label>İsim:</label>
+                    <input type="text" id="regName" required>
+                </div>
+                <div class="form-group">
+                    <label>Discord ID:</label>
+                    <input type="text" id="regDiscordId" required>
+                </div>
+                <div class="form-group">
+                    <label>E-posta:</label>
+                    <input type="email" id="regEmail" required>
+                </div>
+                <div class="form-group">
+                    <label>Şifre:</label>
+                    <input type="password" id="regPassword" required>
+                </div>
+                <button type="submit" class="btn-submit">Kayıt Ol</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hesap Gönder Modal -->
+    <div id="sendAccountModal" class="modal">
+        <div class="modal-content">
+            <span class="btn-close" onclick="closeModal('sendAccountModal')">&times;</span>
+            <h2>Hesap Gönder</h2>
+            <form onsubmit="handleSendAccount(event)">
+                <div class="form-group">
+                    <label>Hesap Seçin:</label>
+                    <select id="accountSelect" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="">Yükleniyor...</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-submit">Gönder</button>
+            </form>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 Ücretsiz Oyun Bot. Tüm hakları saklıdır.</p>
+    </footer>
+
     <script>
-        const API_BASE = window.location.origin;
-        
-        function switchTab(tab) {
-            // Update tabs
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.form-content').forEach(c => c.classList.remove('active'));
-            
-            if (tab === 'login') {
-                document.querySelector('.tab').classList.add('active');
-                document.getElementById('loginForm').classList.add('active');
-            } else {
-                document.querySelectorAll('.tab')[1].classList.add('active');
-                document.getElementById('registerForm').classList.add('active');
+        let currentUser = null;
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
             }
         }
-        
-        function checkPasswordStrength() {
-            const password = document.getElementById('regPassword').value;
-            const bar = document.getElementById('strengthBar');
-            const text = document.getElementById('strengthText');
-            
-            let strength = 0;
-            if (password.length >= 8) strength++;
-            if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
-            if (/\d/.test(password)) strength++;
-            if (/[!@#$%^&*]/.test(password)) strength++;
-            
-            bar.className = 'strength-fill';
-            if (strength <= 1) {
-                bar.classList.add('weak');
-                text.textContent = 'Zayıf';
-            } else if (strength <= 2) {
-                bar.classList.add('medium');
-                text.textContent = 'Orta';
-            } else {
-                bar.classList.add('strong');
-                text.textContent = 'Güçlü';
-            }
+
+        function showMessage(text, type) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                msgDiv.innerHTML = '';
+            }, 5000);
         }
-        
-        async function handleLogin(event) {
-            event.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            try {
-                const response = await fetch(`${API_BASE}/api/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-                
-                const data = await response.json();
-                if (data.success) {
-                    localStorage.setItem('userToken', data.token);
-                    localStorage.setItem('userData', JSON.stringify(data.user));
-                    window.location.href = '/dashboard';
-                } else {
-                    showMessage('loginMessage', data.message, 'error');
-                }
-            } catch (error) {
-                showMessage('loginMessage', 'Giriş başarısız!', 'error');
-            }
-        }
-        
+
         async function handleRegister(event) {
             event.preventDefault();
+            
             const name = document.getElementById('regName').value;
+            const discordId = document.getElementById('regDiscordId').value;
             const email = document.getElementById('regEmail').value;
             const password = document.getElementById('regPassword').value;
-            const passwordConfirm = document.getElementById('regPasswordConfirm').value;
-            
-            if (password !== passwordConfirm) {
-                showMessage('registerMessage', 'Şifreler eşleşmiyor!', 'error');
-                return;
-            }
-            
-            if (password.length < 8) {
-                showMessage('registerMessage', 'Şifre en az 8 karakter olmalı!', 'error');
-                return;
-            }
-            
+
             try {
-                const response = await fetch(`${API_BASE}/api/register`, {
+                const response = await fetch('/api/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password })
+                    body: JSON.stringify({ name, discordId, email, password })
                 });
-                
+
                 const data = await response.json();
-                if (data.success) {
-                    showMessage('registerMessage', 'Kayıt başarılı! Giriş yapabilirsiniz.', 'success');
-                    setTimeout(() => switchTab('login'), 2000);
+
+                if (response.ok) {
+                    showMessage('Kayıt başarılı! Giriş yapabilirsiniz.', 'success');
+                    closeModal('registerModal');
+                    document.getElementById('registerModal').querySelector('form').reset();
                 } else {
-                    showMessage('registerMessage', data.message, 'error');
+                    showMessage(data.error, 'error');
                 }
             } catch (error) {
-                showMessage('registerMessage', 'Kayıt başarısız!', 'error');
+                showMessage('Hata: ' + error.message, 'error');
             }
         }
-        
-        function showMessage(elementId, message, type) {
-            const el = document.getElementById(elementId);
-            el.innerHTML = `<div class="${type}">${message}</div>`;
-            setTimeout(() => el.innerHTML = '', 5000);
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const discordId = document.getElementById('loginDiscordId').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ discordId, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    currentUser = data;
+                    localStorage.setItem('userId', data.userId);
+                    showMessage(`Hoş geldiniz ${data.name}! Kredileriniz: ${data.credits}`, 'success');
+                    closeModal('loginModal');
+                    document.getElementById('sendAccountBtn').style.display = 'inline-block';
+                    document.getElementById('loginModal').querySelector('form').reset();
+                    loadAccounts();
+                } else {
+                    showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Hata: ' + error.message, 'error');
+            }
         }
-        
-        // Check if already logged in
-        if (localStorage.getItem('userToken')) {
-            window.location.href = '/dashboard';
+
+        async function handleSendAccount(event) {
+            event.preventDefault();
+            
+            const accountIndex = document.getElementById('accountSelect').value;
+
+            if (!currentUser) {
+                showMessage('Lütfen önce giriş yapınız', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/send-account', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUser.userId, accountIndex })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage('Hesap gönderildi! Discord DM\\'nizi kontrol edin.', 'success');
+                    closeModal('sendAccountModal');
+                } else {
+                    showMessage(data.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Hata: ' + error.message, 'error');
+            }
         }
+
+        async function loadServers() {
+            try {
+                const response = await fetch('/api/servers');
+                const servers = await response.json();
+                
+                const serversList = document.getElementById('serversList');
+                
+                if (servers.length === 0) {
+                    serversList.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">Henüz sunucu eklenmemiş.</p>';
+                    return;
+                }
+
+                serversList.innerHTML = servers.map(server => `
+                    <div class="server-card">
+                        <h4>${server.name}</h4>
+                        <p>👥 ${server.playerCount || 0} Oyuncu</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Sunucular yüklenemedi:', error);
+            }
+        }
+
+        async function loadAccounts() {
+            try {
+                // Hesapları API'den al (ileride eklenecek)
+                const select = document.getElementById('accountSelect');
+                select.innerHTML = '<option value="">Hesap seçin...</option>';
+                // Örnek hesaplar
+                select.innerHTML += '<option value="0">Hesap 1</option>';
+                select.innerHTML += '<option value="1">Hesap 2</option>';
+            } catch (error) {
+                console.error('Hesaplar yüklenemedi:', error);
+            }
+        }
+
+        // Sayfa yüklendiğinde
+        loadServers();
     </script>
 </body>
 </html>

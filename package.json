@@ -4,8 +4,8 @@
   "description": "Discord Admin Panel Bot + Web Dashboard",
   "main": "index-full.js",
   "scripts": {
-    "start": "node index-full.js",
-    "dev": "nodemon index-full.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "keywords": [
     "discord",

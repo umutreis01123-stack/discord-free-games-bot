@@ -678,6 +678,63 @@ app.get('/api/servers', (req, res) => {
     res.json(servers);
 });
 
+// ========== ADMIN PANEL ROUTES ==========
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+let adminStocks = [];
+let adminPromos = [];
+
+const adminAuthenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.sendStatus(401);
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
+    });
+};
+
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === 'umut' && password === 'umutpapa001122u') {
+        const token = jwt.sign({ username: 'umut', role: 'admin' }, JWT_SECRET, { expiresIn: '24h' });
+        return res.json({ success: true, token });
+    }
+    res.status(401).json({ success: false, message: 'Hatalı giriş' });
+});
+
+app.get('/api/public/stocks', (req, res) => res.json(adminStocks));
+app.get('/api/stocks', adminAuthenticateToken, (req, res) => res.json(adminStocks));
+app.post('/api/stocks', adminAuthenticateToken, (req, res) => {
+    const stock = { id: adminStocks.length + 1, ...req.body, created_at: new Date().toISOString() };
+    adminStocks.push(stock);
+    res.json({ success: true, id: stock.id });
+});
+app.delete('/api/stocks/:id', adminAuthenticateToken, (req, res) => {
+    adminStocks = adminStocks.filter(s => s.id != req.params.id);
+    res.json({ success: true });
+});
+
+app.get('/api/promos', adminAuthenticateToken, (req, res) => res.json(adminPromos));
+app.post('/api/promos', adminAuthenticateToken, (req, res) => {
+    const promo = { id: adminPromos.length + 1, ...req.body, created_at: new Date().toISOString() };
+    adminPromos.push(promo);
+    res.json({ success: true, id: promo.id });
+});
+app.delete('/api/promos/:id', adminAuthenticateToken, (req, res) => {
+    adminPromos = adminPromos.filter(p => p.id != req.params.id);
+    res.json({ success: true });
+});
+
+app.get('/api/users', adminAuthenticateToken, (req, res) => res.json([]));
+app.post('/api/announcements', adminAuthenticateToken, (req, res) => res.json({ success: true }));
+app.get('/api/announcements', adminAuthenticateToken, (req, res) => res.json([]));
+app.post('/api/shipments', adminAuthenticateToken, (req, res) => res.json({ success: true }));
+app.get('/api/dashboard', adminAuthenticateToken, (req, res) => res.json({ stocks: adminStocks.length, users: 0 }));
+
+
 // Server başlat
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
