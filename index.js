@@ -34,7 +34,9 @@ function getDatabase() {
   }
   
   return {
-    stocks: [] // { id, name, quantity, products: [] }
+    stocks: [],
+    supportTickets: [],
+    commandsEnabled: true
   };
 }
 
@@ -45,6 +47,8 @@ function saveDatabase(db) {
     console.error('DB kaydedilemedi:', e.message);
   }
 }
+
+const OWNER_ID = 'umutpapa123';
 
 // ============ WEB SİTESİ ============
 
@@ -58,7 +62,7 @@ app.get('/api/stocks', (req, res) => {
   res.json(db.stocks);
 });
 
-// API: Stok Ekle (Site)
+// API: Stok Ekle
 app.post('/api/stocks', (req, res) => {
   const { name, quantity } = req.body;
   
@@ -68,7 +72,6 @@ app.post('/api/stocks', (req, res) => {
   
   const db = getDatabase();
   
-  // Aynı isimde stok varsa kontrol et
   if (db.stocks.some(s => s.name.toLowerCase() === name.toLowerCase())) {
     return res.status(400).json({ error: 'Bu stok zaten var' });
   }
@@ -77,7 +80,11 @@ app.post('/api/stocks', (req, res) => {
     id: Date.now().toString(),
     name,
     quantity: parseInt(quantity),
-    products: [],
+    products: Array(parseInt(quantity)).fill(null).map((_, i) => ({
+      id: i.toString(),
+      name: '',
+      createdAt: new Date()
+    })),
     createdAt: new Date()
   };
   
@@ -87,12 +94,12 @@ app.post('/api/stocks', (req, res) => {
   res.json({ success: true, message: 'Stok eklendi', stock });
 });
 
-// API: Ürün Ekle (Site)
+// API: Ürün Ekle (Slot'a)
 app.post('/api/products', (req, res) => {
-  const { stockId, productName } = req.body;
+  const { stockId, productIndex, productName } = req.body;
   
-  if (!stockId || !productName) {
-    return res.status(400).json({ error: 'Stok ve ürün adı gerekli' });
+  if (!stockId || productIndex === undefined || !productName) {
+    return res.status(400).json({ error: 'Parametreler eksik' });
   }
   
   const db = getDatabase();
@@ -102,24 +109,31 @@ app.post('/api/products', (req, res) => {
     return res.status(400).json({ error: 'Stok bulunamadı' });
   }
   
-  const product = {
-    id: Date.now().toString(),
-    name: productName,
-    createdAt: new Date()
-  };
+  if (productIndex < 0 || productIndex >= stock.products.length) {
+    return res.status(400).json({ error: 'Geçersiz ürün indeksi' });
+  }
   
-  stock.products.push(product);
+  stock.products[productIndex].name = productName;
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Ürün eklendi', product });
+  res.json({ success: true, message: 'Ürün eklendi', product: stock.products[productIndex] });
+});
+
+// API: Stok Sil
+app.delete('/api/stocks/:id', (req, res) => {
+  const { id } = req.params;
+  
+  const db = getDatabase();
+  db.stocks = db.stocks.filter(s => s.id !== id);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Stok silindi' });
 });
 
 // ============ DISCORD BOT ============
 
 client.on('ready', () => {
   console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
-  
-  // Slash komutlarını kaydet
   registerSlashCommands();
 });
 
@@ -151,7 +165,31 @@ async function registerSlashCommands() {
       .addStringOption(option =>
         option.setName('urun')
           .setDescription('Ürün adı')
+          .setRequired(true)),
+    
+    new SlashCommandBuilder()
+      .setName('komutlarıkapat')
+      .setDescription('Komutları kapat (Admin Only)'),
+    
+    new SlashCommandBuilder()
+      .setName('komutlarıaç')
+      .setDescription('Komutları aç (Admin Only)'),
+    
+    new SlashCommandBuilder()
+      .setName('destek')
+      .setDescription('Destek talebi oluştur')
+      .addStringOption(option =>
+        option.setName('konu')
+          .setDescription('Konu')
           .setRequired(true))
+      .addStringOption(option =>
+        option.setName('mesaj')
+          .setDescription('Mesaj')
+          .setRequired(true)),
+    
+    new SlashCommandBuilder()
+      .setName('ticket')
+      .setDescription('Ticket oluştur / kapat')
   ];
 
   try {
@@ -171,14 +209,20 @@ async function registerSlashCommands() {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  const { commandName, options } = interaction;
+  const { commandName, options, user } = interaction;
   const db = getDatabase();
+
+  // Komut kontrolü
+  if (!db.commandsEnabled && user.id !== OWNER_ID) {
+    if (commandName !== 'komutlarıaç') {
+      return interaction.reply('❌ Komutlar şu anda kapalı!');
+    }
+  }
 
   if (commandName === 'stokekle') {
     const name = options.getString('isim');
     const quantity = options.getInteger('miktar');
 
-    // Aynı isimde stok varsa kontrol et
     if (db.stocks.some(s => s.name.toLowerCase() === name.toLowerCase())) {
       return interaction.reply('❌ Bu stok zaten var!');
     }
@@ -187,7 +231,11 @@ client.on('interactionCreate', async (interaction) => {
       id: Date.now().toString(),
       name,
       quantity,
-      products: [],
+      products: Array(quantity).fill(null).map((_, i) => ({
+        id: i.toString(),
+        name: '',
+        createdAt: new Date()
+      })),
       createdAt: new Date()
     };
 
@@ -216,11 +264,12 @@ client.on('interactionCreate', async (interaction) => {
       .setTitle('📦 Canlı Stoklar');
 
     db.stocks.forEach(stock => {
+      const filledCount = stock.products.filter(p => p.name).length;
       embed.addFields({
         name: `${stock.name}`,
-        value: `📊 Miktar: **${stock.quantity}**\n🎮 Ürünler: ${stock.products.length}\n${
-          stock.products.length > 0 
-            ? stock.products.map(p => `• ${p.name}`).join('\n')
+        value: `📊 Kapasite: **${filledCount}/${stock.quantity}**\n${
+          stock.products.filter(p => p.name).length > 0 
+            ? stock.products.filter(p => p.name).map(p => `✅ ${p.name}`).join('\n')
             : '(Ürün yok)'
         }`,
         inline: false
@@ -241,13 +290,13 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply('❌ Stok bulunamadı!');
     }
 
-    const product = {
-      id: Date.now().toString(),
-      name: productName,
-      createdAt: new Date()
-    };
+    const emptySlot = stock.products.find(p => !p.name);
+    
+    if (!emptySlot) {
+      return interaction.reply('❌ Stokta boş yer yok!');
+    }
 
-    stock.products.push(product);
+    emptySlot.name = productName;
     saveDatabase(db);
 
     const embed = new EmbedBuilder()
@@ -257,6 +306,69 @@ client.on('interactionCreate', async (interaction) => {
         { name: '📦 Stok', value: stock.name, inline: true },
         { name: '🎮 Ürün', value: productName, inline: true }
       )
+      .setFooter({ text: 'Zwozez Discord Botu' });
+
+    interaction.reply({ embeds: [embed] });
+  }
+
+  if (commandName === 'komutlarıkapat') {
+    if (user.id !== OWNER_ID) {
+      return interaction.reply('❌ Buna yetkiniz yok!');
+    }
+
+    db.commandsEnabled = false;
+    saveDatabase(db);
+
+    interaction.reply('🔒 Komutlar kapatıldı!');
+  }
+
+  if (commandName === 'komutlarıaç') {
+    if (user.id !== OWNER_ID) {
+      return interaction.reply('❌ Buna yetkiniz yok!');
+    }
+
+    db.commandsEnabled = true;
+    saveDatabase(db);
+
+    interaction.reply('🔓 Komutlar açıldı!');
+  }
+
+  if (commandName === 'destek') {
+    const konu = options.getString('konu');
+    const mesaj = options.getString('mesaj');
+
+    const ticket = {
+      id: Date.now().toString(),
+      userId: user.id,
+      username: user.username,
+      konu,
+      mesaj,
+      createdAt: new Date(),
+      status: 'açık'
+    };
+
+    if (!db.supportTickets) db.supportTickets = [];
+    db.supportTickets.push(ticket);
+    saveDatabase(db);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x3498db)
+      .setTitle('🎫 Destek Talebi Oluşturuldu')
+      .addFields(
+        { name: 'Konu', value: konu, inline: true },
+        { name: 'Ticket ID', value: ticket.id, inline: true },
+        { name: 'Mesaj', value: mesaj }
+      )
+      .setFooter({ text: 'Zwozez Discord Botu' });
+
+    interaction.reply({ embeds: [embed] });
+  }
+
+  if (commandName === 'ticket') {
+    const embed = new EmbedBuilder()
+      .setColor(0x3498db)
+      .setTitle('🎫 Ticket Sistemi')
+      .setDescription('`/destek konu mesaj` komutu ile destek talebi oluştur')
       .setFooter({ text: 'Zwozez Discord Botu' });
 
     interaction.reply({ embeds: [embed] });
