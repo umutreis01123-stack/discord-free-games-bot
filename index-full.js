@@ -473,48 +473,47 @@ app.get('/', (req, res) => {
             background: rgba(20, 20, 40, 0.8);
             border: 2px solid #7c3aed;
             border-radius: 15px;
-            padding: 40px;
+            padding: 60px 40px;
+            text-align: center;
         }
         h1 { 
             color: #7c3aed;
-            margin-bottom: 10px;
-            font-size: 32px;
+            margin-bottom: 20px;
+            font-size: 36px;
         }
         .status {
             color: #10b981;
-            margin-bottom: 30px;
+            margin-bottom: 40px;
             font-size: 18px;
-        }
-        h2 { 
-            color: #10b981; 
-            margin-top: 30px;
-            margin-bottom: 15px;
-            font-size: 20px;
-        }
-        ul { 
-            list-style: none;
-        }
-        li { 
-            padding: 12px 15px;
-            background: rgba(124, 58, 237, 0.1);
-            margin: 8px 0;
-            border-radius: 8px;
-            border-left: 3px solid #7c3aed;
         }
         .admin-link {
             display: inline-block;
             margin-top: 30px;
-            padding: 15px 30px;
+            padding: 18px 40px;
             background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
             color: #fff;
             text-decoration: none;
             border-radius: 8px;
             font-weight: bold;
+            font-size: 18px;
             transition: all 0.3s;
         }
         .admin-link:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+        }
+        .info {
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(124, 58, 237, 0.1);
+            border-left: 3px solid #7c3aed;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .info p {
+            margin: 10px 0;
+            color: #b0b0c0;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -523,24 +522,13 @@ app.get('/', (req, res) => {
         <h1>🤖 ShadowCore Bot</h1>
         <div class="status">✅ Bot aktif çalışıyor!</div>
         
-        <h2>📦 Stok Durumu</h2>
-        <ul>
-            <li>📺 Netflix: ${accountStock.netflix.length} hesap</li>
-            <li>🎵 Spotify: ${accountStock.spotify.length} hesap</li>
-            <li>🎬 Disney: ${accountStock.disney.length} hesap</li>
-            <li>🛒 Amazon: ${accountStock.amazon.length} hesap</li>
-            <li>▶️ YouTube: ${accountStock.youtube.length} hesap</li>
-            <li>📱 Diğer: ${accountStock.other.length} hesap</li>
-        </ul>
-        
-        <h2>⚡ Komutlar</h2>
-        <ul>
-            <li><strong>/bedavahesap</strong> - Random hesap al</li>
-            <li><strong>/desteksiparişkur</strong> - Destek siparişi aç</li>
-            <li><strong>/promosyonkodukullan</strong> - Promosyon kodu kullan</li>
-        </ul>
-        
         <a href="/admin" class="admin-link">🔐 Admin Paneline Git</a>
+        
+        <div class="info">
+            <p><strong>📌 Not:</strong> Bot komutları sadece Discord'da kullanılabilir.</p>
+            <p><strong>🎮 Komutlar:</strong> /bedavahesap, /desteksiparişkur, /promosyonkodukullan</p>
+            <p><strong>⚙️ Yönetim:</strong> Admin panelinden stokları ve promosyon kodlarını yönetin.</p>
+        </div>
     </div>
 </body>
 </html>`);

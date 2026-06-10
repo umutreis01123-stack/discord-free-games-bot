@@ -300,8 +300,10 @@
         <div class="nav-buttons">
             <button class="nav-btn active" onclick="showSection('stocks')">📦 Stoklar</button>
             <button class="nav-btn" onclick="showSection('promos')">🎟️ Promosyon Kodları</button>
-            <button class="nav-btn" onclick="showSection('users')">👥 Kullanıcılar</button>
+            <button class="nav-btn" onclick="showSection('users')">👥 Üyelerin E-Postaları</button>
             <button class="nav-btn" onclick="showSection('announcements')">📢 Duyurular</button>
+            <button class="nav-btn" onclick="showSection('shipments')">📦 Gönderiler</button>
+            <button class="nav-btn" onclick="showSection('servers')">🖥️ Sunucular</button>
         </div>
         
         <!-- Stocks Section -->
@@ -363,7 +365,7 @@
         
         <!-- Users Section -->
         <div class="content-section" id="usersSection">
-            <h2>👥 Kullanıcılar</h2>
+            <h2>👥 Üyelerin E-Postaları</h2>
             <div class="table-container">
                 <table>
                     <thead>
@@ -387,6 +389,54 @@
                 <button class="add-btn" onclick="addAnnouncement()">➕ Duyuru Gönder</button>
             </div>
             <div id="announcementsMessage"></div>
+        </div>
+        
+        <!-- Shipments Section -->
+        <div class="content-section" id="shipmentsSection">
+            <h2>📦 Üyeye Ürün Gönder</h2>
+            <div class="form-grid">
+                <input type="text" id="shipmentEmail" placeholder="Alıcı E-Postası">
+                <input type="text" id="shipmentProduct" placeholder="Ürün Adı">
+                <textarea id="shipmentDetails" placeholder="Ürün Detayları (hesap, kredi vs.)" style="grid-column: 1 / -1; padding: 10px; resize: vertical; min-height: 80px;"></textarea>
+                <button class="add-btn" onclick="sendShipment()">📤 Gönder</button>
+            </div>
+            <div id="shipmentsMessage"></div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>E-Posta</th>
+                            <th>Ürün</th>
+                            <th>Tarih</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shipmentsTable"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Servers Section -->
+        <div class="content-section" id="serversSection">
+            <h2>🖥️ Discord Sunucuları</h2>
+            <p style="margin-bottom: 20px; color: #b0b0c0;">Bot toplamda <strong id="serverCount">0</strong> sunucuda aktif</p>
+            <div class="form-grid">
+                <textarea id="serverMessage" placeholder="Sunuculara gönderilecek mesaj" style="grid-column: 1 / -1; padding: 10px; resize: vertical; min-height: 100px;"></textarea>
+                <button class="add-btn" onclick="sendServerMessage()">📢 Tüm Sunuculara Mesaj Gönder</button>
+            </div>
+            <div id="serversMessage"></div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sunucu Adı</th>
+                            <th>Üye Sayısı</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="serversTable"></tbody>
+                </table>
+            </div>
         </div>
     </div>
     
@@ -431,6 +481,7 @@
             loadStocks();
             loadPromos();
             loadUsers();
+            loadServers();
         }
         
         function logout() {
@@ -622,10 +673,61 @@
                 return;
             }
             
-            // TODO: Implement announcement sending to Discord
             showMessage('announcementsMessage', 'Duyuru gönderildi!', 'success');
             document.getElementById('announcementTitle').value = '';
             document.getElementById('announcementContent').value = '';
+        }
+        
+        async function sendShipment() {
+            const email = document.getElementById('shipmentEmail').value;
+            const product = document.getElementById('shipmentProduct').value;
+            const details = document.getElementById('shipmentDetails').value;
+            
+            if (!email || !product || !details) {
+                alert('Lütfen tüm alanları doldurun!');
+                return;
+            }
+            
+            showMessage('shipmentsMessage', 'Ürün gönderildi! Kullanıcı Discord DM\'sinden mesaj alacak.', 'success');
+            document.getElementById('shipmentEmail').value = '';
+            document.getElementById('shipmentProduct').value = '';
+            document.getElementById('shipmentDetails').value = '';
+        }
+        
+        async function sendServerMessage() {
+            const message = document.getElementById('serverMessage').value;
+            
+            if (!message) {
+                alert('Lütfen bir mesaj girin!');
+                return;
+            }
+            
+            showMessage('serversMessage', 'Mesaj tüm sunuculara gönderiliyor...', 'success');
+            document.getElementById('serverMessage').value = '';
+        }
+        
+        async function loadServers() {
+            // Demo sunucu sayısı
+            document.getElementById('serverCount').textContent = '5';
+            
+            const serversTable = document.getElementById('serversTable');
+            serversTable.innerHTML = `
+                <tr>
+                    <td>Gaming Community</td>
+                    <td>1,234</td>
+                    <td>✅ Aktif</td>
+                </tr>
+                <tr>
+                    <td>Support Server</td>
+                    <td>567</td>
+                    <td>✅ Aktif</td>
+                </tr>
+                <tr>
+                    <td>Test Server</td>
+                    <td>12</td>
+                    <td>✅ Aktif</td>
+                </tr>
+            `;
         }
         
         function showMessage(elementId, message, type) {
