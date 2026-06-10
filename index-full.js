@@ -14,6 +14,7 @@ const {
     TextInputStyle
 } = require('discord.js');
 const express = require('express');
+const path = require('path');
 
 // Discord Client
 const client = new Client({
@@ -461,105 +462,77 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Web Dashboard (Basit)
+// Web Dashboard + Admin Panel
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'admin-panel', 'public')));
+
+// Admin panel için basit in-memory DB (Production'da veritabanı kullan)
+let admins = [
+    { username: 'umut', password: 'umutpapa001122u' }
+];
 
 app.get('/', (req, res) => {
-    res.send(`<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>ShadowCore Bot</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body { 
-            font-family: Arial; 
-            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
-            color: #fff; 
-            padding: 40px 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: rgba(20, 20, 40, 0.8);
-            border: 2px solid #7c3aed;
-            border-radius: 15px;
-            padding: 60px 40px;
-            text-align: center;
-        }
-        h1 { 
-            color: #7c3aed;
-            margin-bottom: 20px;
-            font-size: 36px;
-        }
-        .status {
-            color: #10b981;
-            margin-bottom: 40px;
-            font-size: 18px;
-        }
-        .admin-link {
-            display: inline-block;
-            margin-top: 30px;
-            padding: 18px 40px;
-            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-            color: #fff;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 18px;
-            transition: all 0.3s;
-        }
-        .admin-link:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
-        }
-        .info {
-            margin-top: 40px;
-            padding: 20px;
-            background: rgba(124, 58, 237, 0.1);
-            border-left: 3px solid #7c3aed;
-            border-radius: 8px;
-            text-align: left;
-        }
-        .info p {
-            margin: 10px 0;
-            color: #b0b0c0;
-            font-size: 14px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🤖 ShadowCore Bot</h1>
-        <div class="status">✅ Bot aktif çalışıyor!</div>
-        
-        <a href="/admin" class="admin-link">🔐 Admin Paneline Git</a>
-        
-        <div class="info">
-            <p><strong>📌 Not:</strong> Bot komutları sadece Discord'da kullanılabilir.</p>
-            <p><strong>🎮 Komutlar:</strong> /bedavahesap, /desteksiparişkur, /promosyonkodukullan</p>
-            <p><strong>⚙️ Yönetim:</strong> Admin panelinden stokları ve promosyon kodlarını yönetin.</p>
-        </div>
-    </div>
-</body>
-</html>`);
+    res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'home.html'));
 });
 
-// Admin panel proxy
-app.use('/admin', (req, res) => {
-    res.redirect('http://localhost:5000');
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'index.html'));
+});
+
+// Public API - Stokları göster
+app.get('/api/public/stocks', (req, res) => {
+    // accountStock verisini döndür
+    const stocks = [];
+    Object.keys(accountStock).forEach(kat => {
+        accountStock[kat].forEach(item => {
+            stocks.push({
+                name: kat.toUpperCase(),
+                amount: 1,
+                credits: 10 // Demo kredi
+            });
+        });
+    });
+    res.json(stocks);
+});
+
+// Admin Login
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    
+    if (username === 'umut' && password === 'umutpapa001122u') {
+        res.json({ success: true, message: 'Giriş başarılı' });
+    } else {
+        res.status(401).json({ success: false, message: 'Hatalı giriş' });
+    }
+});
+
+// Admin Register
+app.post('/api/register', (req, res) => {
+    const { name, email, password } = req.body;
+    
+    if (!password || password.length < 8) {
+        return res.status(400).json({ success: false, message: 'Şifre en az 8 karakter olmalı!' });
+    }
+    
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Şifre büyük harf, küçük harf ve rakam içermelidir!' 
+        });
+    }
+    
+    res.json({ success: true, message: 'Kayıt başarılı!' });
 });
 
 // Server başlat
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`✅ Web panel: http://localhost:${PORT}`);
+    console.log(`✅ Web sitesi: http://localhost:${PORT}`);
 });
 
 // Bot başlat
