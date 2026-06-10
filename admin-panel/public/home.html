@@ -455,10 +455,9 @@
     </div>
     
     <script>
-        const API_BASE = window.location.origin;
-        
         // Load stocks on page load
         loadStocks();
+        loadServers();
         
         async function loadStocks() {
             try {
@@ -485,6 +484,17 @@
                 document.getElementById('totalStocks').textContent = totalStocks;
             } catch (error) {
                 console.error('Load stocks error:', error);
+                document.getElementById('stocksGrid').innerHTML = '<p style="color: #ff8888;">Stoklar yüklenemedi</p>';
+            }
+        }
+        
+        async function loadServers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/servers`);
+                const servers = await response.json();
+                document.getElementById('serverCount').textContent = servers.length;
+            } catch (error) {
+                console.error('Load servers error:', error);
             }
         }
         
