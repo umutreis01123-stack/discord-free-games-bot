@@ -46,8 +46,9 @@ db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
-        discord_id TEXT UNIQUE,
         username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        discord_id TEXT UNIQUE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     
@@ -88,11 +89,62 @@ app.post('/api/login', (req, res) => {
     res.status(401).json({ success: false, message: 'Invalid credentials' });
 });
 
+// Register
+app.post('/api/register', (req, res) => {
+    const { name, email, password } = req.body;
+    
+    if (!name || !email || !password) {
+        return res.status(400).json({ success: false, message: 'Tüm alanları doldurun!' });
+    }
+    
+    if (password.length < 8) {
+        return res.status(400).json({ success: false, message: 'Şifre en az 8 karakter olmalı!' });
+    }
+    
+    // Check password strength
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*]/.test(password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Şifre büyük harf, küçük harf ve rakam içermelidir!' 
+        });
+    }
+    
+    // Hash password
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    db.run(
+        'INSERT INTO users (email, username, password) VALUES (?, ?, ?)',
+        [email, name, hashedPassword],
+        function(err) {
+            if (err) {
+                if (err.message.includes('UNIQUE')) {
+                    return res.status(400).json({ success: false, message: 'Bu e-posta zaten kullanılıyor!' });
+                }
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ success: true, message: 'Kayıt başarılı!' });
+        }
+    );
+});
+
 // Stocks - Get all
 app.get('/api/stocks', authenticateToken, (req, res) => {
     db.all('SELECT * FROM stocks', [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
+    });
+});
+
+// Public stocks (for homepage)
+app.get('/api/public/stocks', (req, res) => {
+    db.all('SELECT id, name, amount, credits FROM stocks', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
     });
 });
 
@@ -193,6 +245,10 @@ app.get('/api/dashboard', authenticateToken, (req, res) => {
 
 // Serve HTML
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'home.html'));
+});
+
+app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
