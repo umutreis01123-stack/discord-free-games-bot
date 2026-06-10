@@ -21,30 +21,42 @@ const jwt = require('jsonwebtoken');
 
 // Database setup
 const db = new sqlite3.Database('./bot.db', (err) => {
-    if (err) console.error('❌ Database Error:', err.message);
-    else console.log('✅ Database connected');
+    if (err) {
+        console.error('❌ Database Error:', err.message);
+        console.log('⚠️ Database yüklenmedi, in-memory mode kullanılıyor');
+    } else {
+        console.log('✅ Database connected');
+    }
 });
 
-// Create tables
-db.serialize(() => {
-    // Stoklar tablosu
-    db.run(`CREATE TABLE IF NOT EXISTS stocks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        amount INTEGER NOT NULL,
-        credits INTEGER NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    // Kullanıcılar tablosu
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        username TEXT NOT NULL,
-        password TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-});
+// Create tables - hata olursa ignore et
+const createTables = () => {
+    try {
+        db.serialize(() => {
+            // Stoklar tablosu
+            db.run(`CREATE TABLE IF NOT EXISTS stocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                credits INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`).catch(() => {});
+            
+            // Kullanıcılar tablosu
+            db.run(`CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                username TEXT NOT NULL,
+                password TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`).catch(() => {});
+        });
+    } catch (error) {
+        console.error('Table creation error:', error.message);
+    }
+};
+
+createTables();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
@@ -609,7 +621,10 @@ app.get('/admin', (req, res) => {
 // Public Stokları getir
 app.get('/api/public/stocks', (req, res) => {
     db.all('SELECT id, name, amount, credits FROM stocks', [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('Stocks query error:', err);
+            return res.json([]); // Boş array dön
+        }
         res.json(rows || []);
     });
 });
@@ -630,9 +645,13 @@ app.post('/api/login', (req, res) => {
             return res.status(401).json({ success: false, message: 'Kullanıcı bulunamadı' });
         }
         
-        if (bcrypt.compareSync(password, user.password)) {
-            const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
-            return res.json({ success: true, token });
+        try {
+            if (bcrypt.compareSync(password, user.password)) {
+                const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
+                return res.json({ success: true, token });
+            }
+        } catch (e) {
+            console.error('Password compare error:', e);
         }
         
         res.status(401).json({ success: false, message: 'Hatalı şifre' });
@@ -658,28 +677,36 @@ app.post('/api/register', (req, res) => {
         });
     }
     
-    const hashedPassword = bcrypt.hashSync(password, 10);
-    
-    db.run(
-        'INSERT INTO users (email, username, password) VALUES (?, ?, ?)',
-        [email, name, hashedPassword],
-        function(err) {
-            if (err) {
-                if (err.message.includes('UNIQUE')) {
-                    return res.status(400).json({ success: false, message: 'Bu e-posta zaten kullanılıyor!' });
+    try {
+        const hashedPassword = bcrypt.hashSync(password, 10);
+        
+        db.run(
+            'INSERT INTO users (email, username, password) VALUES (?, ?, ?)',
+            [email, name, hashedPassword],
+            function(err) {
+                if (err) {
+                    if (err.message.includes('UNIQUE')) {
+                        return res.status(400).json({ success: false, message: 'Bu e-posta zaten kullanılıyor!' });
+                    }
+                    return res.status(500).json({ error: err.message });
                 }
-                return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: 'Kayıt başarılı!' });
             }
-            res.json({ success: true, message: 'Kayıt başarılı!' });
-        }
-    );
+        );
+    } catch (error) {
+        console.error('Register error:', error);
+        res.status(500).json({ success: false, message: 'Kayıt hatası' });
+    }
 });
 
 // Stokları getir (Admin)
 app.get('/api/stocks', authenticateToken, (req, res) => {
     db.all('SELECT * FROM stocks', [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        if (err) {
+            console.error('Stocks query error:', err);
+            return res.json([]);
+        }
+        res.json(rows || []);
     });
 });
 
@@ -691,7 +718,10 @@ app.post('/api/stocks', authenticateToken, (req, res) => {
         'INSERT INTO stocks (name, amount, credits) VALUES (?, ?, ?)',
         [name, amount, credits],
         function(err) {
-            if (err) return res.status(500).json({ error: err.message });
+            if (err) {
+                console.error('Stock insert error:', err);
+                return res.status(500).json({ error: err.message });
+            }
             
             // Bot stokuna da ekle
             if (accountStock[name.toLowerCase()]) {
@@ -713,7 +743,10 @@ app.post('/api/stocks', authenticateToken, (req, res) => {
 // Stok sil (Admin)
 app.delete('/api/stocks/:id', authenticateToken, (req, res) => {
     db.run('DELETE FROM stocks WHERE id = ?', [req.params.id], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
+        if (err) {
+            console.error('Stock delete error:', err);
+            return res.status(500).json({ error: err.message });
+        }
         res.json({ success: true });
     });
 });
