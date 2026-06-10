@@ -15,48 +15,10 @@ const {
 } = require('discord.js');
 const express = require('express');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
-// Database setup
-const db = new sqlite3.Database('./bot.db', (err) => {
-    if (err) {
-        console.error('❌ Database Error:', err.message);
-        console.log('⚠️ Database yüklenmedi, in-memory mode kullanılıyor');
-    } else {
-        console.log('✅ Database connected');
-    }
-});
-
-// Create tables - hata olursa ignore et
-const createTables = () => {
-    try {
-        db.serialize(() => {
-            // Stoklar tablosu
-            db.run(`CREATE TABLE IF NOT EXISTS stocks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                credits INTEGER NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`).catch(() => {});
-            
-            // Kullanıcılar tablosu
-            db.run(`CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT UNIQUE NOT NULL,
-                username TEXT NOT NULL,
-                password TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`).catch(() => {});
-        });
-    } catch (error) {
-        console.error('Table creation error:', error.message);
-    }
-};
-
-createTables();
+// Basit in-memory storage
+let users = [];
+let stocks = [];
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
@@ -594,18 +556,15 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'admin-panel', 'public')));
 
-// JWT Middleware
+// JWT Middleware - basitleştirilmiş
 const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) return res.sendStatus(401);
-    
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
+    const token = req.headers['authorization'];
+    if (token === 'admin-token') {
+        req.user = { username: 'umut' };
         next();
-    });
+    } else {
+        res.sendStatus(401);
+    }
 };
 
 app.get('/', (req, res) => {
@@ -620,42 +579,18 @@ app.get('/admin', (req, res) => {
 
 // Public Stokları getir
 app.get('/api/public/stocks', (req, res) => {
-    db.all('SELECT id, name, amount, credits FROM stocks', [], (err, rows) => {
-        if (err) {
-            console.error('Stocks query error:', err);
-            return res.json([]); // Boş array dön
-        }
-        res.json(rows || []);
-    });
+    res.json(stocks);
 });
 
 // Giriş
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     
-    // Admin hardcoded
     if (username === 'umut' && password === 'umutpapa001122u') {
-        const token = jwt.sign({ username: 'umut', role: 'admin' }, JWT_SECRET, { expiresIn: '24h' });
-        return res.json({ success: true, token });
+        return res.json({ success: true, token: 'admin-token' });
     }
     
-    // Kullanıcı DB'den kontrol et
-    db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
-        if (err || !user) {
-            return res.status(401).json({ success: false, message: 'Kullanıcı bulunamadı' });
-        }
-        
-        try {
-            if (bcrypt.compareSync(password, user.password)) {
-                const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '24h' });
-                return res.json({ success: true, token });
-            }
-        } catch (e) {
-            console.error('Password compare error:', e);
-        }
-        
-        res.status(401).json({ success: false, message: 'Hatalı şifre' });
-    });
+    res.status(401).json({ success: false, message: 'Hatalı giriş' });
 });
 
 // Kayıt
@@ -666,89 +601,51 @@ app.post('/api/register', (req, res) => {
         return res.status(400).json({ success: false, message: 'Şifre en az 8 karakter olmalı!' });
     }
     
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    
-    if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
-        return res.status(400).json({ 
-            success: false, 
-            message: 'Şifre büyük harf, küçük harf ve rakam içermelidir!' 
-        });
-    }
-    
-    try {
-        const hashedPassword = bcrypt.hashSync(password, 10);
-        
-        db.run(
-            'INSERT INTO users (email, username, password) VALUES (?, ?, ?)',
-            [email, name, hashedPassword],
-            function(err) {
-                if (err) {
-                    if (err.message.includes('UNIQUE')) {
-                        return res.status(400).json({ success: false, message: 'Bu e-posta zaten kullanılıyor!' });
-                    }
-                    return res.status(500).json({ error: err.message });
-                }
-                res.json({ success: true, message: 'Kayıt başarılı!' });
-            }
-        );
-    } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({ success: false, message: 'Kayıt hatası' });
-    }
+    users.push({ id: users.length + 1, username: name, email, password });
+    res.json({ success: true, message: 'Kayıt başarılı!' });
 });
 
 // Stokları getir (Admin)
 app.get('/api/stocks', authenticateToken, (req, res) => {
-    db.all('SELECT * FROM stocks', [], (err, rows) => {
-        if (err) {
-            console.error('Stocks query error:', err);
-            return res.json([]);
-        }
-        res.json(rows || []);
-    });
+    res.json(stocks);
 });
 
 // Stok ekle (Admin)
 app.post('/api/stocks', authenticateToken, (req, res) => {
     const { name, amount, credits } = req.body;
     
-    db.run(
-        'INSERT INTO stocks (name, amount, credits) VALUES (?, ?, ?)',
-        [name, amount, credits],
-        function(err) {
-            if (err) {
-                console.error('Stock insert error:', err);
-                return res.status(500).json({ error: err.message });
-            }
-            
-            // Bot stokuna da ekle
-            if (accountStock[name.toLowerCase()]) {
-                for (let i = 0; i < amount; i++) {
-                    accountStock[name.toLowerCase()].push({
-                        id: Date.now() + i,
-                        hesap: `Account ${i + 1}`,
-                        ekleyen: req.user.username,
-                        tarih: new Date().toISOString()
-                    });
-                }
-            }
-            
-            res.json({ success: true, id: this.lastID });
+    const stock = {
+        id: stocks.length + 1,
+        name,
+        amount: parseInt(amount),
+        credits: parseInt(credits),
+        created_at: new Date().toISOString()
+    };
+    
+    stocks.push(stock);
+    
+    // Bot stokuna da ekle
+    if (accountStock[name.toLowerCase()]) {
+        for (let i = 0; i < amount; i++) {
+            accountStock[name.toLowerCase()].push({
+                id: Date.now() + i,
+                hesap: `Account ${i + 1}`,
+                ekleyen: req.user.username,
+                tarih: new Date().toISOString()
+            });
         }
-    );
+    }
+    
+    res.json({ success: true, id: stock.id });
 });
 
 // Stok sil (Admin)
 app.delete('/api/stocks/:id', authenticateToken, (req, res) => {
-    db.run('DELETE FROM stocks WHERE id = ?', [req.params.id], function(err) {
-        if (err) {
-            console.error('Stock delete error:', err);
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ success: true });
-    });
+    const index = stocks.findIndex(s => s.id == req.params.id);
+    if (index !== -1) {
+        stocks.splice(index, 1);
+    }
+    res.json({ success: true });
 });
 
 // Sunucuları getir
