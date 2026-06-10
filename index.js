@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -7,6 +7,7 @@ const path = require('path');
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
@@ -17,12 +18,11 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// Veritabanı dosyası
+// Veritabanı
 const DB_FILE = (process.env.NODE_ENV || 'development') === 'production' 
   ? '/tmp/database.json' 
   : 'database.json';
 
-// Veritabanı yapısı
 function getDatabase() {
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -33,12 +33,11 @@ function getDatabase() {
   }
   
   return {
-    users: [],
+    stocks: [],
     products: [],
-    orders: [],
-    notifications: [],
-    supportTickets: [],
-    accountRequests: []
+    invites: {}, // userId -> davet sayısı
+    invitedUsers: [], // davet edilen kullanıcılar
+    commandsEnabled: true
   };
 }
 
@@ -50,72 +49,32 @@ function saveDatabase(db) {
   }
 }
 
-// Admin bilgileri
+// Admin Bilgileri
 const ADMIN_USER = 'umut';
 const ADMIN_PASS = 'umutpapa001122u';
+const OWNER_ID = 'umutpapa123';
 
-// ============ WEB SİTESİ ROUTES ============
+// ============ WEB SİTESİ ============
 
-// Ana sayfa
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Kayıt Ol
-app.post('/api/register', (req, res) => {
-  const { username, discordId, email, password } = req.body;
-  
-  if (!username || !discordId || !email || !password) {
-    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
-  }
-  
-  const db = getDatabase();
-  
-  // Kontrol
-  if (db.users.some(u => u.discordId === discordId || u.email === email)) {
-    return res.status(400).json({ error: 'Bu Discord ID veya E-posta zaten kayıtlı' });
-  }
-  
-  const user = {
-    id: Date.now().toString(),
-    username,
-    discordId,
-    email,
-    password,
-    credits: 0,
-    registeredAt: new Date()
-  };
-  
-  db.users.push(user);
-  saveDatabase(db);
-  
-  res.json({ success: true, message: 'Kayıt başarılı', userId: user.id });
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Giriş Yap
-app.post('/api/login', (req, res) => {
-  const { discordId, password } = req.body;
-  
-  if (!discordId || !password) {
-    return res.status(400).json({ error: 'Discord ID ve Şifre gerekli' });
-  }
-  
+// API: Stokları Getir
+app.get('/api/stocks', (req, res) => {
   const db = getDatabase();
-  const user = db.users.find(u => u.discordId === discordId && u.password === password);
-  
-  if (!user) {
-    return res.status(401).json({ error: 'Hatalı Discord ID veya Şifre' });
-  }
-  
-  res.json({ 
-    success: true, 
-    userId: user.id,
-    username: user.username,
-    credits: user.credits
-  });
+  const stocksWithProducts = db.stocks.map(stock => ({
+    ...stock,
+    productCount: db.products.filter(p => p.stockId === stock.id).length
+  }));
+  res.json(stocksWithProducts);
 });
 
-// Admin Giriş
+// API: Admin Giriş
 app.post('/api/admin-login', (req, res) => {
   const { username, password } = req.body;
   
@@ -126,15 +85,30 @@ app.post('/api/admin-login', (req, res) => {
   }
 });
 
-// Ürünleri Getir
-app.get('/api/products', (req, res) => {
+// API: Stok Oluştur (Admin)
+app.post('/api/admin/create-stock', (req, res) => {
+  const { token, name } = req.body;
+  
+  if (!token || token !== 'admin_token') {
+    return res.status(401).json({ error: 'Yetkiniz yok' });
+  }
+  
   const db = getDatabase();
-  res.json(db.products);
+  const stock = {
+    id: Date.now().toString(),
+    name,
+    createdAt: new Date()
+  };
+  
+  db.stocks.push(stock);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Stok oluşturuldu', stock });
 });
 
-// Admin: Ürün Ekle
+// API: Ürün Ekle (Admin)
 app.post('/api/admin/add-product', (req, res) => {
-  const { token, name, price, image, link, stock } = req.body;
+  const { token, name, stockId, details } = req.body;
   
   if (!token || token !== 'admin_token') {
     return res.status(401).json({ error: 'Yetkiniz yok' });
@@ -144,10 +118,8 @@ app.post('/api/admin/add-product', (req, res) => {
   const product = {
     id: Date.now().toString(),
     name,
-    price,
-    image,
-    link,
-    stock: stock || 0,
+    stockId,
+    details: details || '',
     createdAt: new Date()
   };
   
@@ -157,153 +129,140 @@ app.post('/api/admin/add-product', (req, res) => {
   res.json({ success: true, message: 'Ürün eklendi', product });
 });
 
-// Kredi Ver (Admin)
-app.post('/api/admin/add-credit', (req, res) => {
-  const { token, userId, amount } = req.body;
+// API: Stokları Sil (Admin)
+app.delete('/api/admin/stock/:id', (req, res) => {
+  const { token } = req.body;
+  const { id } = req.params;
   
   if (!token || token !== 'admin_token') {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
   const db = getDatabase();
-  const user = db.users.find(u => u.id === userId);
-  
-  if (!user) {
-    return res.status(400).json({ error: 'Kullanıcı bulunamadı' });
-  }
-  
-  user.credits += parseInt(amount);
+  db.stocks = db.stocks.filter(s => s.id !== id);
+  db.products = db.products.filter(p => p.stockId !== id);
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Kredi verildi' });
+  res.json({ success: true, message: 'Stok silindi' });
 });
 
-// Hesap Gönder İsteği
-app.post('/api/request-account', (req, res) => {
-  const { userId, productId, customAccount } = req.body;
-  
-  if (!userId) {
-    return res.status(401).json({ error: 'Giriş yapınız' });
-  }
-  
-  const db = getDatabase();
-  const user = db.users.find(u => u.id === userId);
-  
-  if (!user) {
-    return res.status(400).json({ error: 'Kullanıcı bulunamadı' });
-  }
-  
-  const request = {
-    id: Date.now().toString(),
-    userId,
-    username: user.username,
-    discordId: user.discordId,
-    productId,
-    customAccount: customAccount || null,
-    status: 'pending',
-    createdAt: new Date()
-  };
-  
-  db.accountRequests.push(request);
-  saveDatabase(db);
-  
-  res.json({ success: true, message: 'Hesap gönderme isteği oluşturuldu', requestId: request.id });
-});
-
-// Admin: Hesap İsteğini Onayla ve Gönder
-app.post('/api/admin/approve-account', (req, res) => {
-  const { token, requestId } = req.body;
+// API: Ürün Sil (Admin)
+app.delete('/api/admin/product/:id', (req, res) => {
+  const { token } = req.body;
+  const { id } = req.params;
   
   if (!token || token !== 'admin_token') {
     return res.status(401).json({ error: 'Yetkiniz yok' });
   }
   
   const db = getDatabase();
-  const request = db.accountRequests.find(r => r.id === requestId);
-  
-  if (!request) {
-    return res.status(400).json({ error: 'İstek bulunamadı' });
-  }
-  
-  request.status = 'approved';
+  db.products = db.products.filter(p => p.id !== id);
   saveDatabase(db);
   
-  // Bot'a DM gönder
-  const discordId = request.discordId;
-  client.users.fetch(discordId).then(userDM => {
-    const accountInfo = request.customAccount || `Ürün: ${request.productId}`;
-    userDM.send(`
-✅ **Hesap Gönderildi**
-
-📦 **Ürün Bilgisi:**
-\`\`\`
-${accountInfo}
-\`\`\`
-
-**Zwozez Discord Botu**
-    `);
-  }).catch(err => {
-    console.log('DM gönderilemedi:', err);
-  });
-  
-  res.json({ success: true, message: 'Hesap gönderildi' });
-});
-
-// Kullanıcıları Getir (Admin)
-app.get('/api/admin/users', (req, res) => {
-  const db = getDatabase();
-  res.json(db.users.map(u => ({
-    id: u.id,
-    username: u.username,
-    discordId: u.discordId,
-    email: u.email,
-    credits: u.credits,
-    registeredAt: u.registeredAt
-  })));
-});
-
-// Bekleyen İstekleri Getir (Admin)
-app.get('/api/admin/pending-requests', (req, res) => {
-  const db = getDatabase();
-  const pending = db.accountRequests.filter(r => r.status === 'pending');
-  res.json(pending);
+  res.json({ success: true, message: 'Ürün silindi' });
 });
 
 // ============ DISCORD BOT ============
 
 client.on('ready', () => {
-  console.log(`Bot giriş yaptı: ${client.user.tag}`);
+  console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
 });
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  if (!message.content.startsWith('!')) return;
   
-  const args = message.content.slice(1).split(/ +/);
-  const command = args.shift().toLowerCase();
+  const db = getDatabase();
   
-  if (command === 'urunler' || command === 'stok') {
-    const db = getDatabase();
-    if (db.products.length === 0) {
-      return message.reply('🚫 Şu anda satılık ürün yok.');
+  // -invite komutu
+  if (message.content === '-invite') {
+    const userId = message.author.id;
+    const inviteCount = db.invites[userId] || 0;
+    const invitedCount = db.invitedUsers.filter(u => u.inviterId === userId).length;
+    
+    const embed = new EmbedBuilder()
+      .setColor(0xe94560)
+      .setTitle('📊 Davet İstatistikleri')
+      .addFields(
+        { name: '📨 Davet Ettiğin Kişi Sayısı', value: inviteCount.toString(), inline: true },
+        { name: '✅ Giriş Yapan Sayısı', value: invitedCount.toString(), inline: true }
+      )
+      .setFooter({ text: 'Zwozez Discord Botu' });
+    
+    return message.reply({ embeds: [embed] });
+  }
+  
+  // Kurucun kim
+  if (message.content === 'Kurucun kim') {
+    const embed = new EmbedBuilder()
+      .setColor(0xe94560)
+      .setTitle('👑 Kurucunuz')
+      .setDescription('umutpapa123')
+      .setFooter({ text: 'Zwozez Discord Botu' });
+    
+    return message.reply({ embeds: [embed] });
+  }
+  
+  // Komutlar kapalıysa durdur
+  if (!db.commandsEnabled) {
+    if (message.author.id !== OWNER_ID) {
+      return message.reply('❌ Komutlar şu anda kapalı!');
+    }
+  }
+  
+  // /komutlarıkapat - Sadece umutpapa123
+  if (message.content === '/komutlarıkapat') {
+    if (message.author.id !== OWNER_ID) {
+      return message.reply('❌ Buna izniniz yok!');
     }
     
-    let embed = {
-      color: 0xe94560,
-      title: '📦 Satılık Ürünler',
-      description: 'Siteden ürün satın almak için tıkla!',
-      fields: db.products.map((prod, i) => ({
-        name: `${i + 1}. ${prod.image} ${prod.name}`,
-        value: `💰 **${prod.price}₺** | 📦 **${prod.stock} stok**${prod.link ? `\n🔗 [Bağlantı](${prod.link})` : ''}`,
-        inline: false
-      })),
-      footer: {
-        text: 'Zwozez Discord Botu'
-      },
-      timestamp: new Date()
-    };
+    db.commandsEnabled = false;
+    saveDatabase(db);
+    return message.reply('🔒 Komutlar kapatıldı!');
+  }
+  
+  // /komutlarıaç - Sadece umutpapa123
+  if (message.content === '/komutlarıaç') {
+    if (message.author.id !== OWNER_ID) {
+      return message.reply('❌ Buna izniniz yok!');
+    }
+    
+    db.commandsEnabled = true;
+    saveDatabase(db);
+    return message.reply('🔓 Komutlar açıldı!');
+  }
+  
+  // /bedava hesap komutu
+  if (message.content === '/bedava hesap') {
+    // Rastgele ürün seç
+    if (db.products.length === 0) {
+      return message.reply('❌ Stok Yok');
+    }
+    
+    const randomProduct = db.products[Math.floor(Math.random() * db.products.length)];
+    const stock = db.stocks.find(s => s.id === randomProduct.stockId);
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('🎁 Bedava Hesap')
+      .addFields(
+        { name: '📦 Stok', value: stock.name, inline: true },
+        { name: '🎮 Ürün', value: randomProduct.name, inline: true }
+      )
+      .setDescription(`\`\`\`\n${randomProduct.details || 'Bilgi yok'}\n\`\`\``)
+      .setFooter({ text: 'Zwozez Discord Botu' });
     
     message.reply({ embeds: [embed] });
+    
+    // Davet istatistiğini güncelle
+    if (!db.invites[message.author.id]) {
+      db.invites[message.author.id] = 0;
+    }
+    db.invitedUsers.push({
+      userId: message.author.id,
+      username: message.author.username,
+      joinedAt: new Date()
+    });
+    saveDatabase(db);
   }
 });
 
@@ -312,7 +271,7 @@ client.on('messageCreate', async (message) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Web sunucusu ${PORT} portunda çalışıyor`);
+  console.log(`🌐 Web sunucusu ${PORT} portunda çalışıyor`);
 });
 
 client.login(process.env.DISCORD_TOKEN);
