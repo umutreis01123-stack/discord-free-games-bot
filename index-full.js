@@ -568,11 +568,15 @@ const authenticateToken = (req, res, next) => {
 };
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'home.html'));
+    res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'new-site.html'));
 });
 
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'index.html'));
+});
+
+app.get('/old', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin-panel', 'public', 'home.html'));
 });
 
 // ========== API ENDPOINTS ==========
@@ -584,13 +588,28 @@ app.get('/api/public/stocks', (req, res) => {
 
 // Giriş
 app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
     
-    if (username === 'umut' && password === 'umutpapa001122u') {
-        return res.json({ success: true, token: 'admin-token' });
+    // Admin giriş
+    if (email === 'umut@admin.com' && password === 'umutpapa001122u') {
+        return res.json({ 
+            success: true, 
+            token: 'admin-token',
+            user: { name: 'Umut', email: 'umut@admin.com', role: 'admin' }
+        });
     }
     
-    res.status(401).json({ success: false, message: 'Hatalı giriş' });
+    // Normal kullanıcı
+    const user = users.find(u => u.email === email && u.password === password);
+    if (user) {
+        return res.json({ 
+            success: true, 
+            token: 'user-token-' + user.id,
+            user: { name: user.username, email: user.email, role: 'user' }
+        });
+    }
+    
+    res.status(401).json({ success: false, message: 'Hatalı e-posta veya şifre' });
 });
 
 // Kayıt
