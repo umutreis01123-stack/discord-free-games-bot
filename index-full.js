@@ -8,7 +8,10 @@ const {
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
-    ChannelType
+    ChannelType,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const express = require('express');
 
@@ -64,6 +67,10 @@ client.once('ready', async () => {
         new SlashCommandBuilder()
             .setName('bedavahesap')
             .setDescription('Random bedava hesap al'),
+            
+        new SlashCommandBuilder()
+            .setName('desteksiparişkur')
+            .setDescription('Destek siparişi aç'),
             
         new SlashCommandBuilder()
             .setName('duyuru')
@@ -152,17 +159,19 @@ client.on('interactionCreate', async interaction => {
             } else if (commandName === 'bedavahesap') {
                 const userId = user.id;
                 const now = Date.now();
-                const oneDayMs = 24 * 60 * 60 * 1000; // 24 saat
+                const fourHoursMs = 4 * 60 * 60 * 1000; // 4 saat
                 
                 // Cooldown kontrolü
                 if (bedavaHesapCooldown[userId]) {
                     const lastUsed = bedavaHesapCooldown[userId];
                     const timePassed = now - lastUsed;
                     
-                    if (timePassed < oneDayMs) {
-                        const hoursLeft = Math.ceil((oneDayMs - timePassed) / (60 * 60 * 1000));
+                    if (timePassed < fourHoursMs) {
+                        const minutesLeft = Math.ceil((fourHoursMs - timePassed) / (60 * 1000));
+                        const hoursLeft = Math.floor(minutesLeft / 60);
+                        const mins = minutesLeft % 60;
                         await interaction.reply({
-                            content: `⏰ Günde sadece 1 kez kullanabilirsin! **${hoursLeft} saat** sonra tekrar dene.`,
+                            content: `⏰ 4 saate bir kullanabilirsin! **${hoursLeft}s ${mins}d** sonra tekrar dene.`,
                             ephemeral: true
                         });
                         return;
@@ -252,6 +261,75 @@ client.on('interactionCreate', async interaction => {
                     .setTimestamp();
                 
                 await interaction.reply({ content: '@everyone', embeds: [embed] });
+                
+            } else if (commandName === 'desteksiparişkur') {
+                const modal = new ModalBuilder()
+                    .setCustomId('support_order_modal')
+                    .setTitle('Destek Siparişi');
+                
+                const konu = new TextInputBuilder()
+                    .setCustomId('konu')
+                    .setLabel('Konu')
+                    .setPlaceholder('Siparişin konusu')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+                
+                const aciklama = new TextInputBuilder()
+                    .setCustomId('aciklama')
+                    .setLabel('Açıklama')
+                    .setPlaceholder('Detaylı açıklama')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(true);
+                
+                const row1 = new ActionRowBuilder().addComponents(konu);
+                const row2 = new ActionRowBuilder().addComponents(aciklama);
+                
+                modal.addComponents(row1, row2);
+                await interaction.showModal(modal);
+            }
+            
+        } else if (interaction.isModalSubmit()) {
+            if (interaction.customId === 'support_order_modal') {
+                const konu = interaction.fields.getTextInputValue('konu');
+                const aciklama = interaction.fields.getTextInputValue('aciklama');
+                const guild = interaction.guild;
+                const user = interaction.user;
+                
+                // Destek kanalı oluştur
+                const channel = await guild.channels.create({
+                    name: `sipariş-${user.username}`,
+                    type: ChannelType.GuildText,
+                    permissionOverwrites: [
+                        {
+                            id: guild.roles.everyone.id,
+                            deny: [PermissionsBitField.Flags.ViewChannel]
+                        },
+                        {
+                            id: user.id,
+                            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+                        }
+                    ]
+                });
+                
+                // Embed oluştur
+                const embed = new EmbedBuilder()
+                    .setTitle('🛠️ Destek Siparişi')
+                    .setDescription('zwozez modorasyon')
+                    .setColor(0x7c3aed)
+                    .setThumbnail(user.displayAvatarURL())
+                    .addFields(
+                        { name: '👤 Kullanıcı', value: user.tag, inline: true },
+                        { name: '📌 Konu', value: konu, inline: true },
+                        { name: '📝 Açıklama', value: aciklama }
+                    )
+                    .setTimestamp();
+                
+                await channel.send({ embeds: [embed] });
+                
+                await interaction.reply({
+                    content: `✅ Destek siparişin oluşturuldu: ${channel}`,
+                    ephemeral: true
+                });
             }
             
         } else if (interaction.isButton()) {
