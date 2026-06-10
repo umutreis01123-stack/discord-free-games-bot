@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - ShadowCore Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .login-box {
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid #7c3aed;
+            border-radius: 15px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(124, 58, 237, 0.3);
+        }
+        
+        .login-box h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #7c3aed;
+            font-size: 28px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0c0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #7c3aed;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            background: rgba(124, 58, 237, 0.1);
+            box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
+        }
+        
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.4);
+        }
+        
+        .dashboard {
+            display: none;
+            padding: 20px;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(20, 20, 40, 0.8);
+            border-radius: 10px;
+            border-left: 4px solid #7c3aed;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            color: #7c3aed;
+        }
+        
+        .logout-btn {
+            padding: 10px 20px;
+            background: #ff4444;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background: #ff2222;
+            transform: translateY(-2px);
+        }
+        
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .nav-btn {
+            padding: 12px 24px;
+            background: rgba(124, 58, 237, 0.2);
+            border: 2px solid #7c3aed;
+            border-radius: 8px;
+            color: #7c3aed;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .nav-btn:hover,
+        .nav-btn.active {
+            background: #7c3aed;
+            color: #fff;
+        }
+        
+        .content-section {
+            display: none;
+            background: rgba(20, 20, 40, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 4px solid #7c3aed;
+        }
+        
+        .content-section.active {
+            display: block;
+        }
+        
+        .content-section h2 {
+            color: #7c3aed;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .form-grid input,
+        .form-grid select {
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #7c3aed;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .add-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            grid-column: 1 / -1;
+        }
+        
+        .add-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+        }
+        
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        th {
+            background: rgba(124, 58, 237, 0.2);
+            padding: 15px;
+            text-align: left;
+            color: #7c3aed;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(124, 58, 237, 0.3);
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(124, 58, 237, 0.1);
+        }
+        
+        tr:hover {
+            background: rgba(124, 58, 237, 0.1);
+        }
+        
+        .delete-btn {
+            padding: 6px 12px;
+            background: #ff4444;
+            border: none;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .delete-btn:hover {
+            background: #ff2222;
+            transform: scale(1.05);
+        }
+        
+        .success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            color: #10b981;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid #ff4444;
+            color: #ff8888;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login -->
+    <div class="login-container" id="loginContainer">
+        <div class="login-box">
+            <h1>🔐 Admin Giriş</h1>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>Kullanıcı Adı</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label>Şifre</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="login-btn">Giriş Yap</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Dashboard -->
+    <div class="dashboard" id="dashboard">
+        <div class="header">
+            <h1>🎛️ Admin Paneli</h1>
+            <button class="logout-btn" onclick="logout()">Çıkış Yap</button>
+        </div>
+        
+        <div class="nav-buttons">
+            <button class="nav-btn active" onclick="showSection('stocks')">📦 Stoklar</button>
+            <button class="nav-btn" onclick="showSection('promos')">🎟️ Promosyon Kodları</button>
+            <button class="nav-btn" onclick="showSection('users')">👥 Kullanıcılar</button>
+            <button class="nav-btn" onclick="showSection('announcements')">📢 Duyurular</button>
+        </div>
+        
+        <!-- Stocks Section -->
+        <div class="content-section active" id="stocksSection">
+            <h2>📦 Stok Yönetimi</h2>
+            <div class="form-grid">
+                <input type="text" id="stockName" placeholder="Stok Adı (Netflix, Spotify...)">
+                <input type="number" id="stockAmount" placeholder="Miktar" min="1">
+                <input type="number" id="stockCredits" placeholder="Kredi Değeri" min="1">
+                <input type="text" id="stockImage" placeholder="Görsel URL">
+                <button class="add-btn" onclick="addStock()">➕ Stok Ekle</button>
+            </div>
+            <div id="stocksMessage"></div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Adı</th>
+                            <th>Miktar</th>
+                            <th>Kredi</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stocksTable"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Promo Codes Section -->
+        <div class="content-section" id="promosSection">
+            <h2>🎟️ Promosyon Kodları</h2>
+            <div class="form-grid">
+                <input type="text" id="promoCode" placeholder="Kod (örn: GOLD50)">
+                <select id="promoRewardType">
+                    <option value="">Hediye Türü Seç</option>
+                    <option value="credits">Kredi</option>
+                    <option value="account">Hesap</option>
+                </select>
+                <input type="text" id="promoRewardValue" placeholder="Hediye Değeri (miktar veya hesap adı)">
+                <input type="datetime-local" id="promoExpires" placeholder="Bitiş Tarihi (opsiyonel)">
+                <button class="add-btn" onclick="addPromo()">➕ Kod Ekle</button>
+            </div>
+            <div id="promosMessage"></div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Kod</th>
+                            <th>Hediye Türü</th>
+                            <th>Değer</th>
+                            <th>Bitiş Tarihi</th>
+                            <th>İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="promosTable"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Users Section -->
+        <div class="content-section" id="usersSection">
+            <h2>👥 Kullanıcılar</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>E-Posta</th>
+                            <th>Kullanıcı Adı</th>
+                            <th>Katılım Tarihi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Announcements Section -->
+        <div class="content-section" id="announcementsSection">
+            <h2>📢 Duyurular</h2>
+            <div class="form-grid">
+                <input type="text" id="announcementTitle" placeholder="Başlık">
+                <textarea id="announcementContent" placeholder="İçerik" style="grid-column: 1 / -1; padding: 10px; resize: vertical; min-height: 100px;"></textarea>
+                <button class="add-btn" onclick="addAnnouncement()">➕ Duyuru Gönder</button>
+            </div>
+            <div id="announcementsMessage"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        let token = localStorage.getItem('adminToken');
+        
+        if (token) {
+            showDashboard();
+        }
+        
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    token = data.token;
+                    localStorage.setItem('adminToken', token);
+                    document.getElementById('loginForm').reset();
+                    showDashboard();
+                } else {
+                    alert('Hatalı giriş!');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Giriş başarısız!');
+            }
+        });
+        
+        function showDashboard() {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('dashboard').style.display = 'block';
+            loadStocks();
+            loadPromos();
+            loadUsers();
+        }
+        
+        function logout() {
+            localStorage.removeItem('adminToken');
+            token = null;
+            document.getElementById('dashboard').style.display = 'none';
+            document.getElementById('loginContainer').style.display = 'flex';
+        }
+        
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(sectionId + 'Section').classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function loadStocks() {
+            try {
+                const response = await fetch(`${API_BASE}/api/stocks`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const stocks = await response.json();
+                const tbody = document.getElementById('stocksTable');
+                tbody.innerHTML = stocks.map(stock => `
+                    <tr>
+                        <td>${stock.name}</td>
+                        <td>${stock.amount}</td>
+                        <td>${stock.credits}</td>
+                        <td><button class="delete-btn" onclick="deleteStock(${stock.id})">Sil</button></td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Load stocks error:', error);
+            }
+        }
+        
+        async function addStock() {
+            const name = document.getElementById('stockName').value;
+            const amount = document.getElementById('stockAmount').value;
+            const credits = document.getElementById('stockCredits').value;
+            const image_url = document.getElementById('stockImage').value;
+            
+            if (!name || !amount || !credits) {
+                alert('Lütfen tüm alanları doldurun!');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/stocks`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name, amount: parseInt(amount), credits: parseInt(credits), image_url })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('stocksMessage', 'Stok başarıyla eklendi!', 'success');
+                    document.getElementById('stockName').value = '';
+                    document.getElementById('stockAmount').value = '';
+                    document.getElementById('stockCredits').value = '';
+                    document.getElementById('stockImage').value = '';
+                    loadStocks();
+                }
+            } catch (error) {
+                console.error('Add stock error:', error);
+                showMessage('stocksMessage', 'Hata oluştu!', 'error');
+            }
+        }
+        
+        async function deleteStock(id) {
+            if (confirm('Bu stoku silmek istediğinize emin misiniz?')) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/stocks/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        loadStocks();
+                    }
+                } catch (error) {
+                    console.error('Delete stock error:', error);
+                }
+            }
+        }
+        
+        async function loadPromos() {
+            try {
+                const response = await fetch(`${API_BASE}/api/promos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const promos = await response.json();
+                const tbody = document.getElementById('promosTable');
+                tbody.innerHTML = promos.map(promo => `
+                    <tr>
+                        <td>${promo.code}</td>
+                        <td>${promo.reward_type === 'credits' ? 'Kredi' : 'Hesap'}</td>
+                        <td>${promo.reward_value}</td>
+                        <td>${promo.expires_at || 'Süreli değil'}</td>
+                        <td><button class="delete-btn" onclick="deletePromo(${promo.id})">Sil</button></td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Load promos error:', error);
+            }
+        }
+        
+        async function addPromo() {
+            const code = document.getElementById('promoCode').value;
+            const reward_type = document.getElementById('promoRewardType').value;
+            const reward_value = document.getElementById('promoRewardValue').value;
+            const expires_at = document.getElementById('promoExpires').value;
+            
+            if (!code || !reward_type || !reward_value) {
+                alert('Lütfen tüm alanları doldurun!');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/promos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ code, reward_type, reward_value, expires_at: expires_at || null })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('promosMessage', 'Kod başarıyla eklendi!', 'success');
+                    document.getElementById('promoCode').value = '';
+                    document.getElementById('promoRewardType').value = '';
+                    document.getElementById('promoRewardValue').value = '';
+                    document.getElementById('promoExpires').value = '';
+                    loadPromos();
+                }
+            } catch (error) {
+                console.error('Add promo error:', error);
+                showMessage('promosMessage', 'Hata oluştu!', 'error');
+            }
+        }
+        
+        async function deletePromo(id) {
+            if (confirm('Bu kodu silmek istediğinize emin misiniz?')) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/promos/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        loadPromos();
+                    }
+                } catch (error) {
+                    console.error('Delete promo error:', error);
+                }
+            }
+        }
+        
+        async function loadUsers() {
+            try {
+                const response = await fetch(`${API_BASE}/api/users`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const users = await response.json();
+                const tbody = document.getElementById('usersTable');
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.email}</td>
+                        <td>${user.username}</td>
+                        <td>${new Date(user.created_at).toLocaleDateString('tr-TR')}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Load users error:', error);
+            }
+        }
+        
+        async function addAnnouncement() {
+            const title = document.getElementById('announcementTitle').value;
+            const content = document.getElementById('announcementContent').value;
+            
+            if (!title || !content) {
+                alert('Lütfen başlık ve içerik girin!');
+                return;
+            }
+            
+            // TODO: Implement announcement sending to Discord
+            showMessage('announcementsMessage', 'Duyuru gönderildi!', 'success');
+            document.getElementById('announcementTitle').value = '';
+            document.getElementById('announcementContent').value = '';
+        }
+        
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => el.innerHTML = '', 3000);
+        }
+    </script>
+</body>
+</html>
