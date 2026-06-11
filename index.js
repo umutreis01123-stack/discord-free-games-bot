@@ -132,15 +132,25 @@ app.get('/api/products', (req, res) => {
 
 // Admin: Ürün Ekle
 app.post('/api/admin/products', (req, res) => {
-  const { name, quantity, credits } = req.body;
+  const { name, quantity, credits, accounts } = req.body;
   
   const db = getDatabase();
+  
+  // Hesapları satırlara böl ve temizle
+  const accountList = accounts.split('\n')
+    .filter(acc => acc.trim())
+    .map(acc => ({
+      id: Date.now().toString() + Math.random(),
+      details: acc.trim(),
+      used: false
+    }));
+  
   const product = {
     id: Date.now().toString(),
     name,
     quantity: parseInt(quantity),
     credits: parseInt(credits),
-    accounts: [],
+    accounts: accountList,
     createdAt: new Date()
   };
   
@@ -254,7 +264,7 @@ app.post('/api/buy-product', (req, res) => {
 
 // Admin: Siparişi Onayla
 app.post('/api/admin/approve-order', (req, res) => {
-  const { orderId, accountDetails } = req.body;
+  const { orderId } = req.body;
   
   const db = getDatabase();
   const orderIndex = db.pendingOrders.findIndex(o => o.id === orderId);
@@ -271,6 +281,22 @@ app.post('/api/admin/approve-order', (req, res) => {
     return res.status(404).json({ error: 'Kullanıcı veya ürün bulunamadı' });
   }
   
+  // Kullanılmamış hesapları al
+  const availableAccounts = product.accounts.filter(acc => !acc.used);
+  
+  if (availableAccounts.length < order.quantity) {
+    return res.status(400).json({ error: 'Yeterli hesap yok!' });
+  }
+  
+  // Random hesap seç
+  const selectedAccounts = [];
+  for (let i = 0; i < order.quantity; i++) {
+    const randomIndex = Math.floor(Math.random() * availableAccounts.length);
+    const selectedAccount = availableAccounts.splice(randomIndex, 1)[0];
+    selectedAccount.used = true;
+    selectedAccounts.push(selectedAccount);
+  }
+  
   // Kredi düş
   user.credits -= order.totalCost;
   
@@ -279,7 +305,7 @@ app.post('/api/admin/approve-order', (req, res) => {
   
   // Siparişi tamamlananlara taşı
   order.status = 'completed';
-  order.accountDetails = accountDetails;
+  order.selectedAccounts = selectedAccounts;
   order.completedAt = new Date();
   
   db.completedOrders.push(order);
@@ -289,15 +315,17 @@ app.post('/api/admin/approve-order', (req, res) => {
   
   // Bot'a DM gönder
   client.users.fetch(order.userDiscordId).then(userDM => {
+    const accountDetails = selectedAccounts.map((acc, i) => `**${i + 1}.** ${acc.details}`).join('\n');
+    
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
       .setTitle('✅ Sipariş Onaylandı!')
       .addFields(
         { name: '📦 Ürün', value: order.productName, inline: true },
         { name: '🔢 Adet', value: order.quantity.toString(), inline: true },
-        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true },
-        { name: '🎮 Hesap Bilgisi', value: accountDetails }
+        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true }
       )
+      .setDescription(`🎮 **Hesap Bilgileri:**\n${accountDetails}`)
       .setFooter({ text: 'Zwozez Discord Botu' });
     
     userDM.send({ embeds: [embed] });
@@ -305,7 +333,7 @@ app.post('/api/admin/approve-order', (req, res) => {
     console.log('DM gönderilemedi:', err);
   });
   
-  res.json({ success: true, message: 'Sipariş onaylandı ve hesap gönderildi' });
+  res.json({ success: true, message: 'Sipariş onaylandı ve hesaplar gönderildi' });
 });
 
 // Kullanıcı Bilgilerini Güncelle
