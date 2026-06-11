@@ -245,7 +245,9 @@ app.post('/api/register', (req, res) => {
   db.users.push(user);
   db.userRights[userId] = { 
     boostRights: 0, 
-    freeRights: 1 // İlk kayıt bonusu
+    boostLastUsed: null,
+    freeRights: 1, // İlk kayıt bonusu
+    freeLastUsed: null
   };
   
   // Sistem logları
@@ -855,43 +857,189 @@ client.on('interactionCreate', async (interaction) => {
           return interaction.reply({ content: '❌ Bu komutu kullanmak için sunucuya boost yapman gerekiyor!', ephemeral: true });
         }
         
+        // Stokta ürün var mı kontrol et
+        const availableProducts = db.products.filter(p => {
+          const acc = p.accounts.filter(a => !a.used);
+          return p.quantity > 0 && acc.length >= 4;
+        });
+
+        if (availableProducts.length === 0) {
+          return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
+        }
+
         const userId = user.id;
         
         if (!db.userRights[userId]) {
-          db.userRights[userId] = { boostRights: 4, freeRights: 0 };
-          saveDatabase(db);
-          
-          await sendRandomProduct(user, 'boost');
-          return interaction.reply({ content: '🎉 İlk boost hesabın! 4 hakkın var, şimdi 3 kaldı.', ephemeral: true });
+          db.userRights[userId] = { 
+            boostRights: 4, 
+            boostLastUsed: null,
+            freeRights: 1,
+            freeLastUsed: null
+          };
         }
-        
+
+        // Boost hakkı kontrolü
         if (db.userRights[userId].boostRights <= 0) {
-          return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış!', ephemeral: true });
+          return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış! Daha sonra tekrar dene.', ephemeral: true });
         }
+
+        // Stok kontrol et ve 4 hesap gönder
+        const selectedProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+        const availableAccounts = selectedProduct.accounts.filter(acc => !acc.used);
         
+        if (availableAccounts.length < 4) {
+          return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
+        }
+
+        const selectedAccounts = [];
+        for (let i = 0; i < 4; i++) {
+          const randomIndex = Math.floor(Math.random() * availableAccounts.length);
+          const account = availableAccounts.splice(randomIndex, 1)[0];
+          account.used = true;
+          selectedAccounts.push(account);
+        }
+
+        selectedProduct.quantity -= 4;
         db.userRights[userId].boostRights--;
-        saveDatabase(db);
+        db.userRights[userId].boostLastUsed = new Date().toISOString();
+
+        // Sistem logları
+        addSystemLog(db, 'BOOST_USED', `${user.username} boost hesap kullandı (${db.userRights[userId].boostRights} kaldı)`, userId);
         
-        await sendRandomProduct(user, 'boost');
-        interaction.reply({ content: `✅ Boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
+        saveDatabase(db);
+
+        // DM gönder
+        const accountDetails = selectedAccounts.map(acc => acc.details).join('\n');
+        
+        const boostEmbed = new EmbedBuilder()
+          .setColor(0xf39c12)
+          .setTitle('🚀 Boost Hediye!')
+          .setDescription(`**Zwozez** mağazasından boost hediyeniz aşağıda:`)
+          .addFields(
+            { name: 'Ürün', value: selectedProduct.name, inline: true },
+            { name: 'Adet', value: '4', inline: true },
+            { name: 'Değeri', value: `💰 ${selectedProduct.credits * 4} Kredi`, inline: true },
+            { name: 'Hesap Bilgileri', value: `\`\`\`\n${accountDetails}\n\`\`\``, inline: false },
+            { name: 'Kalan Hakkın', value: `${db.userRights[userId].boostRights}`, inline: true }
+          )
+          .setFooter({ text: `Teşekkürler! • Zwozez • bugün saat ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` })
+          .setTimestamp();
+
+        const noteEmbed = new EmbedBuilder()
+          .setColor(0xff9900)
+          .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!')
+          .setTimestamp();
+
+        try {
+          await user.send({ embeds: [boostEmbed] });
+          setTimeout(async () => {
+            await user.send({ embeds: [noteEmbed] });
+          }, 1000);
+        } catch (e) {
+          console.log('DM gönderilemedi');
+        }
+
+        interaction.reply({ content: `✅ 4 boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
         
       } catch (error) {
-        interaction.reply({ content: '❌ Boost durumun kontrol edilemedi!', ephemeral: true });
+        console.log('Boost hatası:', error);
+        interaction.reply({ content: '❌ Bir hata oluştu!', ephemeral: true });
       }
     }
 
     if (commandName === 'bedavahesap') {
       const userId = user.id;
-      
-      if (!db.userRights[userId] || db.userRights[userId].freeRights <= 0) {
-        return interaction.reply({ content: '❌ Bedava hesap hakkın yok!', ephemeral: true });
+
+      // Stokta ürün var mı kontrol et
+      const availableProducts = db.products.filter(p => {
+        const acc = p.accounts.filter(a => !a.used);
+        return p.quantity > 0 && acc.length >= 1;
+      });
+
+      if (availableProducts.length === 0) {
+        return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
       }
+
+      if (!db.userRights[userId]) {
+        db.userRights[userId] = { 
+          boostRights: 0,
+          boostLastUsed: null,
+          freeRights: 1,
+          freeLastUsed: null
+        };
+      }
+
+      // Bedava hesap hakkı kontrolü
+      if (db.userRights[userId].freeRights <= 0) {
+        return interaction.reply({ content: '❌ Bedava hesap hakkın kalmamış!', ephemeral: true });
+      }
+
+      // 4 saatlik cooldown kontrolü
+      const lastUsed = db.userRights[userId].freeLastUsed;
+      if (lastUsed) {
+        const lastUsedTime = new Date(lastUsed).getTime();
+        const now = Date.now();
+        const cooldownMs = 4 * 60 * 60 * 1000; // 4 saat
+        const remainingMs = cooldownMs - (now - lastUsedTime);
+
+        if (remainingMs > 0) {
+          const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+          const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+          return interaction.reply({ content: `⏳ Cooldown! ${hours}s ${minutes}d sonra tekrar deneyebilirsin.`, ephemeral: true });
+        }
+      }
+
+      // Stok kontrol et ve 1 hesap gönder
+      const selectedProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+      const availableAccounts = selectedProduct.accounts.filter(acc => !acc.used);
       
+      if (availableAccounts.length < 1) {
+        return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
+      }
+
+      const randomIndex = Math.floor(Math.random() * availableAccounts.length);
+      const selectedAccount = availableAccounts[randomIndex];
+      selectedAccount.used = true;
+
+      selectedProduct.quantity -= 1;
       db.userRights[userId].freeRights--;
-      saveDatabase(db);
+      db.userRights[userId].freeLastUsed = new Date().toISOString();
+
+      // Sistem logları
+      addSystemLog(db, 'FREE_ACCOUNT_USED', `${user.username} bedava hesap kullandı (${db.userRights[userId].freeRights} kaldı)`, userId);
       
-      await sendRandomProduct(user, 'free');
-      interaction.reply({ content: `✅ Bedava hesap gönderildi! Kalan hakkın: ${db.userRights[userId].freeRights}`, ephemeral: true });
+      saveDatabase(db);
+
+      // DM gönder
+      const freeEmbed = new EmbedBuilder()
+        .setColor(0x2ecc71)
+        .setTitle('🎁 Bedava Hesap!')
+        .setDescription(`**Zwozez** mağazasından bedava hediyeniz aşağıda:`)
+        .addFields(
+          { name: 'Ürün', value: selectedProduct.name, inline: true },
+          { name: 'Değeri', value: `💰 ${selectedProduct.credits} Kredi`, inline: true },
+          { name: 'Hesap Bilgileri', value: `\`\`\`\n${selectedAccount.details}\n\`\`\``, inline: false },
+          { name: 'Kalan Hakkın', value: `${db.userRights[userId].freeRights}`, inline: true }
+        )
+        .setFooter({ text: `Teşekkürler! • Zwozez • bugün saat ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` })
+        .setTimestamp();
+
+      const noteEmbed = new EmbedBuilder()
+        .setColor(0xff9900)
+        .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!\n⏳ Bir sonraki bedava hesap için 4 saat beklemelisin.')
+        .setTimestamp();
+
+      try {
+        await user.send({ embeds: [freeEmbed] });
+        setTimeout(async () => {
+          await user.send({ embeds: [noteEmbed] });
+        }, 1000);
+      } catch (e) {
+        console.log('DM gönderilemedi');
+      }
+
+      const nextAvailableTime = new Date(Date.now() + (4 * 60 * 60 * 1000)).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+      interaction.reply({ content: `✅ Bedava hesap gönderildi! Bir sonraki hesap için ${nextAvailableTime}'de tekrar deneyebilirsin.`, ephemeral: true });
     }
 
     if (commandName === 'hakver') {
