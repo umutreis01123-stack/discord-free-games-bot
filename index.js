@@ -1093,7 +1093,11 @@ async function registerSlashCommands() {
 
     new SlashCommandBuilder()
       .setName('owogeçmişi')
-      .setDescription('Bana gönderilen tüm OWO\'ları göster')
+      .setDescription('Bana gönderilen tüm OWO\'ları göster'),
+
+    new SlashCommandBuilder()
+      .setName('owoödemealdı')
+      .setDescription('OWO ödeme aldıktan sonra hesapı al (Test/Manual)')
   ];
 
   try {
@@ -1800,6 +1804,106 @@ client.on('interactionCreate', async (interaction) => {
         interaction.reply({ embeds: [historyEmbed], ephemeral: true });
       } catch (error) {
         console.error('OWO geçmişi hatası:', error);
+        interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
+    }
+
+    // ✅ YENİ: OWO ÖDEMESİ ALINDI - HESAP GÖNDERİ
+    if (commandName === 'owoödemealdı') {
+      try {
+        const db = getDatabase();
+        if (!db.owoPendingPayments) db.owoPendingPayments = [];
+
+        // Kullanıcının pending payment'ını bul
+        const userPendingIndex = db.owoPendingPayments.findIndex(p => p.userId === user.id && p.status === 'awaiting_payment');
+
+        if (userPendingIndex === -1) {
+          return interaction.reply({ content: '❌ Bekleyen ödeme bulunamadı! Önce `/owoileode` yazın.', ephemeral: true });
+        }
+
+        const pendingPayment = db.owoPendingPayments[userPendingIndex];
+        const product = db.products.find(p => p.id === pendingPayment.productId);
+
+        if (!product) {
+          return interaction.reply({ content: '❌ Ürün bulunamadı!', ephemeral: true });
+        }
+
+        const availableAccounts = product.accounts.filter(acc => !acc.used);
+        
+        if (availableAccounts.length === 0) {
+          return interaction.reply({ content: '❌ Stokta hesap kalmadı!', ephemeral: true });
+        }
+
+        // Random hesap seç
+        const randomIndex = Math.floor(Math.random() * availableAccounts.length);
+        const selectedAccount = availableAccounts[randomIndex];
+        selectedAccount.used = true;
+        product.quantity -= 1;
+
+        // Status güncelle
+        pendingPayment.status = 'completed';
+        pendingPayment.completedAt = new Date().toISOString();
+        pendingPayment.accountDetails = selectedAccount.details;
+
+        // History'ye ekle
+        if (!db.owoHistory) db.owoHistory = [];
+        db.owoHistory.push({
+          id: Date.now().toString(),
+          userId: pendingPayment.userId,
+          userName: pendingPayment.userName,
+          productId: pendingPayment.productId,
+          productName: pendingPayment.productName,
+          owoAmount: pendingPayment.owoAmount,
+          completedAt: new Date().toISOString()
+        });
+
+        saveDatabase(db);
+
+        // Sunucuda onay mesajı
+        const confirmEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('✅ Ödeme Alındı!')
+          .setDescription('Hesap DM\'den geliyor...')
+          .addFields(
+            { name: '🎮 Ürün', value: product.name, inline: true },
+            { name: '💜 Tutar', value: `${pendingPayment.owoAmount} OWO`, inline: true }
+          )
+          .setFooter({ text: 'Hesap DM\'de' })
+          .setTimestamp();
+
+        interaction.reply({ embeds: [confirmEmbed], ephemeral: true });
+
+        // Kullanıcıya DM gönder
+        const successEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('✅ Ödeme Alındı! Hesap Geliyor!')
+          .setDescription(`Satın aldığınız ürün aşağıda:`)
+          .addFields(
+            { name: '🎮 Ürün', value: product.name, inline: true },
+            { name: '💜 Ödenen Tutar', value: `${pendingPayment.owoAmount} OWO`, inline: true },
+            { name: '📦 Steam Hesabı', value: `\`\`\`\n${selectedAccount.details}\n\`\`\``, inline: false },
+            { name: '⏰ Tarih', value: new Date().toLocaleString('tr-TR'), inline: false }
+          )
+          .setFooter({ text: 'Teşekkür ederiz! - Zwozez' })
+          .setTimestamp();
+
+        const noteEmbed = new EmbedBuilder()
+          .setColor(0xff9900)
+          .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!')
+          .setTimestamp();
+
+        try {
+          await user.send({ embeds: [successEmbed] });
+          setTimeout(async () => {
+            await user.send({ embeds: [noteEmbed] });
+          }, 1000);
+        } catch (e) {
+          console.log('DM gönderilemedi:', user.id);
+        }
+
+        console.log(`✅ OWO ÖDEME TAMAMLANDI: ${user.username} → ${product.name}`);
+      } catch (error) {
+        console.error('OWO ödeme hatası:', error);
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
