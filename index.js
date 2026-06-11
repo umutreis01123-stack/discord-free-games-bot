@@ -794,7 +794,7 @@ async function registerSlashCommands() {
     // TICKET KOMUTLARı
     new SlashCommandBuilder()
       .setName('ticket')
-      .setDescription('Ticket aç'),
+      .setDescription('Ticket aç - Destek için'),
     
     new SlashCommandBuilder()
       .setName('destekkur')
@@ -1069,12 +1069,8 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ content: `✅ ${targetUser.username} kullanıcısına ${adet} adet ${tipText} hakkı verildi!`, ephemeral: true });
     }
 
-    // TICKET KOMUTU
+    // TICKET KOMUTU - Herkes Kullansın
     if (commandName === 'ticket') {
-      if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
-      }
-
       const ticketEmbed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🎫 Ticket Sistemi')
@@ -1093,12 +1089,8 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ embeds: [ticketEmbed], components: [row], ephemeral: true });
     }
 
-    // DESTEK KUR KOMUTU
+    // DESTEK KUR KOMUTU - Herkes Kullansın
     if (commandName === 'destekkur') {
-      if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
-      }
-
       const supportEmbed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('💬 Destek Talebi')
