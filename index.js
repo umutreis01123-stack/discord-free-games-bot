@@ -1071,6 +1071,10 @@ client.on('interactionCreate', async (interaction) => {
 
     // TICKET KOMUTU
     if (commandName === 'ticket') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
+      }
+
       const ticketEmbed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🎫 Ticket Sistemi')
@@ -1091,6 +1095,10 @@ client.on('interactionCreate', async (interaction) => {
 
     // DESTEK KUR KOMUTU
     if (commandName === 'destekkur') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
+      }
+
       const supportEmbed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('💬 Destek Talebi')
@@ -1133,7 +1141,7 @@ client.on('interactionCreate', async (interaction) => {
     // ÇEKİLİŞ KOMUTU
     if (commandName === 'çekiliş') {
       if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
       }
 
       const duration = options.getInteger('süre');
@@ -1191,7 +1199,7 @@ client.on('interactionCreate', async (interaction) => {
     // LOG KOMUTU
     if (commandName === 'log') {
       if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
       }
 
       // Log kanalı oluştur
@@ -1209,6 +1217,10 @@ client.on('interactionCreate', async (interaction) => {
             {
               id: client.user.id,
               allow: ['ViewChannel', 'SendMessages']
+            },
+            {
+              id: OWNER_ID,
+              allow: ['ViewChannel', 'ReadMessageHistory']
             }
           ]
         });
@@ -1245,6 +1257,10 @@ client.on('interactionCreate', async (interaction) => {
 
     // SUNUCU BİLGİ KOMUTU
     if (commandName === 'sunucu') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
+      }
+
       const serverEmbed = new EmbedBuilder()
         .setColor(0x1abc9c)
         .setTitle(`🏠 ${guild.name} - Sunucu Bilgileri`)
