@@ -236,7 +236,10 @@ app.post('/api/buy-product', (req, res) => {
   const order = {
     id: Date.now().toString(),
     userId: user.id,
+    userName: user.name,
+    userDiscordId: user.discordId,
     productId: product.id,
+    productName: product.name,
     quantity,
     totalCost,
     status: 'pending',
@@ -247,6 +250,86 @@ app.post('/api/buy-product', (req, res) => {
   saveDatabase(db);
   
   res.json({ success: true, message: 'Sipariş onay bekliyor', orderId: order.id });
+});
+
+// Admin: Siparişi Onayla
+app.post('/api/admin/approve-order', (req, res) => {
+  const { orderId, accountDetails } = req.body;
+  
+  const db = getDatabase();
+  const orderIndex = db.pendingOrders.findIndex(o => o.id === orderId);
+  
+  if (orderIndex === -1) {
+    return res.status(404).json({ error: 'Sipariş bulunamadı' });
+  }
+  
+  const order = db.pendingOrders[orderIndex];
+  const user = db.users.find(u => u.id === order.userId);
+  const product = db.products.find(p => p.id === order.productId);
+  
+  if (!user || !product) {
+    return res.status(404).json({ error: 'Kullanıcı veya ürün bulunamadı' });
+  }
+  
+  // Kredi düş
+  user.credits -= order.totalCost;
+  
+  // Stok azalt
+  product.quantity -= order.quantity;
+  
+  // Siparişi tamamlananlara taşı
+  order.status = 'completed';
+  order.accountDetails = accountDetails;
+  order.completedAt = new Date();
+  
+  db.completedOrders.push(order);
+  db.pendingOrders.splice(orderIndex, 1);
+  
+  saveDatabase(db);
+  
+  // Bot'a DM gönder
+  client.users.fetch(order.userDiscordId).then(userDM => {
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('✅ Sipariş Onaylandı!')
+      .addFields(
+        { name: '📦 Ürün', value: order.productName, inline: true },
+        { name: '🔢 Adet', value: order.quantity.toString(), inline: true },
+        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true },
+        { name: '🎮 Hesap Bilgisi', value: accountDetails }
+      )
+      .setFooter({ text: 'Zwozez Discord Botu' });
+    
+    userDM.send({ embeds: [embed] });
+  }).catch(err => {
+    console.log('DM gönderilemedi:', err);
+  });
+  
+  res.json({ success: true, message: 'Sipariş onaylandı ve hesap gönderildi' });
+});
+
+// Kullanıcı Bilgilerini Güncelle
+app.get('/api/user/:userId', (req, res) => {
+  const { userId } = req.params;
+  
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) {
+    return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+  }
+  
+  res.json({
+    id: user.id,
+    name: user.name,
+    credits: user.credits
+  });
+});
+
+// Bekleyen Siparişleri Getir
+app.get('/api/admin/pending-orders', (req, res) => {
+  const db = getDatabase();
+  res.json(db.pendingOrders);
 });
 
 // ============ DISCORD BOT ============

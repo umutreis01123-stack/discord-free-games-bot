@@ -407,7 +407,9 @@
             <!-- Orders Tab -->
             <div id="adminOrders" class="admin-tab-content">
                 <h3>Bekleyen Siparişler</h3>
-                <div id="ordersList" class="orders-list"></div>
+                <div id="ordersList" class="orders-list">
+                    <p style="color: #7f8c8d;">Siparişler yükleniyor...</p>
+                </div>
             </div>
         </div>
 
@@ -503,9 +505,16 @@
 
                 if (response.ok) {
                     currentUser = data.user;
+                    
+                    // LocalStorage'a kaydet
+                    localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
+                    
                     closeModal('loginModal');
                     updateUI();
                     alert('✅ Giriş başarılı!');
+                    
+                    // Form'u temizle
+                    event.target.reset();
                 } else {
                     alert('❌ ' + data.error);
                 }
@@ -534,6 +543,14 @@
                 if (response.ok) {
                     closeModal('registerModal');
                     alert('✅ Kayıt başarılı! Giriş yapabilirsiniz.');
+                    
+                    // Form'u temizle
+                    event.target.reset();
+                    
+                    // Giriş modal'ını aç
+                    setTimeout(() => {
+                        openModal('loginModal');
+                    }, 500);
                 } else {
                     alert('❌ ' + data.error);
                 }
@@ -559,6 +576,10 @@
 
                 if (response.ok) {
                     adminMode = true;
+                    
+                    // Admin session'ı kaydet
+                    localStorage.setItem('zwozez_admin', 'true');
+                    
                     updateUI();
                     loadAdminData();
                     alert('✅ Admin girişi başarılı!');
@@ -577,17 +598,39 @@
 
             if (currentUser) {
                 headerButtons.innerHTML = `
-                    <span style="color: #2ecc71; font-weight: bold;">${currentUser.name}</span>
+                    <span style="color: #2ecc71; font-weight: bold;">💰 ${currentUser.credits} Kredi</span>
+                    <span style="color: #3498db; font-weight: bold;">${currentUser.name}</span>
                     <button class="btn btn-cancel" onclick="logout()">Çıkış</button>
+                    ${adminMode ? '' : '<button class="btn admin" onclick="adminLogin()">Admin</button>'}
                 `;
                 document.getElementById('userName').textContent = currentUser.name;
                 document.getElementById('userCredits').textContent = currentUser.credits;
                 userInfo.style.display = 'block';
+            } else {
+                headerButtons.innerHTML = `
+                    <button class="btn" onclick="openModal('loginModal')">Giriş Yap</button>
+                    <button class="btn" onclick="openModal('registerModal')">Kayıt Ol</button>
+                    <button class="btn admin" onclick="adminLogin()">Admin</button>
+                `;
+                userInfo.style.display = 'none';
             }
 
             if (adminMode) {
                 adminPanel.style.display = 'block';
+                // Admin modunda normal kullanıcı butonlarını gizle
+                if (currentUser) {
+                    headerButtons.innerHTML = `
+                        <span style="color: #f39c12; font-weight: bold;">👑 Admin Modu</span>
+                        <button class="btn btn-cancel" onclick="exitAdminMode()">Admin Çıkış</button>
+                    `;
+                }
             }
+        }
+
+        function exitAdminMode() {
+            adminMode = false;
+            updateUI();
+            document.getElementById('adminPanel').style.display = 'none';
         }
 
         function logout() {
@@ -631,7 +674,7 @@
             }
         }
 
-        function buyProduct(productId, productName, credits) {
+        async function buyProduct(productId, productName, credits) {
             if (!currentUser) {
                 alert('Lütfen giriş yapın');
                 return;
@@ -648,20 +691,43 @@
             }
 
             if (confirm(`${quantity} adet ${productName} için ${totalCost} kredi harcanacak. Onaylıyor musunuz?`)) {
-                // API çağrısı
-                fetch('/api/buy-product', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: currentUser.id, productId, quantity })
-                })
-                .then(response => response.json())
-                .then(data => {
+                try {
+                    const response = await fetch('/api/buy-product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: currentUser.id, productId, quantity })
+                    });
+
+                    const data = await response.json();
+                    
                     if (data.success) {
-                        alert('✅ Sipariş onay bekliyor!');
+                        alert('✅ Sipariş onay bekliyor! Admin onayladıktan sonra Discord DM\'den hesap gönderilecek.');
+                        
+                        // Kullanıcı bilgilerini güncelle
+                        await refreshUserData();
                     } else {
                         alert('❌ ' + data.error);
                     }
-                });
+                } catch (error) {
+                    alert('❌ Hata: ' + error.message);
+                }
+            }
+        }
+
+        async function refreshUserData() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`/api/user/${currentUser.id}`);
+                const userData = await response.json();
+                
+                if (response.ok) {
+                    currentUser = userData;
+                    localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Kullanıcı verileri güncellenemedi:', error);
             }
         }
 
@@ -675,6 +741,11 @@
             
             document.getElementById('admin' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
             event.target.classList.add('active');
+
+            // Tab değiştiğinde ilgili verileri yükle
+            if (tab === 'orders') {
+                loadPendingOrders();
+            }
         }
 
         async function loadAdminData() {
@@ -688,7 +759,7 @@
                     const select = document.getElementById(selectId);
                     select.innerHTML = '<option value="">Kullanıcı Seç</option>';
                     users.forEach(user => {
-                        select.innerHTML += `<option value="${user.id}">${user.name} (${user.discordId})</option>`;
+                        select.innerHTML += `<option value="${user.id}">${user.name} (${user.discordId}) - ${user.credits} kredi</option>`;
                     });
                 });
 
@@ -696,10 +767,10 @@
                 const usersList = document.getElementById('usersList');
                 usersList.innerHTML = users.map(user => `
                     <div class="user-item">
-                        <strong>${user.name}</strong><br>
-                        Discord: ${user.discordId}<br>
-                        E-posta: ${user.email}<br>
-                        Kredi: ${user.credits}
+                        <strong>👤 ${user.name}</strong><br>
+                        <span style="color: #3498db;">🆔 ${user.discordId}</span><br>
+                        <span style="color: #95a5a6;">📧 ${user.email}</span><br>
+                        <span style="color: #f39c12;">💰 ${user.credits} kredi</span>
                     </div>
                 `).join('');
             } catch (error) {
@@ -713,10 +784,94 @@
                     const select = document.getElementById('sendProductId');
                     select.innerHTML = '<option value="">Ürün Seç</option>';
                     products.forEach(product => {
-                        select.innerHTML += `<option value="${product.id}">${product.name}</option>`;
+                        select.innerHTML += `<option value="${product.id}">${product.name} (${product.credits} kredi)</option>`;
                     });
                 });
             });
+
+            // Load pending orders
+            loadPendingOrders();
+        }
+
+        async function loadPendingOrders() {
+            try {
+                const response = await fetch('/api/admin/pending-orders');
+                const orders = await response.json();
+                
+                const ordersList = document.getElementById('ordersList');
+                
+                if (orders.length === 0) {
+                    ordersList.innerHTML = '<p style="color: #7f8c8d; text-align: center;">Bekleyen sipariş yok</p>';
+                    return;
+                }
+
+                ordersList.innerHTML = orders.map(order => `
+                    <div class="order-item" style="background: #16213e; padding: 20px; margin: 15px 0; border-radius: 10px; border-left: 4px solid #f39c12;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h4 style="color: #f39c12;">📦 Sipariş #${order.id.slice(-6)}</h4>
+                            <span style="background: #f39c12; color: #16213e; padding: 5px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold;">BEKLEMEDE</span>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                            <div>
+                                <strong style="color: #ecf0f1;">👤 Müşteri:</strong><br>
+                                <span style="color: #3498db;">${order.userName}</span><br>
+                                <span style="color: #95a5a6; font-size: 0.9em;">${order.userDiscordId}</span>
+                            </div>
+                            <div>
+                                <strong style="color: #ecf0f1;">📦 Ürün:</strong><br>
+                                <span style="color: #2ecc71;">${order.productName}</span><br>
+                                <span style="color: #95a5a6; font-size: 0.9em;">${order.quantity} adet</span>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #0f3460; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                            <strong style="color: #e94560;">💰 Toplam: ${order.totalCost} kredi</strong>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="color: #ecf0f1; font-weight: bold; margin-bottom: 5px; display: block;">🎮 Hesap Bilgisi:</label>
+                            <textarea id="account_${order.id}" placeholder="Hesap bilgilerini buraya yaz..." style="width: 100%; height: 80px; padding: 10px; background: #0f3460; color: #ecf0f1; border: 1px solid #e94560; border-radius: 5px; resize: vertical;"></textarea>
+                        </div>
+                        
+                        <button class="btn" onclick="approveOrder('${order.id}')" style="width: 100%; background: #2ecc71;">
+                            ✅ Onayla ve Hesabı Gönder
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Siparişler yüklenemedi:', error);
+            }
+        }
+
+        async function approveOrder(orderId) {
+            const accountDetails = document.getElementById(`account_${orderId}`).value.trim();
+            
+            if (!accountDetails) {
+                alert('❌ Lütfen hesap bilgilerini girin!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/approve-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderId, accountDetails })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Sipariş onaylandı ve hesap gönderildi!');
+                    loadPendingOrders();
+                    loadAdminData(); // Kullanıcı kredilerini güncelle
+                    loadProducts(); // Stok miktarlarını güncelle
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
         }
 
         async function addProduct(event) {
@@ -796,6 +951,50 @@
             } catch (error) {
                 alert('❌ Hata: ' + error.message);
             }
+        }
+
+        // Sayfa yüklendiğinde localStorage kontrol et
+        window.addEventListener('DOMContentLoaded', function() {
+            // Kullanıcı session'ını kontrol et
+            const savedUser = localStorage.getItem('zwozez_user');
+            if (savedUser) {
+                try {
+                    currentUser = JSON.parse(savedUser);
+                    updateUI();
+                } catch (e) {
+                    localStorage.removeItem('zwozez_user');
+                }
+            }
+
+            // Admin session'ını kontrol et
+            const savedAdmin = localStorage.getItem('zwozez_admin');
+            if (savedAdmin === 'true') {
+                adminMode = true;
+                updateUI();
+                loadAdminData();
+            }
+
+            loadProducts();
+        });
+
+        // Logout fonksiyonunu güncelle
+        function logout() {
+            currentUser = null;
+            adminMode = false;
+            
+            // LocalStorage'ı temizle
+            localStorage.removeItem('zwozez_user');
+            localStorage.removeItem('zwozez_admin');
+            
+            document.getElementById('headerButtons').innerHTML = `
+                <button class="btn" onclick="openModal('loginModal')">Giriş Yap</button>
+                <button class="btn" onclick="openModal('registerModal')">Kayıt Ol</button>
+                <button class="btn admin" onclick="adminLogin()">Admin</button>
+            `;
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'none';
+            
+            alert('✅ Çıkış yapıldı');
         }
 
         // Sayfa yüklendiğinde
