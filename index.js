@@ -71,6 +71,7 @@ function getDatabase() {
       }
       
       if (!data.users) data.users = [];
+      if (!data.categories) data.categories = []; // ✅ YENİ: Stok kategorileri
       if (!data.products) data.products = [];
       if (!data.userRights) data.userRights = {};
       if (!data.pendingOrders) data.pendingOrders = [];
@@ -111,13 +112,14 @@ function getDatabase() {
       totalOrders: 0
     },
     users: [],
+    categories: [], // ✅ YENİ: Stok kategorileri
     products: [],
     userRights: {},
     pendingOrders: [],
     completedOrders: [],
-    creditHistory: [], // Kredi işlem geçmişi
-    loginHistory: [], // Giriş geçmişi
-    systemLogs: [] // Sistem logları
+    creditHistory: [],
+    loginHistory: [],
+    systemLogs: []
   };
 }
 
@@ -377,11 +379,96 @@ app.get('/api/products', (req, res) => {
   res.json(db.products);
 });
 
-// Admin: Ürün Ekle
-app.post('/api/admin/products', (req, res) => {
-  const { name, quantity, credits, accounts } = req.body;
+// ✅ YENİ: Kategorileri Getir (Stoklar)
+app.get('/api/categories', (req, res) => {
+  const db = getDatabase();
+  res.json(db.categories);
+});
+
+// ✅ YENİ: Stok Oluştur (Admin)
+app.post('/api/admin/categories', (req, res) => {
+  const { name, image, quantity } = req.body;
+  
+  if (!name || !image || !quantity) {
+    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
+  }
   
   const db = getDatabase();
+  
+  // Stok ismi benzersiz mi kontrol et
+  if (db.categories.some(c => c.name === name)) {
+    return res.status(400).json({ error: 'Bu stok ismi zaten var' });
+  }
+  
+  const category = {
+    id: Date.now().toString(),
+    name: name.trim(),
+    image: image.trim(),
+    quantity: parseInt(quantity),
+    createdAt: new Date().toISOString(),
+    products: [] // Bu stokta olan ürünler
+  };
+  
+  db.categories.push(category);
+  saveDatabase(db);
+  
+  res.json({ success: true, category });
+});
+
+// ✅ YENİ: Stok Sil (Admin)
+app.delete('/api/admin/categories/:categoryId', (req, res) => {
+  const { categoryId } = req.params;
+  const db = getDatabase();
+  
+  const categoryIndex = db.categories.findIndex(c => c.id === categoryId);
+  if (categoryIndex === -1) {
+    return res.status(404).json({ error: 'Stok bulunamadı' });
+  }
+  
+  // Bu stokta ürün var mı kontrol et
+  if (db.categories[categoryIndex].products.length > 0) {
+    return res.status(400).json({ error: 'Bu stokta ürün var, silemezsin' });
+  }
+  
+  db.categories.splice(categoryIndex, 1);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Stok silindi' });
+});
+
+// ✅ YENİ: Stok Miktarı Güncelle (Admin)
+app.put('/api/admin/categories/:categoryId', (req, res) => {
+  const { categoryId } = req.params;
+  const { quantity } = req.body;
+  
+  const db = getDatabase();
+  const category = db.categories.find(c => c.id === categoryId);
+  
+  if (!category) {
+    return res.status(404).json({ error: 'Stok bulunamadı' });
+  }
+  
+  category.quantity = parseInt(quantity);
+  saveDatabase(db);
+  
+  res.json({ success: true, category });
+});
+
+// Admin: Ürün Ekle
+app.post('/api/admin/products', (req, res) => {
+  const { name, quantity, credits, accounts, categoryId } = req.body;
+  
+  if (!name || !credits || !accounts || !categoryId) {
+    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
+  }
+  
+  const db = getDatabase();
+  
+  // Stok var mı kontrol et
+  const category = db.categories.find(c => c.id === categoryId);
+  if (!category) {
+    return res.status(404).json({ error: 'Stok bulunamadı' });
+  }
   
   // Hesapları satırlara böl ve temizle
   const accountList = accounts.split('\n')
@@ -394,14 +481,19 @@ app.post('/api/admin/products', (req, res) => {
   
   const product = {
     id: Date.now().toString(),
-    name,
+    categoryId: categoryId, // ✅ YENİ: Hangi stoka ait olduğunu takip et
+    name: name.trim(),
     quantity: parseInt(quantity),
     credits: parseInt(credits),
     accounts: accountList,
-    createdAt: new Date()
+    createdAt: new Date().toISOString()
   };
   
   db.products.push(product);
+  
+  // Stokta ürün sayısını artır
+  category.products.push(product.id);
+  
   saveDatabase(db);
   
   res.json({ success: true, product });
@@ -615,6 +707,14 @@ app.post('/api/admin/approve-order', (req, res) => {
   
   // Stok azalt
   product.quantity -= order.quantity;
+  
+  // ✅ YENİ: Kategorinin stok miktarını da azalt
+  if (product.categoryId) {
+    const category = db.categories.find(c => c.id === product.categoryId);
+    if (category) {
+      category.quantity -= order.quantity;
+    }
+  }
   
   // Siparişi tamamlananlara taşı
   order.status = 'completed';

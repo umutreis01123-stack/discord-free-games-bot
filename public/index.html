@@ -341,12 +341,21 @@
             <p style="text-align: center; color: #7f8c8d;">Ürünler yükleniyor...</p>
         </div>
 
+        <!-- ✅ YENİ: Stok Kategorileri (Ana Sayfa) -->
+        <div style="margin-top: 50px; margin-bottom: 40px;">
+            <h2 style="color: #e94560; margin-bottom: 30px; text-align: center;">📦 Stok Kategorileri</h2>
+            <div class="products-grid" id="categoriesGrid">
+                <p style="text-align: center; color: #7f8c8d;">Stoklar yükleniyor...</p>
+            </div>
+        </div>
+
         <!-- Admin Panel -->
         <div id="adminPanel" class="admin-panel">
             <h2>⚙️ Yönetim Paneli</h2>
             
             <div class="admin-tabs">
                 <button class="active" onclick="switchAdminTab('products')">Ürünler</button>
+                <button onclick="switchAdminTab('categories')">Stoklar</button>
                 <button onclick="switchAdminTab('users')">Kullanıcılar</button>
                 <button onclick="switchAdminTab('orders')">Siparişler</button>
                 <button onclick="switchAdminTab('stats')">İstatistikler</button>
@@ -358,12 +367,14 @@
                 <form onsubmit="addProduct(event)" style="background: #16213e; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div class="form-group">
-                            <label>Ürün Adı:</label>
-                            <input type="text" id="adminProductName" placeholder="Steam Hesap" required>
+                            <label>Hangi Stok?:</label>
+                            <select id="adminProductCategory" required>
+                                <option value="">Stok Seç</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>Stok Adet:</label>
-                            <input type="number" id="adminProductQuantity" placeholder="10" required>
+                            <label>Ürün Adı:</label>
+                            <input type="text" id="adminProductName" placeholder="Premium Account" required>
                         </div>
                         <div class="form-group">
                             <label>Kredi Fiyatı:</label>
@@ -376,6 +387,25 @@
                         <small style="color: #95a5a6; font-size: 0.9em;">Her satıra bir hesap yazın. Sistem rastgele seçim yapacak.</small>
                     </div>
                     <button type="submit" class="btn" style="width: 100%; margin-top: 10px;">📦 Ürün & Hesapları Ekle</button>
+                </form>
+                
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">📦 Stok Oluştur</h3>
+                <form onsubmit="addCategory(event)" style="background: #16213e; padding: 20px; border-radius: 5px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Stok İsmi:</label>
+                            <input type="text" id="categoryName" placeholder="Steam" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Görseli URL:</label>
+                            <input type="url" id="categoryImage" placeholder="https://..." required>
+                        </div>
+                        <div class="form-group">
+                            <label>Stok Miktarı:</label>
+                            <input type="number" id="categoryQuantity" placeholder="100" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">✅ Stok Oluştur</button>
                 </form>
                 
                 <h3>Hesap Gönder</h3>
@@ -423,6 +453,14 @@
                 
                 <h3>Kullanıcılar</h3>
                 <div id="usersList" class="users-list"></div>
+            </div>
+
+            <!-- Stoklar Tab (Categories) -->
+            <div id="adminCategories" class="admin-tab-content">
+                <h3>Aktif Stoklar</h3>
+                <div id="categoriesList" class="users-list">
+                    <p style="color: #7f8c8d;">Stoklar yükleniyor...</p>
+                </div>
             </div>
 
             <!-- Orders Tab -->
@@ -507,6 +545,17 @@
         <div class="modal-content">
             <h2 id="buyModalTitle">Ürün Satın Al</h2>
             <div id="buyModalContent"></div>
+        </div>
+    </div>
+
+    <!-- ✅ YENİ: Stok Modal -->
+    <div id="categoryModal" class="modal">
+        <div class="modal-content" style="width: 95%; max-width: 600px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="categoryModalTitle" style="margin: 0;">Stok</h2>
+                <button onclick="closeCategoryModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #e94560;">✕</button>
+            </div>
+            <div id="categoryModalContent" style="max-height: 500px; overflow-y: auto;"></div>
         </div>
     </div>
 
@@ -749,6 +798,137 @@
                 }).join('');
             } catch (error) {
                 console.error('Ürünler yüklenemedi:', error);
+            }
+        }
+
+        // ✅ YENİ: Stokları Yükle
+        async function loadCategories() {
+            try {
+                const response = await fetch('/api/categories');
+                const categories = await response.json();
+                
+                const grid = document.getElementById('categoriesGrid');
+                
+                if (categories.length === 0) {
+                    grid.innerHTML = '<p style="text-align: center; color: #7f8c8d;">Henüz stok eklenmemiş</p>';
+                    return;
+                }
+
+                grid.innerHTML = categories.map(category => {
+                    const isOutOfStock = category.quantity <= 0;
+                    
+                    return `
+                        <div class="product-card" style="${isOutOfStock ? 'opacity: 0.6; border-color: #e74c3c;' : ''}" onclick="openCategoryModal('${category.id}', '${category.name}')">
+                            <div style="text-align: center; cursor: pointer;">
+                                <img src="${category.image}" alt="${category.name}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 10px;">
+                                <div class="product-name">${category.name}</div>
+                                <div class="product-info">
+                                    <span class="product-quantity" style="color: ${isOutOfStock ? '#e74c3c' : '#2ecc71'}">
+                                        📦 ${isOutOfStock ? 'Stokta Yok' : `${category.quantity} adet`}
+                                    </span>
+                                </div>
+                                <p style="color: #95a5a6; font-size: 0.9em; margin-top: 10px;">Tıklayarak ürünleri görün →</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Stoklar yüklenemedi:', error);
+            }
+        }
+
+        // ✅ YENİ: Stok Modal'ı Aç
+        async function openCategoryModal(categoryId, categoryName) {
+            try {
+                const response = await fetch('/api/products');
+                const allProducts = await response.json();
+                
+                // Bu stoka ait ürünleri filtrele
+                const categoryProducts = allProducts.filter(p => p.categoryId === categoryId);
+                
+                document.getElementById('categoryModalTitle').textContent = categoryName;
+                
+                if (categoryProducts.length === 0) {
+                    document.getElementById('categoryModalContent').innerHTML = '<p style="text-align: center; color: #7f8c8d;">Bu stokta ürün bulunmuyor</p>';
+                } else {
+                    document.getElementById('categoryModalContent').innerHTML = categoryProducts.map(product => {
+                        const isOutOfStock = product.quantity <= 0;
+                        
+                        return `
+                            <div class="user-item" style="margin-bottom: 15px; ${isOutOfStock ? 'opacity: 0.6;' : ''}">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="flex: 1;">
+                                        <strong style="color: #e94560;">${product.name}</strong><br>
+                                        <span style="color: #95a5a6;">💰 ${product.credits} Kredi</span><br>
+                                        <span style="color: ${isOutOfStock ? '#e74c3c' : '#2ecc71'};">📦 ${isOutOfStock ? 'Stokta Yok' : `${product.quantity} adet mevcut`}</span>
+                                    </div>
+                                    ${currentUser && !isOutOfStock ? `
+                                        <button class="btn" style="padding: 8px 15px; font-size: 0.9em;" onclick="selectProductForPurchase('${product.id}', '${product.name}', ${product.credits})">
+                                            Satın Al
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+                document.getElementById('categoryModal').classList.add('active');
+            } catch (error) {
+                console.error('Stok modal açılamadı:', error);
+            }
+        }
+
+        // ✅ YENİ: Stok Modal'ı Kapat
+        function closeCategoryModal() {
+            document.getElementById('categoryModal').classList.remove('active');
+        }
+
+        // ✅ YENİ: Ürün Satın Almayı Başlat (Modal'dan)
+        function selectProductForPurchase(productId, productName, credits) {
+            if (!currentUser) {
+                alert('Lütfen giriş yapın');
+                return;
+            }
+
+            const quantity = prompt(`${productName} - Kaç adet almak istiyorsunuz?`);
+            if (!quantity || quantity <= 0) return;
+
+            const totalCost = credits * quantity;
+            
+            if (currentUser.credits < totalCost) {
+                alert('❌ Yetersiz kredi!');
+                return;
+            }
+
+            if (confirm(`${quantity} adet ${productName} için ${totalCost} kredi harcanacak. Onaylıyor musunuz?`)) {
+                buyProductFromCategory(productId, quantity, totalCost);
+            }
+        }
+
+        // ✅ YENİ: Kategori'den Satın Al
+        async function buyProductFromCategory(productId, quantity, totalCost) {
+            try {
+                const response = await fetch('/api/buy-product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUser.id, productId, quantity })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Sipariş onay bekliyor! Admin onayladıktan sonra Discord DM\'den hesap gönderilecek.');
+                    
+                    // Verileri güncelle
+                    closeCategoryModal();
+                    loadCategories();
+                    await refreshUserData();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
             }
         }
 
@@ -1287,6 +1467,9 @@
         // Sayfa yüklendiğinde ürünleri yükle
         loadProducts();
         
+        // ✅ YENİ: Stokları yükle
+        loadCategories();
+        
         // AĞIRLIKLI SINCRONIZASYON - Her 30 saniyede veriyi yenile
         setInterval(() => {
             if (currentUser) {
@@ -1295,6 +1478,7 @@
                 refreshUserData();
             }
             loadProducts();
+            loadCategories(); // ✅ YENİ: Stokları da yenile
         }, 30000);
     </script>
 </body>
