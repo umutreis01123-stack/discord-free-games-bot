@@ -897,12 +897,71 @@ client.on('ready', () => {
   registerSlashCommands();
 });
 
-// ✅ MESAJ KOMUTU: -sil (Bugünün tüm mesajlarını sil)
+// ✅ MESAJ KOMUTU: -resetle (Kanalı sil ve ayarlarıyla yeniden oluştur)
 client.on('messageCreate', async (message) => {
   // Bot kendi mesajlarını yoksay
   if (message.author.bot) return;
 
   try {
+    // -resetle komutunu kontrol et
+    if (message.content.trim() === '-resetle') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      try {
+        // Kanalın ayarlarını kaydet
+        const channel = message.channel;
+        const channelData = {
+          name: channel.name,
+          topic: channel.topic,
+          position: channel.position,
+          parent: channel.parentId,
+          permissionOverwrites: channel.permissionOverwrites.cache.map(overwrite => ({
+            id: overwrite.id,
+            type: overwrite.type,
+            allow: overwrite.allow.bitfield,
+            deny: overwrite.deny.bitfield
+          }))
+        };
+
+        await message.reply('⏳ Kanal sıfırlanıyor...');
+
+        // Kanalı sil
+        await channel.delete();
+
+        // Yeni kanalı oluştur (aynı ayarlarla)
+        const newChannel = await message.guild.channels.create({
+          name: channelData.name,
+          type: 0, // Text channel
+          topic: channelData.topic,
+          position: channelData.position,
+          parent: channelData.parent,
+          permissionOverwrites: channelData.permissionOverwrites
+        });
+
+        // Yeni kanala onay mesajı gönder
+        const confirmEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('✅ Kanal Sıfırlandı!')
+          .setDescription('Kanal başarıyla silindi ve yeniden oluşturuldu.')
+          .addFields(
+            { name: '📝 Kanal Adı', value: channelData.name, inline: true },
+            { name: '🔧 Ayarlar', value: 'Korundu ✓', inline: true }
+          )
+          .setFooter({ text: 'Kanal Sıfırlama' })
+          .setTimestamp();
+
+        await newChannel.send({ embeds: [confirmEmbed] });
+
+        console.log(`🔄 Kanal sıfırlandı: ${channelData.name} - ${message.author.username}`);
+      } catch (error) {
+        console.error('-resetle komutu hatası:', error);
+        message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
+    }
+
     // -sil komutunu kontrol et
     if (message.content.trim() === '-sil') {
       // Admin kontrolü
@@ -975,8 +1034,7 @@ client.on('messageCreate', async (message) => {
       console.log(`🗑️ ${deleted} mesaj silindi (${fetchedMessages} kontrol edilen) - ${message.author.username}`);
     }
   } catch (error) {
-    console.error('-sil komutu hatası:', error);
-    message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+    console.error('Mesaj komutu hatası:', error);
   }
 });
 
