@@ -1105,78 +1105,11 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-    // -sil komutunu kontrol et
-    if (message.content.trim() === '-sil') {
-      // Admin kontrolü
-      if (message.author.id !== OWNER_ID) {
-        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
-      }
+// ✅ MESAJ KOMUTU: -resetle (Kanalı sıfırla)
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
 
-      await message.reply('⏳ Siliniyor...');
-
-      // Bugünün başı ve sonu (Türkiye saati)
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      let deleted = 0;
-      let fetchedMessages = 0;
-      let lastMessageId = null;
-
-      // Tüm mesajları getir ve sil
-      while (true) {
-        const options = { limit: 100 };
-        if (lastMessageId) {
-          options.before = lastMessageId;
-        }
-
-        const messages = await message.channel.messages.fetch(options);
-        
-        if (messages.size === 0) break;
-
-        let hasOldMessages = false;
-
-        for (const msg of messages.values()) {
-          fetchedMessages++;
-          const msgDate = new Date(msg.createdTimestamp);
-
-          // Bugüne ait mi kontrol et
-          if (msgDate >= today && msgDate < tomorrow) {
-            try {
-              await msg.delete();
-              deleted++;
-            } catch (e) {
-              console.log('Mesaj silinemedi:', e.message);
-            }
-          } else if (msgDate < today) {
-            // Eski mesajlara ulaştık
-            hasOldMessages = true;
-            break;
-          }
-
-          lastMessageId = msg.id;
-        }
-
-        if (hasOldMessages || messages.size < 100) {
-          break;
-        }
-      }
-
-      // Sonuç mesajı
-      const resultMsg = await message.channel.send({ 
-        content: `✅ **${deleted}** mesaj silindi!`
-      });
-
-      // 3 saniye sonra sonuç mesajını sil
-      setTimeout(() => {
-        resultMsg.delete().catch(e => console.log('Sonuç mesajı silinemedi'));
-      }, 3000);
-
-      console.log(`🗑️ ${deleted} mesaj silindi (${fetchedMessages} kontrol edilen) - ${message.author.username}`);
-    }
-
+  try {
     // -resetle komutunu kontrol et (Kanalı sil ve ayarlarıyla birlikte geri oluştur)
     if (message.content.trim() === '-resetle') {
       // Admin kontrolü
