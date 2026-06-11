@@ -700,18 +700,29 @@
                     return;
                 }
 
-                grid.innerHTML = products.map(product => `
-                    <div class="product-card">
-                        <div class="product-name">${product.name}</div>
-                        <div class="product-info">
-                            <span class="product-quantity">📦 ${product.quantity} adet</span>
-                            <span class="product-credits">💰 ${product.credits} kredi</span>
+                grid.innerHTML = products.map(product => {
+                    const isOutOfStock = product.quantity <= 0;
+                    const availableAccounts = product.accounts ? product.accounts.filter(acc => !acc.used).length : 0;
+                    
+                    return `
+                        <div class="product-card" style="${isOutOfStock ? 'opacity: 0.6; border-color: #e74c3c;' : ''}">
+                            <div class="product-name">${product.name}</div>
+                            <div class="product-info">
+                                <span class="product-quantity" style="color: ${isOutOfStock ? '#e74c3c' : '#2ecc71'}">
+                                    📦 ${isOutOfStock ? 'Stokta Yok' : `${product.quantity} adet`}
+                                </span>
+                                <span class="product-credits">💰 ${product.credits} kredi</span>
+                            </div>
+                            ${availableAccounts > 0 ? `<small style="color: #95a5a6;">🎮 ${availableAccounts} hesap mevcut</small><br>` : ''}
+                            <button class="btn" 
+                                onclick="buyProduct('${product.id}', '${product.name}', ${product.credits})" 
+                                ${!currentUser || isOutOfStock ? 'disabled' : ''}
+                                style="${isOutOfStock ? 'background: #e74c3c; cursor: not-allowed;' : ''}">
+                                ${!currentUser ? 'Giriş Gerekli' : (isOutOfStock ? 'Stokta Yok' : 'Satın Al')}
+                            </button>
                         </div>
-                        <button class="btn" onclick="buyProduct('${product.id}', '${product.name}', ${product.credits})" ${!currentUser ? 'disabled' : ''}>
-                            ${currentUser ? 'Satın Al' : 'Giriş Gerekli'}
-                        </button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (error) {
                 console.error('Ürünler yüklenemedi:', error);
             }

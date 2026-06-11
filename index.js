@@ -608,22 +608,42 @@ app.post('/api/admin/approve-order', (req, res) => {
   
   // Bot'a DM gönder
   client.users.fetch(order.userDiscordId).then(userDM => {
-    const accountDetails = selectedAccounts.map((acc, i) => `**${i + 1}.** ${acc.details}`).join('\n');
+    const accountDetails = selectedAccounts.map(acc => acc.details).join('\n');
     
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
-      .setTitle('✅ Sipariş Onaylandı!')
+      .setTitle('🛍️ Satın Alma Başarılı!')
+      .setDescription(`**${user.name}** mağazasından satın aldığınız ürün aşağıda:`)
       .addFields(
-        { name: '📦 Ürün', value: order.productName, inline: true },
-        { name: '🔢 Adet', value: order.quantity.toString(), inline: true },
-        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true },
-        { name: '💳 Kalan Kredi', value: user.credits.toString(), inline: true }
+        { name: 'Ürün', value: order.productName, inline: true },
+        { name: 'Kategori', value: 'Oyun', inline: true },
+        { name: 'Ödenen Miktar', value: `💰 ${order.totalCost} Kredi`, inline: true }
       )
-      .setDescription(`🎮 **Hesap Bilgileri:**\n${accountDetails}`)
-      .setFooter({ text: 'Zwozez Discord Botu' })
+      .addFields(
+        { name: 'İçerik', value: `\`\`\`\n${accountDetails}\n\`\`\``, inline: false }
+      )
+      .addFields(
+        { 
+          name: 'Değerlendirme', 
+          value: `Ürünü **/değerlendirme** komutu ile değerlendirebilirsiniz!`, 
+          inline: false 
+        }
+      )
+      .setFooter({ 
+        text: `Teşekkürler! • ${user.name} • bugün saat ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` 
+      })
+      .setTimestamp();
+    
+    // Not mesajı ayrı olarak gönder
+    const noteEmbed = new EmbedBuilder()
+      .setColor(0xff9900)
+      .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!')
       .setTimestamp();
     
     userDM.send({ embeds: [embed] });
+    setTimeout(() => {
+      userDM.send({ embeds: [noteEmbed] });
+    }, 1000);
   }).catch(err => {
     console.log('DM gönderilemedi:', err);
   });
@@ -867,27 +887,83 @@ async function sendRandomProduct(user, type) {
   
   if (db.products.length === 0) {
     try {
-      await user.send('❌ Şu anda stokta ürün yok.');
+      const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('❌ Stok Bulunamadı')
+        .setDescription('Şu anda stokta ürün yok.')
+        .setTimestamp();
+      await user.send({ embeds: [embed] });
     } catch (e) {
       console.log('DM gönderilemedi');
     }
     return;
   }
   
-  const randomProduct = db.products[Math.floor(Math.random() * db.products.length)];
+  // Stokta olan ürünleri filtrele
+  const availableProducts = db.products.filter(p => {
+    const availableAccounts = p.accounts.filter(acc => !acc.used);
+    return p.quantity > 0 && availableAccounts.length > 0;
+  });
+  
+  if (availableProducts.length === 0) {
+    try {
+      const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('❌ Stok Bulunamadı')
+        .setDescription('Şu anda stokta mevcut hesap yok.')
+        .setTimestamp();
+      await user.send({ embeds: [embed] });
+    } catch (e) {
+      console.log('DM gönderilemedi');
+    }
+    return;
+  }
+  
+  const randomProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+  
+  // Random hesap seç
+  const availableAccounts = randomProduct.accounts.filter(acc => !acc.used);
+  const selectedAccount = availableAccounts[Math.floor(Math.random() * availableAccounts.length)];
+  
+  // Hesabı kullanılmış olarak işaretle
+  selectedAccount.used = true;
+  randomProduct.quantity -= 1;
+  
+  // Sistem logları
+  addSystemLog(db, type === 'boost' ? 'BOOST_ACCOUNT_GIVEN' : 'FREE_ACCOUNT_GIVEN', 
+    `${type} hesap verildi: ${user.username} - ${randomProduct.name}`, user.id);
+  
+  saveDatabase(db);
   
   const embed = new EmbedBuilder()
     .setColor(type === 'boost' ? 0xf39c12 : 0x2ecc71)
-    .setTitle(type === 'boost' ? '🚀 Boost Hesap!' : '🎁 Bedava Hesap!')
+    .setTitle(type === 'boost' ? '🚀 Boost Hediyesi!' : '🎁 Bedava Hediye!')
+    .setDescription(`**Zwozez** mağazasından ${type === 'boost' ? 'boost hediyeniz' : 'bedava hediyeniz'} aşağıda:`)
     .addFields(
-      { name: '📦 Ürün', value: randomProduct.name, inline: true },
-      { name: '💰 Değeri', value: `${randomProduct.credits} kredi`, inline: true }
+      { name: 'Ürün', value: randomProduct.name, inline: true },
+      { name: 'Kategori', value: 'Oyun', inline: true },
+      { name: 'Değer', value: `💰 ${randomProduct.credits} Kredi`, inline: true }
     )
-    .setDescription('Hesap bilgileri yakında admin tarafından gönderilecek.')
-    .setFooter({ text: 'Zwozez Discord Botu' });
+    .addFields(
+      { name: 'İçerik', value: `\`\`\`\n${selectedAccount.details}\n\`\`\``, inline: false }
+    )
+    .setFooter({ 
+      text: `Teşekkürler! • Zwozez • bugün saat ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` 
+    })
+    .setTimestamp();
+  
+  // Not mesajı ayrı olarak gönder
+  const noteEmbed = new EmbedBuilder()
+    .setColor(0xff9900)
+    .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!')
+    .setTimestamp();
   
   try {
     await user.send({ embeds: [embed] });
+    setTimeout(async () => {
+      await user.send({ embeds: [noteEmbed] });
+    }, 1000);
+    console.log(`🎮 ${type} hesap verildi: ${user.username} - ${randomProduct.name}`);
   } catch (e) {
     console.log('DM gönderilemedi');
   }
