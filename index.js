@@ -785,7 +785,47 @@ async function registerSlashCommands() {
       .addIntegerOption(option =>
         option.setName('adet')
           .setDescription('Kaç hak')
+          .setRequired(true)),
+    
+    // TICKET KOMUTLARı
+    new SlashCommandBuilder()
+      .setName('ticket')
+      .setDescription('Ticket aç'),
+    
+    new SlashCommandBuilder()
+      .setName('destekkur')
+      .setDescription('Destek talebi oluştur'),
+    
+    new SlashCommandBuilder()
+      .setName('sorumlu')
+      .setDescription('Sorumlu ekle (Owner Only)')
+      .addUserOption(option =>
+        option.setName('kullanici')
+          .setDescription('Sorumlu kullanıcı')
+          .setRequired(true)),
+    
+    // ÇEKİLİŞ KOMUTLARı
+    new SlashCommandBuilder()
+      .setName('çekiliş')
+      .setDescription('Çekiliş başlat')
+      .addIntegerOption(option =>
+        option.setName('süre')
+          .setDescription('Çekiliş süresi (saniye)')
           .setRequired(true))
+      .addIntegerOption(option =>
+        option.setName('kazanan')
+          .setDescription('Kaç kişi kazanacak')
+          .setRequired(true)),
+    
+    // LOG KOMUTU
+    new SlashCommandBuilder()
+      .setName('log')
+      .setDescription('Sohbet logları ve ses aktivitesi'),
+    
+    // SUNUCU BILGISI
+    new SlashCommandBuilder()
+      .setName('sunucu')
+      .setDescription('Sunucu bilgilerini göster')
   ];
 
   try {
@@ -803,84 +843,495 @@ async function registerSlashCommands() {
 }
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isCommand()) return;
+  if (interaction.isCommand()) {
+    const { commandName, options, user, guild } = interaction;
+    const db = getDatabase();
 
-  const { commandName, options, user, guild } = interaction;
-  const db = getDatabase();
-
-  if (commandName === 'boosthesap') {
-    // Boost kontrolü
-    try {
-      const member = await guild.members.fetch(user.id);
-      
-      if (!member.premiumSince) {
-        return interaction.reply({ content: '❌ Bu komutu kullanmak için sunucuya boost yapman gerekiyor!', ephemeral: true });
-      }
-      
-      const userId = user.id;
-      
-      if (!db.userRights[userId]) {
-        db.userRights[userId] = { boostRights: 4, freeRights: 0 };
+    if (commandName === 'boosthesap') {
+      try {
+        const member = await guild.members.fetch(user.id);
+        
+        if (!member.premiumSince) {
+          return interaction.reply({ content: '❌ Bu komutu kullanmak için sunucuya boost yapman gerekiyor!', ephemeral: true });
+        }
+        
+        const userId = user.id;
+        
+        if (!db.userRights[userId]) {
+          db.userRights[userId] = { boostRights: 4, freeRights: 0 };
+          saveDatabase(db);
+          
+          await sendRandomProduct(user, 'boost');
+          return interaction.reply({ content: '🎉 İlk boost hesabın! 4 hakkın var, şimdi 3 kaldı.', ephemeral: true });
+        }
+        
+        if (db.userRights[userId].boostRights <= 0) {
+          return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış!', ephemeral: true });
+        }
+        
+        db.userRights[userId].boostRights--;
         saveDatabase(db);
         
         await sendRandomProduct(user, 'boost');
-        return interaction.reply({ content: '🎉 İlk boost hesabın! 4 hakkın var, şimdi 3 kaldı.', ephemeral: true });
+        interaction.reply({ content: `✅ Boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
+        
+      } catch (error) {
+        interaction.reply({ content: '❌ Boost durumun kontrol edilemedi!', ephemeral: true });
+      }
+    }
+
+    if (commandName === 'bedavahesap') {
+      const userId = user.id;
+      
+      if (!db.userRights[userId] || db.userRights[userId].freeRights <= 0) {
+        return interaction.reply({ content: '❌ Bedava hesap hakkın yok!', ephemeral: true });
       }
       
-      if (db.userRights[userId].boostRights <= 0) {
-        return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış!', ephemeral: true });
-      }
-      
-      db.userRights[userId].boostRights--;
+      db.userRights[userId].freeRights--;
       saveDatabase(db);
       
-      await sendRandomProduct(user, 'boost');
-      interaction.reply({ content: `✅ Boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
+      await sendRandomProduct(user, 'free');
+      interaction.reply({ content: `✅ Bedava hesap gönderildi! Kalan hakkın: ${db.userRights[userId].freeRights}`, ephemeral: true });
+    }
+
+    if (commandName === 'hakver') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+      }
       
-    } catch (error) {
-      interaction.reply({ content: '❌ Boost durumun kontrol edilemedi!', ephemeral: true });
+      const tip = options.getString('tip');
+      const targetUser = options.getUser('kullanici');
+      const adet = options.getInteger('adet');
+      
+      if (!db.userRights[targetUser.id]) {
+        db.userRights[targetUser.id] = { boostRights: 0, freeRights: 0 };
+      }
+      
+      if (tip === 'boost') {
+        db.userRights[targetUser.id].boostRights += adet;
+      } else {
+        db.userRights[targetUser.id].freeRights += adet;
+      }
+      
+      saveDatabase(db);
+      
+      const tipText = tip === 'boost' ? 'Boost Hesap' : 'Bedava Hesap';
+      interaction.reply({ content: `✅ ${targetUser.username} kullanıcısına ${adet} adet ${tipText} hakkı verildi!`, ephemeral: true });
+    }
+
+    // TICKET KOMUTU
+    if (commandName === 'ticket') {
+      const ticketEmbed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🎫 Ticket Sistemi')
+        .setDescription('Destek talebiniz için bir ticket oluşturun.')
+        .setFooter({ text: 'Butona tıklayarak başlayın' });
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('create_ticket')
+            .setLabel('Ticket Aç')
+            .setStyle((require('discord.js')).ButtonStyle.Primary)
+            .setEmoji('🎫')
+        );
+
+      interaction.reply({ embeds: [ticketEmbed], components: [row], ephemeral: true });
+    }
+
+    // DESTEK KUR KOMUTU
+    if (commandName === 'destekkur') {
+      const supportEmbed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('💬 Destek Talebi')
+        .setDescription('Destek talebinizi oluşturmak için butona tıklayın.')
+        .setFooter({ text: 'Ekibimiz kısa sürede yanıt verecektir' });
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('create_support')
+            .setLabel('Destek Talebi Aç')
+            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setEmoji('💬')
+        );
+
+      interaction.reply({ embeds: [supportEmbed], components: [row], ephemeral: true });
+    }
+
+    // SORUMLU EKLE KOMUTU
+    if (commandName === 'sorumlu') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+      }
+
+      const targetUser = options.getUser('kullanici');
+      
+      if (!db.staff) db.staff = {};
+      if (!db.staff.supportStaff) db.staff.supportStaff = [];
+      
+      if (db.staff.supportStaff.includes(targetUser.id)) {
+        return interaction.reply({ content: `⚠️ ${targetUser.username} zaten sorumlu listesinde!`, ephemeral: true });
+      }
+
+      db.staff.supportStaff.push(targetUser.id);
+      saveDatabase(db);
+
+      interaction.reply({ content: `✅ ${targetUser.username} sorumlu listesine eklendi!`, ephemeral: true });
+    }
+
+    // ÇEKİLİŞ KOMUTU
+    if (commandName === 'çekiliş') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+      }
+
+      const duration = options.getInteger('süre');
+      const winnerCount = options.getInteger('kazanan');
+
+      // Stokta olan ürünleri al
+      const availableProducts = db.products.filter(p => {
+        const acc = p.accounts.filter(a => !a.used);
+        return p.quantity > 0 && acc.length > 0;
+      });
+
+      if (availableProducts.length === 0) {
+        return interaction.reply({ content: '❌ Stokta ürün yok! Çekiliş başlatılamıyor.', ephemeral: true });
+      }
+
+      const giveawayEmbed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle('🎉 Çekiliş!')
+        .setDescription(`**Ödül:** ${availableProducts[Math.floor(Math.random() * availableProducts.length)].name}\n**Kazanan Sayısı:** ${winnerCount}\n**Süre:** ${duration} saniye`)
+        .addFields(
+          { name: 'Katılmak İçin', value: 'Aşağıdaki butona tıklayın!', inline: false }
+        )
+        .setFooter({ text: `Çekiliş ${duration} saniye sonra sona erecek` });
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('join_giveaway')
+            .setLabel('Çekilişe Katıl')
+            .setStyle((require('discord.js')).ButtonStyle.Success)
+            .setEmoji('🎁')
+        );
+
+      const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [row], fetchReply: true });
+
+      // Çekiliş veritabanı
+      if (!db.giveaways) db.giveaways = {};
+      db.giveaways[msg.id] = {
+        id: msg.id,
+        product: availableProducts[Math.floor(Math.random() * availableProducts.length)],
+        winners: winnerCount,
+        participants: [],
+        endTime: Date.now() + (duration * 1000),
+        channelId: interaction.channelId,
+        messageId: msg.id
+      };
+      saveDatabase(db);
+
+      // Süre bitince çekiliş sonuçlandır
+      setTimeout(() => {
+        endGiveaway(msg.id, db);
+      }, duration * 1000);
+    }
+
+    // LOG KOMUTU
+    if (commandName === 'log') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+      }
+
+      // Log kanalı oluştur
+      let logChannel = guild.channels.cache.find(ch => ch.name === 'bot-logları');
+      
+      if (!logChannel) {
+        logChannel = await guild.channels.create({
+          name: 'bot-logları',
+          type: 0, // Text channel
+          permissionOverwrites: [
+            {
+              id: guild.id,
+              deny: ['ViewChannel']
+            },
+            {
+              id: client.user.id,
+              allow: ['ViewChannel', 'SendMessages']
+            }
+          ]
+        });
+      }
+
+      // Ses kanallarındaki aktiviteyi kontrol et
+      const voiceChannels = guild.channels.cache.filter(ch => ch.type === 2); // Voice channels
+      let voiceActivityLog = '📊 **Ses Kanal Aktivitesi:**\n\n';
+
+      for (const [, channel] of voiceChannels) {
+        const members = channel.members.filter(m => !m.user.bot);
+        if (members.size > 0) {
+          voiceActivityLog += `🔊 ${channel.name}: ${members.size} kişi\n`;
+          members.forEach(m => {
+            const voiceState = m.voice;
+            voiceActivityLog += `  • ${m.user.username} (${voiceState.streaming ? '📡 Yayın' : 'Dinliyor'})\n`;
+          });
+        }
+      }
+
+      const logEmbed = new EmbedBuilder()
+        .setColor(0x34495e)
+        .setTitle('📋 Bot Logları')
+        .setDescription(voiceActivityLog || 'Şu anda hiç kimse ses kanalında değil.')
+        .addFields(
+          { name: '👥 Sunucu Üye Sayısı', value: `${guild.memberCount}`, inline: true },
+          { name: '📅 Tarih', value: `${new Date().toLocaleString('tr-TR')}`, inline: true }
+        )
+        .setFooter({ text: 'Log sistemi aktif' });
+
+      await logChannel.send({ embeds: [logEmbed] });
+      interaction.reply({ content: `✅ Loglar **#${logChannel.name}** kanalına gönderildi!`, ephemeral: true });
+    }
+
+    // SUNUCU BİLGİ KOMUTU
+    if (commandName === 'sunucu') {
+      const serverEmbed = new EmbedBuilder()
+        .setColor(0x1abc9c)
+        .setTitle(`🏠 ${guild.name} - Sunucu Bilgileri`)
+        .setThumbnail(guild.iconURL())
+        .addFields(
+          { name: '🆔 Sunucu ID', value: guild.id, inline: true },
+          { name: '👑 Kurucu', value: guild.ownerId === OWNER_ID ? '<@' + OWNER_ID + '>' : 'Bilinmiyor', inline: true },
+          { name: '👥 Üye Sayısı', value: `${guild.memberCount}`, inline: true },
+          { name: '📅 Oluşturulma Tarihi', value: `${guild.createdAt.toLocaleDateString('tr-TR')}`, inline: true },
+          { name: '⭐ Boost Sayısı', value: `${guild.premiumSubscriptionCount || 0}`, inline: true },
+          { name: '🎭 Rol Sayısı', value: `${guild.roles.cache.size}`, inline: true }
+        )
+        .setFooter({ text: `Kurucunuz: ${guild.ownerId === OWNER_ID ? 'umutpapa123' : 'Başkası'}` });
+
+      interaction.reply({ embeds: [serverEmbed], ephemeral: true });
     }
   }
 
-  if (commandName === 'bedavahesap') {
-    const userId = user.id;
-    
-    if (!db.userRights[userId] || db.userRights[userId].freeRights <= 0) {
-      return interaction.reply({ content: '❌ Bedava hesap hakkın yok!', ephemeral: true });
-    }
-    
-    db.userRights[userId].freeRights--;
-    saveDatabase(db);
-    
-    await sendRandomProduct(user, 'free');
-    interaction.reply({ content: `✅ Bedava hesap gönderildi! Kalan hakkın: ${db.userRights[userId].freeRights}`, ephemeral: true });
-  }
+  // BUTTON INTERACTIONS
+  if (interaction.isButton()) {
+    const db = getDatabase();
+    const { customId, user, guild, channel } = interaction;
 
-  if (commandName === 'hakver') {
-    if (user.id !== OWNER_ID) {
-      return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
+    // TICKET BUTTONS
+    if (customId === 'create_ticket') {
+      const ticketChannel = await guild.channels.create({
+        name: `ticket-${user.username}`,
+        type: 0,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: ['ViewChannel']
+          },
+          {
+            id: user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+          }
+        ]
+      });
+
+      const ticketEmbed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🎫 Ticket Açıldı')
+        .setDescription(`Merhaba ${user}! Destek ekibimiz kısa sürede yanıt verecektir.`)
+        .setTimestamp();
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('Ticketi Kapat')
+            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setEmoji('❌')
+        );
+
+      await ticketChannel.send({ embeds: [ticketEmbed], components: [row] });
+      
+      // Sorumlulara bildirim
+      if (db.staff && db.staff.supportStaff) {
+        for (const staffId of db.staff.supportStaff) {
+          try {
+            const staffUser = await client.users.fetch(staffId);
+            await staffUser.send(`📝 Yeni ticket: <#${ticketChannel.id}> - ${user.username}`);
+          } catch (e) {
+            console.log('Staff bildirim gönderilemedi');
+          }
+        }
+      }
+
+      interaction.reply({ content: `✅ Ticket oluşturuldu: <#${ticketChannel.id}>`, ephemeral: true });
     }
-    
-    const tip = options.getString('tip');
-    const targetUser = options.getUser('kullanici');
-    const adet = options.getInteger('adet');
-    
-    if (!db.userRights[targetUser.id]) {
-      db.userRights[targetUser.id] = { boostRights: 0, freeRights: 0 };
+
+    if (customId === 'close_ticket') {
+      if (channel.name.startsWith('ticket-')) {
+        await channel.delete();
+      }
     }
-    
-    if (tip === 'boost') {
-      db.userRights[targetUser.id].boostRights += adet;
-    } else {
-      db.userRights[targetUser.id].freeRights += adet;
+
+    // DESTEK BUTTONS
+    if (customId === 'create_support') {
+      const supportChannel = await guild.channels.create({
+        name: `destek-${user.username}`,
+        type: 0,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: ['ViewChannel']
+          },
+          {
+            id: user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+          }
+        ]
+      });
+
+      const supportEmbed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('💬 Destek Talebi Oluşturuldu')
+        .setDescription(`${user} tarafından destek talebi açıldı.`)
+        .setTimestamp();
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('support_ustlen')
+            .setLabel('Talebi Üstlen')
+            .setStyle((require('discord.js')).ButtonStyle.Primary),
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('support_kapat')
+            .setLabel('Talebi Kapat')
+            .setStyle((require('discord.js')).ButtonStyle.Danger)
+        );
+
+      await supportChannel.send({ embeds: [supportEmbed], components: [row] });
+      interaction.reply({ content: `✅ Destek talebi oluşturuldu: <#${supportChannel.id}>`, ephemeral: true });
     }
-    
-    saveDatabase(db);
-    
-    const tipText = tip === 'boost' ? 'Boost Hesap' : 'Bedava Hesap';
-    interaction.reply({ content: `✅ ${targetUser.username} kullanıcısına ${adet} adet ${tipText} hakkı verildi!`, ephemeral: true });
+
+    if (customId === 'support_ustlen') {
+      if (!db.staff || !db.staff.supportStaff.includes(user.id)) {
+        return interaction.reply({ content: '❌ Yalnızca sorumlular bu işlemi yapabilir!', ephemeral: true });
+      }
+
+      const msg = await channel.messages.fetch(interaction.message.id);
+      const embed = msg.embeds[0];
+      embed.data.fields = embed.data.fields || [];
+      embed.data.fields.push({ name: '👤 Sorumlu', value: `${user}`, inline: false });
+
+      const row = new (require('discord.js')).ActionRowBuilder()
+        .addComponents(
+          new (require('discord.js')).ButtonBuilder()
+            .setCustomId('support_kapat')
+            .setLabel('Talebi Kapat')
+            .setStyle((require('discord.js')).ButtonStyle.Danger)
+        );
+
+      await msg.edit({ embeds: [embed], components: [row] });
+      interaction.reply({ content: `✅ Destek talebini üstlendin!`, ephemeral: true });
+    }
+
+    if (customId === 'support_kapat' || customId === 'close_ticket') {
+      if (channel.name.startsWith('destek-') || channel.name.startsWith('ticket-')) {
+        await channel.delete();
+      }
+    }
+
+    // ÇEKİLİŞ BUTTONS
+    if (customId === 'join_giveaway') {
+      const msg = interaction.message;
+      if (db.giveaways && db.giveaways[msg.id]) {
+        const giveaway = db.giveaways[msg.id];
+        
+        if (!giveaway.participants.includes(user.id)) {
+          giveaway.participants.push(user.id);
+          saveDatabase(db);
+          interaction.reply({ content: '✅ Çekilişe katıldın!', ephemeral: true });
+        } else {
+          interaction.reply({ content: '⚠️ Zaten çekilişte varsın!', ephemeral: true });
+        }
+      }
+    }
   }
 });
+
+async function endGiveaway(messageId, db) {
+  if (!db.giveaways || !db.giveaways[messageId]) return;
+
+  const giveaway = db.giveaways[messageId];
+  const { participants, product, winners, channelId, messageId: msgId } = giveaway;
+
+  if (participants.length === 0) {
+    const channel = await client.channels.fetch(channelId);
+    const embed = new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setTitle('❌ Çekiliş Sona Erdi')
+      .setDescription('Hiç katılımcı olmadığı için çekiliş iptal edildi.')
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    delete db.giveaways[messageId];
+    saveDatabase(db);
+    return;
+  }
+
+  // Kazananları seç
+  const selectedWinners = [];
+  const shuffled = [...participants].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < Math.min(winners, shuffled.length); i++) {
+    selectedWinners.push(shuffled[i]);
+  }
+
+  const channel = await client.channels.fetch(channelId);
+  let winnersText = selectedWinners.map(id => `<@${id}>`).join(', ');
+
+  const resultEmbed = new EmbedBuilder()
+    .setColor(0x2ecc71)
+    .setTitle('🎉 Çekiliş Sona Erdi!')
+    .addFields(
+      { name: '🎁 Ödül', value: product.name, inline: true },
+      { name: '👑 Kazananlar', value: winnersText, inline: false },
+      { name: '📊 Katılımcı Sayısı', value: `${participants.length}`, inline: true }
+    )
+    .setTimestamp();
+
+  await channel.send({ embeds: [resultEmbed] });
+
+  // Kazananlara DM gönder
+  for (const winnerId of selectedWinners) {
+    try {
+      const winnerUser = await client.users.fetch(winnerId);
+      const availableAccounts = product.accounts.filter(acc => !acc.used);
+      
+      if (availableAccounts.length > 0) {
+        const selectedAccount = availableAccounts[0];
+        selectedAccount.used = true;
+        product.quantity -= 1;
+
+        const winEmbed = new EmbedBuilder()
+          .setColor(0xf1c40f)
+          .setTitle('🏆 Çekiliş Kazandınız!')
+          .setDescription('Tebrikler! Çekilişi kazandınız!')
+          .addFields(
+            { name: '🎁 Ödül', value: product.name, inline: true },
+            { name: '💰 Değeri', value: `${product.credits} kredi`, inline: true },
+            { name: '🎮 Hesap', value: `\`\`\`\n${selectedAccount.details}\n\`\`\``, inline: false }
+          )
+          .setTimestamp();
+
+        await winnerUser.send({ embeds: [winEmbed] });
+      }
+    } catch (e) {
+      console.log('DM gönderilemedi:', winnerId);
+    }
+  }
+
+  delete db.giveaways[messageId];
+  saveDatabase(db);
+}
 
 async function sendRandomProduct(user, type) {
   const db = getDatabase();
