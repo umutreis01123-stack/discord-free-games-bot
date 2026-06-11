@@ -315,10 +315,25 @@
             <p>Güvenli ve hızlı oyun hesabı al</p>
         </div>
 
-        <!-- User Info -->
+        <!-- User Info - Geliştirilmiş -->
         <div id="userInfo" class="user-info" style="display: none;">
-            <h3>Hoş geldiniz, <span id="userName"></span>!</h3>
-            <p>💰 Krediniz: <span id="userCredits">0</span></p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
+                <div style="background: #0f3460; padding: 15px; border-radius: 8px;">
+                    <h3>Hoş geldiniz!</h3>
+                    <p style="color: #3498db; font-size: 1.2em; font-weight: bold;"><span id="userName"></span></p>
+                    <small style="color: #95a5a6;">Üye tarihi: <span id="userRegDate"></span></small>
+                </div>
+                <div style="background: #0f3460; padding: 15px; border-radius: 8px;">
+                    <h3>💰 Krediniz</h3>
+                    <p style="color: #2ecc71; font-size: 1.5em; font-weight: bold;"><span id="userCredits">0</span></p>
+                    <small style="color: #95a5a6;">Toplam kazanılan: <span id="totalEarned">0</span></small>
+                </div>
+                <div style="background: #0f3460; padding: 15px; border-radius: 8px;">
+                    <h3>📊 İstatistikler</h3>
+                    <p style="color: #e94560;">Toplam harcanan: <span id="totalSpent">0</span></p>
+                    <p style="color: #f39c12;">Giriş sayısı: <span id="loginCount">0</span></p>
+                </div>
+            </div>
         </div>
 
         <!-- Products -->
@@ -334,6 +349,7 @@
                 <button class="active" onclick="switchAdminTab('products')">Ürünler</button>
                 <button onclick="switchAdminTab('users')">Kullanıcılar</button>
                 <button onclick="switchAdminTab('orders')">Siparişler</button>
+                <button onclick="switchAdminTab('stats')">İstatistikler</button>
             </div>
 
             <!-- Products Tab -->
@@ -414,6 +430,19 @@
                 <h3>Bekleyen Siparişler</h3>
                 <div id="ordersList" class="orders-list">
                     <p style="color: #7f8c8d;">Siparişler yükleniyor...</p>
+                </div>
+            </div>
+
+            <!-- Stats Tab -->
+            <div id="adminStats" class="admin-tab-content">
+                <h3>Sistem İstatistikleri</h3>
+                <div id="statsContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- İstatistikler buraya yüklenecek -->
+                </div>
+                
+                <h3>Son Kredi İşlemleri</h3>
+                <div id="recentCredits" class="orders-list">
+                    <p style="color: #7f8c8d;">Kredi geçmişi yükleniyor...</p>
                 </div>
             </div>
         </div>
@@ -610,6 +639,15 @@
                 `;
                 document.getElementById('userName').textContent = currentUser.name;
                 document.getElementById('userCredits').textContent = currentUser.credits;
+                document.getElementById('totalEarned').textContent = currentUser.totalEarned || 0;
+                document.getElementById('totalSpent').textContent = currentUser.totalSpent || 0;
+                document.getElementById('loginCount').textContent = currentUser.loginCount || 0;
+                
+                if (currentUser.registrationDate) {
+                    const regDate = new Date(currentUser.registrationDate).toLocaleDateString('tr-TR');
+                    document.getElementById('userRegDate').textContent = regDate;
+                }
+                
                 userInfo.style.display = 'block';
             } else {
                 headerButtons.innerHTML = `
@@ -750,6 +788,85 @@
             // Tab değiştiğinde ilgili verileri yükle
             if (tab === 'orders') {
                 loadPendingOrders();
+            } else if (tab === 'stats') {
+                loadAdminStats();
+            }
+        }
+
+        // Admin İstatistikleri Yükle
+        async function loadAdminStats() {
+            try {
+                // Sistem istatistikleri
+                const statsResponse = await fetch('/api/admin/stats');
+                const stats = await statsResponse.json();
+                
+                const statsContainer = document.getElementById('statsContainer');
+                statsContainer.innerHTML = `
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #3498db; margin-bottom: 10px;">👥 Kullanıcılar</h4>
+                        <p style="font-size: 1.5em; color: #2ecc71; margin: 5px 0;">${stats.totalUsers}</p>
+                        <small style="color: #95a5a6;">Aktif: ${stats.activeUsers}</small>
+                    </div>
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #f39c12; margin-bottom: 10px;">📦 Ürünler</h4>
+                        <p style="font-size: 1.5em; color: #2ecc71; margin: 5px 0;">${stats.totalProducts}</p>
+                        <small style="color: #95a5a6;">Aktif stok</small>
+                    </div>
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">🛒 Siparişler</h4>
+                        <p style="font-size: 1.2em; color: #f39c12; margin: 5px 0;">Bekleyen: ${stats.pendingOrders}</p>
+                        <p style="font-size: 1.2em; color: #2ecc71; margin: 5px 0;">Tamamlanan: ${stats.completedOrders}</p>
+                    </div>
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #9b59b6; margin-bottom: 10px;">💰 Krediler</h4>
+                        <p style="font-size: 1.2em; color: #2ecc71; margin: 5px 0;">Dağıtılan: ${stats.totalCreditsDistributed}</p>
+                        <p style="font-size: 1.2em; color: #e74c3c; margin: 5px 0;">Harcanan: ${stats.totalCreditsSpent}</p>
+                    </div>
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #1abc9c; margin-bottom: 10px;">📈 Bu Hafta</h4>
+                        <p style="font-size: 1.5em; color: #2ecc71; margin: 5px 0;">${stats.recentRegistrations}</p>
+                        <small style="color: #95a5a6;">Yeni kayıt</small>
+                    </div>
+                    <div style="background: #16213e; padding: 15px; border-radius: 8px; text-align: center;">
+                        <h4 style="color: #34495e; margin-bottom: 10px;">🗃️ Veritabanı</h4>
+                        <p style="font-size: 1em; color: #ecf0f1; margin: 5px 0;">v${stats.database.version}</p>
+                        <small style="color: #95a5a6;">${new Date(stats.database.lastModified).toLocaleDateString('tr-TR')}</small>
+                    </div>
+                `;
+
+                // Kredi geçmişi (backend'de API eklenecek)
+                try {
+                    const creditsResponse = await fetch('/api/admin/recent-credits');
+                    const credits = await creditsResponse.json();
+                    
+                    const recentCredits = document.getElementById('recentCredits');
+                    if (credits.length === 0) {
+                        recentCredits.innerHTML = '<p style="color: #7f8c8d; text-align: center;">Kredi işlemi bulunamadı</p>';
+                    } else {
+                        recentCredits.innerHTML = credits.map(credit => `
+                            <div class="user-item" style="border-left-color: ${credit.type === 'earned' ? '#2ecc71' : credit.type === 'spent' ? '#e74c3c' : '#f39c12'};">
+                                <div style="display: flex; justify-content: between; align-items: center;">
+                                    <div>
+                                        <strong>${credit.type === 'earned' ? '📈' : credit.type === 'spent' ? '📉' : '🎁'} ${credit.userName || 'Bilinmeyen'}</strong><br>
+                                        <span style="color: #95a5a6;">${credit.description}</span><br>
+                                        <small style="color: #7f8c8d;">${new Date(credit.timestamp).toLocaleString('tr-TR')}</small>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <span style="color: ${credit.amount > 0 ? '#2ecc71' : '#e74c3c'}; font-size: 1.2em; font-weight: bold;">
+                                            ${credit.amount > 0 ? '+' : ''}${credit.amount}
+                                        </span><br>
+                                        <small style="color: #95a5a6;">Bakiye: ${credit.balanceAfter}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } catch (error) {
+                    document.getElementById('recentCredits').innerHTML = '<p style="color: #e74c3c; text-align: center;">Kredi geçmişi yüklenemedi</p>';
+                }
+                
+            } catch (error) {
+                console.error('İstatistikler yüklenemedi:', error);
             }
         }
 
@@ -768,14 +885,23 @@
                     });
                 });
 
-                // Load users list
+                // Load users list with detailed info
                 const usersList = document.getElementById('usersList');
                 usersList.innerHTML = users.map(user => `
-                    <div class="user-item">
-                        <strong>👤 ${user.name}</strong><br>
-                        <span style="color: #3498db;">🆔 ${user.discordId}</span><br>
-                        <span style="color: #95a5a6;">📧 ${user.email}</span><br>
-                        <span style="color: #f39c12;">💰 ${user.credits} kredi</span>
+                    <div class="user-item" style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: center;">
+                        <div>
+                            <strong>👤 ${user.name}</strong><br>
+                            <span style="color: #3498db;">🆔 ${user.discordId}</span><br>
+                            <span style="color: #95a5a6;">📧 ${user.email}</span><br>
+                            <span style="color: #f39c12;">💰 ${user.credits} kredi</span>
+                            ${user.totalSpent ? `<br><small style="color: #e74c3c;">Harcanan: ${user.totalSpent}</small>` : ''}
+                            ${user.totalEarned ? `<br><small style="color: #2ecc71;">Kazanılan: ${user.totalEarned}</small>` : ''}
+                        </div>
+                        <div style="text-align: right;">
+                            <button class="btn" style="padding: 5px 10px; font-size: 0.8em; margin-bottom: 5px;" onclick="quickGiveCredits('${user.id}', '${user.name}', 10)">+10</button><br>
+                            <button class="btn" style="padding: 5px 10px; font-size: 0.8em; margin-bottom: 5px;" onclick="quickGiveCredits('${user.id}', '${user.name}', 50)">+50</button><br>
+                            <button class="btn" style="padding: 5px 10px; font-size: 0.8em;" onclick="quickGiveCredits('${user.id}', '${user.name}', 100)">+100</button>
+                        </div>
                     </div>
                 `).join('');
             } catch (error) {
@@ -796,6 +922,41 @@
 
             // Load pending orders
             loadPendingOrders();
+        }
+
+        // Hızlı kredi verme fonksiyonu
+        async function quickGiveCredits(userId, userName, amount) {
+            if (!confirm(`${userName} kullanıcısına ${amount} kredi vermek istediğinizden emin misiniz?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/give-credits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId, amount, reason: `Hızlı kredi verme (+${amount})` })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(`✅ ${userName} kullanıcısına ${amount} kredi verildi!`);
+                    
+                    // Admin verilerini yenile
+                    await loadAdminData();
+                    
+                    // Eğer kredi verilen kullanıcı şu anki kullanıcıysa, onun bilgilerini de güncelle
+                    if (currentUser && currentUser.id === userId) {
+                        await refreshUserData();
+                    }
+                    
+                    console.log(`💰 Hızlı kredi: ${userName} +${amount} kredi`);
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
         }
 
         async function loadPendingOrders() {
@@ -864,9 +1025,18 @@
 
                 if (response.ok) {
                     alert('✅ Sipariş onaylandı! Rastgele hesaplar seçildi ve Discord DM ile gönderildi!');
-                    loadPendingOrders();
-                    loadAdminData(); // Kullanıcı kredilerini güncelle
-                    loadProducts(); // Stok miktarlarını güncelle
+                    
+                    // Tüm verileri yenile
+                    await loadPendingOrders();
+                    await loadAdminData();
+                    await loadProducts();
+                    
+                    // Eğer onaylanan sipariş şu anki kullanıcıya aitse, bilgilerini güncelle
+                    if (currentUser) {
+                        await refreshUserData();
+                    }
+                    
+                    console.log('✅ Sipariş onaylandı:', orderId);
                 } else {
                     alert('❌ ' + data.error);
                 }
@@ -917,20 +1087,35 @@
             
             const userId = document.getElementById('creditUserId').value;
             const amount = document.getElementById('creditAmount').value;
+            const reason = 'Admin tarafından verildi';
+
+            if (!userId || !amount) {
+                alert('❌ Kullanıcı ve kredi miktarı seçin!');
+                return;
+            }
 
             try {
                 const response = await fetch('/api/admin/give-credits', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, amount })
+                    body: JSON.stringify({ userId, amount: parseInt(amount), reason })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('✅ Kredi verildi!');
+                    alert(`✅ ${data.message}`);
                     event.target.reset();
-                    loadAdminData();
+                    
+                    // Admin verilerini yenile
+                    await loadAdminData();
+                    
+                    // Eğer kredi verilen kullanıcı şu anki kullanıcıysa, onun bilgilerini de güncelle
+                    if (currentUser && currentUser.id === userId) {
+                        await refreshUserData();
+                    }
+                    
+                    console.log(`💰 Kredi verildi: ${data.oldCredits} → ${data.newCredits}`);
                 } else {
                     alert('❌ ' + data.error);
                 }

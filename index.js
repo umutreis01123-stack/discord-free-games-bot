@@ -20,35 +20,156 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-// Veritabanı
+// Güçlü Veritabanı Sistemi
 const DB_FILE = (process.env.NODE_ENV || 'development') === 'production' 
   ? '/tmp/database.json' 
   : 'database.json';
 
+const BACKUP_DIR = 'backups';
+
+// Backup klasörünü oluştur
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+function createBackup(db) {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = path.join(BACKUP_DIR, `database-${timestamp}.json`);
+    fs.writeFileSync(backupFile, JSON.stringify(db, null, 2));
+    
+    // Eski backupları temizle (son 10 tanesini sakla)
+    const backups = fs.readdirSync(BACKUP_DIR)
+      .filter(file => file.startsWith('database-') && file.endsWith('.json'))
+      .sort()
+      .reverse();
+    
+    if (backups.length > 10) {
+      backups.slice(10).forEach(file => {
+        fs.unlinkSync(path.join(BACKUP_DIR, file));
+      });
+    }
+  } catch (e) {
+    console.log('Backup oluşturulamadı:', e.message);
+  }
+}
+
 function getDatabase() {
   try {
     if (fs.existsSync(DB_FILE)) {
-      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      
+      // Veritabanı yapısını kontrol et ve eksik alanları ekle
+      if (!data.metadata) {
+        data.metadata = {
+          version: '2.0',
+          created: new Date().toISOString(),
+          lastModified: new Date().toISOString(),
+          totalUsers: 0,
+          totalOrders: 0
+        };
+      }
+      
+      if (!data.users) data.users = [];
+      if (!data.products) data.products = [];
+      if (!data.userRights) data.userRights = {};
+      if (!data.pendingOrders) data.pendingOrders = [];
+      if (!data.completedOrders) data.completedOrders = [];
+      if (!data.creditHistory) data.creditHistory = [];
+      if (!data.loginHistory) data.loginHistory = [];
+      if (!data.systemLogs) data.systemLogs = [];
+      
+      return data;
     }
   } catch (e) {
     console.log('DB okunamadı:', e.message);
+    
+    // Backup'dan geri yüklemeyi dene
+    try {
+      const backups = fs.readdirSync(BACKUP_DIR)
+        .filter(file => file.startsWith('database-') && file.endsWith('.json'))
+        .sort()
+        .reverse();
+      
+      if (backups.length > 0) {
+        console.log('Backup\'dan geri yükleniyor:', backups[0]);
+        const backupData = JSON.parse(fs.readFileSync(path.join(BACKUP_DIR, backups[0]), 'utf8'));
+        return backupData;
+      }
+    } catch (backupError) {
+      console.log('Backup geri yüklenemedi:', backupError.message);
+    }
   }
   
+  // Yeni veritabanı oluştur
   return {
+    metadata: {
+      version: '2.0',
+      created: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      totalUsers: 0,
+      totalOrders: 0
+    },
     users: [],
     products: [],
-    userRights: {}, // userId -> { boostRights: 0, freeRights: 0 }
+    userRights: {},
     pendingOrders: [],
-    completedOrders: []
+    completedOrders: [],
+    creditHistory: [], // Kredi işlem geçmişi
+    loginHistory: [], // Giriş geçmişi
+    systemLogs: [] // Sistem logları
   };
 }
 
 function saveDatabase(db) {
   try {
+    // Metadata güncelle
+    db.metadata.lastModified = new Date().toISOString();
+    db.metadata.totalUsers = db.users.length;
+    db.metadata.totalOrders = db.completedOrders.length;
+    
+    // Her kaydetmeden önce backup al
+    createBackup(db);
+    
+    // Veritabanını kaydet
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    
+    console.log('✅ Veritabanı kaydedildi:', new Date().toISOString());
   } catch (e) {
-    console.error('DB kaydedilemedi:', e.message);
+    console.error('❌ DB kaydedilemedi:', e.message);
   }
+}
+
+function addSystemLog(db, action, details, userId = null) {
+  const log = {
+    id: Date.now().toString() + Math.random(),
+    timestamp: new Date().toISOString(),
+    action,
+    details,
+    userId,
+    ip: 'system'
+  };
+  
+  db.systemLogs.push(log);
+  
+  // Son 1000 log'u sakla
+  if (db.systemLogs.length > 1000) {
+    db.systemLogs = db.systemLogs.slice(-1000);
+  }
+}
+
+function addCreditHistory(db, userId, amount, type, description) {
+  const history = {
+    id: Date.now().toString() + Math.random(),
+    userId,
+    amount,
+    type, // 'earned', 'spent', 'gifted'
+    description,
+    timestamp: new Date().toISOString(),
+    balanceAfter: db.users.find(u => u.id === userId)?.credits || 0
+  };
+  
+  db.creditHistory.push(history);
 }
 
 const ADMIN_USER = 'umut';
@@ -61,54 +182,151 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Kayıt Ol
+// Kayıt Ol - Geliştirilmiş Sistem
 app.post('/api/register', (req, res) => {
   const { name, discordId, email, password } = req.body;
   
+  // Veri doğrulama
   if (!name || !discordId || !email || !password) {
     return res.status(400).json({ error: 'Tüm alanlar gerekli' });
   }
   
-  const db = getDatabase();
-  
-  if (db.users.some(u => u.discordId === discordId || u.email === email)) {
-    return res.status(400).json({ error: 'Bu Discord ID veya E-posta zaten kayıtlı' });
+  // Veri formatı kontrolleri
+  if (name.length < 2 || name.length > 50) {
+    return res.status(400).json({ error: 'İsim 2-50 karakter arası olmalı' });
   }
   
+  if (discordId.length < 10 || discordId.length > 20) {
+    return res.status(400).json({ error: 'Discord ID formatı hatalı' });
+  }
+  
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Şifre en az 6 karakter olmalı' });
+  }
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'E-posta formatı hatalı' });
+  }
+  
+  const db = getDatabase();
+  
+  // Mevcut kullanıcı kontrolü
+  if (db.users.some(u => u.discordId === discordId)) {
+    return res.status(400).json({ error: 'Bu Discord ID zaten kayıtlı' });
+  }
+  
+  if (db.users.some(u => u.email === email)) {
+    return res.status(400).json({ error: 'Bu E-posta zaten kayıtlı' });
+  }
+  
+  // Yeni kullanıcı oluştur
+  const userId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
   const user = {
-    id: Date.now().toString(),
-    name,
-    discordId,
-    email,
-    password,
-    credits: 0,
-    createdAt: new Date()
+    id: userId,
+    name: name.trim(),
+    discordId: discordId.trim(),
+    email: email.trim().toLowerCase(),
+    password: password, // Gerçek projede hash'lenmelidir
+    credits: 10, // Hoş geldin bonusu
+    totalSpent: 0,
+    totalEarned: 10,
+    registrationDate: new Date().toISOString(),
+    lastLogin: null,
+    loginCount: 0,
+    isActive: true,
+    profile: {
+      joinedOrders: 0,
+      completedOrders: 0,
+      favoriteProducts: []
+    }
   };
   
   db.users.push(user);
-  db.userRights[user.id] = { boostRights: 0, freeRights: 0 };
+  db.userRights[userId] = { 
+    boostRights: 0, 
+    freeRights: 1 // İlk kayıt bonusu
+  };
+  
+  // Sistem logları
+  addSystemLog(db, 'USER_REGISTERED', `Yeni kullanıcı kaydı: ${user.name} (${user.discordId})`, userId);
+  addCreditHistory(db, userId, 10, 'earned', 'Hoş geldin bonusu');
+  
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Kayıt başarılı' });
+  console.log(`✅ Yeni kullanıcı kaydı: ${user.name} (${user.discordId})`);
+  
+  res.json({ 
+    success: true, 
+    message: 'Kayıt başarılı! 10 kredi ve 1 bedava hesap hakkı kazandınız!',
+    user: {
+      id: userId,
+      name: user.name,
+      credits: user.credits
+    }
+  });
 });
 
-// Giriş Yap
+// Giriş Yap - Geliştirilmiş Sistem
 app.post('/api/login', (req, res) => {
   const { discordId, password } = req.body;
+  const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+  
+  if (!discordId || !password) {
+    return res.status(400).json({ error: 'Discord ID ve şifre gerekli' });
+  }
   
   const db = getDatabase();
   const user = db.users.find(u => u.discordId === discordId && u.password === password);
   
   if (!user) {
+    // Başarısız giriş denemesi
+    addSystemLog(db, 'LOGIN_FAILED', `Başarısız giriş denemesi: ${discordId} (IP: ${clientIP})`);
+    saveDatabase(db);
     return res.status(401).json({ error: 'Hatalı Discord ID veya Şifre' });
   }
   
+  if (!user.isActive) {
+    return res.status(401).json({ error: 'Hesabınız devre dışı' });
+  }
+  
+  // Giriş bilgilerini güncelle
+  user.lastLogin = new Date().toISOString();
+  user.loginCount = (user.loginCount || 0) + 1;
+  
+  // Giriş geçmişi
+  const loginRecord = {
+    id: Date.now().toString() + Math.random(),
+    userId: user.id,
+    timestamp: new Date().toISOString(),
+    ip: clientIP,
+    userAgent: req.headers['user-agent'] || 'unknown'
+  };
+  
+  db.loginHistory.push(loginRecord);
+  
+  // Son 100 giriş kaydını sakla
+  if (db.loginHistory.length > 100) {
+    db.loginHistory = db.loginHistory.slice(-100);
+  }
+  
+  addSystemLog(db, 'LOGIN_SUCCESS', `Başarılı giriş: ${user.name} (${user.discordId})`, user.id);
+  saveDatabase(db);
+  
+  console.log(`✅ Giriş: ${user.name} (${user.discordId})`);
+  
   res.json({ 
     success: true, 
+    message: 'Giriş başarılı!',
     user: {
       id: user.id,
       name: user.name,
-      credits: user.credits
+      credits: user.credits,
+      discordId: user.discordId,
+      totalSpent: user.totalSpent || 0,
+      totalEarned: user.totalEarned || 0,
+      loginCount: user.loginCount,
+      registrationDate: user.registrationDate
     }
   });
 });
@@ -160,9 +378,18 @@ app.post('/api/admin/products', (req, res) => {
   res.json({ success: true, product });
 });
 
-// Admin: Kredi Ver
+// Admin: Kredi Ver - Geliştirilmiş Sistem
 app.post('/api/admin/give-credits', (req, res) => {
-  const { userId, amount } = req.body;
+  const { userId, amount, reason } = req.body;
+  
+  if (!userId || !amount) {
+    return res.status(400).json({ error: 'Kullanıcı ID ve miktar gerekli' });
+  }
+  
+  const creditAmount = parseInt(amount);
+  if (isNaN(creditAmount) || creditAmount <= 0) {
+    return res.status(400).json({ error: 'Geçersiz kredi miktarı' });
+  }
   
   const db = getDatabase();
   const user = db.users.find(u => u.id === userId);
@@ -171,10 +398,24 @@ app.post('/api/admin/give-credits', (req, res) => {
     return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
   }
   
-  user.credits += parseInt(amount);
+  const oldCredits = user.credits;
+  user.credits += creditAmount;
+  user.totalEarned = (user.totalEarned || 0) + creditAmount;
+  
+  // Kredi geçmişi kaydet
+  addCreditHistory(db, userId, creditAmount, 'gifted', reason || 'Admin tarafından verildi');
+  addSystemLog(db, 'CREDIT_GIVEN', `Admin ${creditAmount} kredi verdi: ${user.name} (${oldCredits} → ${user.credits})`, userId);
+  
   saveDatabase(db);
   
-  res.json({ success: true, newCredits: user.credits });
+  console.log(`💰 Admin kredi verdi: ${user.name} (+${creditAmount}) = ${user.credits}`);
+  
+  res.json({ 
+    success: true, 
+    message: `${user.name} kullanıcısına ${creditAmount} kredi verildi`,
+    newCredits: user.credits,
+    oldCredits: oldCredits
+  });
 });
 
 // Admin: Hesap Gönder
@@ -220,46 +461,86 @@ app.get('/api/admin/users', (req, res) => {
   })));
 });
 
-// Ürün Satın Al
+// Ürün Satın Al - Geliştirilmiş Sistem
 app.post('/api/buy-product', (req, res) => {
   const { userId, productId, quantity } = req.body;
+  
+  if (!userId || !productId || !quantity) {
+    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
+  }
+  
+  const purchaseQuantity = parseInt(quantity);
+  if (isNaN(purchaseQuantity) || purchaseQuantity <= 0) {
+    return res.status(400).json({ error: 'Geçersiz adet' });
+  }
   
   const db = getDatabase();
   const user = db.users.find(u => u.id === userId);
   const product = db.products.find(p => p.id === productId);
   
-  if (!user || !product) {
-    return res.status(404).json({ error: 'Kullanıcı veya ürün bulunamadı' });
+  if (!user) {
+    return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
   }
   
-  const totalCost = product.credits * quantity;
+  if (!product) {
+    return res.status(404).json({ error: 'Ürün bulunamadı' });
+  }
+  
+  if (!user.isActive) {
+    return res.status(403).json({ error: 'Hesabınız devre dışı' });
+  }
+  
+  const totalCost = product.credits * purchaseQuantity;
   
   if (user.credits < totalCost) {
-    return res.status(400).json({ error: 'Yetersiz kredi' });
+    return res.status(400).json({ error: `Yetersiz kredi! Gereken: ${totalCost}, Mevcut: ${user.credits}` });
   }
   
-  if (product.quantity < quantity) {
-    return res.status(400).json({ error: 'Yetersiz stok' });
+  if (product.quantity < purchaseQuantity) {
+    return res.status(400).json({ error: `Yetersiz stok! Mevcut: ${product.quantity}, İstenen: ${purchaseQuantity}` });
   }
   
-  // Onay bekleyenler listesine ekle
+  // Kullanılabilir hesap kontrolü
+  const availableAccounts = product.accounts.filter(acc => !acc.used);
+  if (availableAccounts.length < purchaseQuantity) {
+    return res.status(400).json({ error: `Yeterli hesap yok! Mevcut: ${availableAccounts.length}` });
+  }
+  
+  // Sipariş oluştur
+  const orderId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
   const order = {
-    id: Date.now().toString(),
+    id: orderId,
     userId: user.id,
     userName: user.name,
     userDiscordId: user.discordId,
     productId: product.id,
     productName: product.name,
-    quantity,
+    quantity: purchaseQuantity,
+    unitPrice: product.credits,
     totalCost,
     status: 'pending',
-    createdAt: new Date()
+    createdAt: new Date().toISOString(),
+    estimatedDelivery: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 saat
   };
   
   db.pendingOrders.push(order);
+  
+  // Kullanıcı istatistiklerini güncelle
+  user.profile.joinedOrders = (user.profile.joinedOrders || 0) + 1;
+  
+  // Sistem kayıtları
+  addSystemLog(db, 'ORDER_CREATED', `Yeni sipariş: ${user.name} - ${product.name} x${purchaseQuantity} (${totalCost} kredi)`, userId);
+  
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Sipariş onay bekliyor', orderId: order.id });
+  console.log(`📦 Yeni sipariş: ${user.name} - ${product.name} x${purchaseQuantity}`);
+  
+  res.json({ 
+    success: true, 
+    message: 'Sipariş oluşturuldu! Admin onayından sonra Discord DM ile hesaplar gönderilecek.',
+    orderId: order.id,
+    estimatedDelivery: order.estimatedDelivery
+  });
 });
 
 // Admin: Siparişi Onayla
@@ -297,8 +578,11 @@ app.post('/api/admin/approve-order', (req, res) => {
     selectedAccounts.push(selectedAccount);
   }
   
-  // Kredi düş
+  // Kredi düş ve istatistikleri güncelle
+  const oldCredits = user.credits;
   user.credits -= order.totalCost;
+  user.totalSpent = (user.totalSpent || 0) + order.totalCost;
+  user.profile.completedOrders = (user.profile.completedOrders || 0) + 1;
   
   // Stok azalt
   product.quantity -= order.quantity;
@@ -306,12 +590,21 @@ app.post('/api/admin/approve-order', (req, res) => {
   // Siparişi tamamlananlara taşı
   order.status = 'completed';
   order.selectedAccounts = selectedAccounts;
-  order.completedAt = new Date();
+  order.completedAt = new Date().toISOString();
+  order.approvedBy = 'admin';
   
   db.completedOrders.push(order);
   db.pendingOrders.splice(orderIndex, 1);
   
+  // Kredi geçmişine ekle
+  addCreditHistory(db, user.id, -order.totalCost, 'spent', `Sipariş: ${order.productName} x${order.quantity}`);
+  
+  // Sistem logları
+  addSystemLog(db, 'ORDER_APPROVED', `Sipariş onaylandı: ${user.name} - ${order.productName} x${order.quantity} (${order.totalCost} kredi)`, user.id);
+  
   saveDatabase(db);
+  
+  console.log(`✅ Sipariş onaylandı: ${user.name} - ${order.productName} x${order.quantity} (${oldCredits} → ${user.credits})`);
   
   // Bot'a DM gönder
   client.users.fetch(order.userDiscordId).then(userDM => {
@@ -323,20 +616,27 @@ app.post('/api/admin/approve-order', (req, res) => {
       .addFields(
         { name: '📦 Ürün', value: order.productName, inline: true },
         { name: '🔢 Adet', value: order.quantity.toString(), inline: true },
-        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true }
+        { name: '💰 Harcanan Kredi', value: order.totalCost.toString(), inline: true },
+        { name: '💳 Kalan Kredi', value: user.credits.toString(), inline: true }
       )
       .setDescription(`🎮 **Hesap Bilgileri:**\n${accountDetails}`)
-      .setFooter({ text: 'Zwozez Discord Botu' });
+      .setFooter({ text: 'Zwozez Discord Botu' })
+      .setTimestamp();
     
     userDM.send({ embeds: [embed] });
   }).catch(err => {
     console.log('DM gönderilemedi:', err);
   });
   
-  res.json({ success: true, message: 'Sipariş onaylandı ve hesaplar gönderildi' });
+  res.json({ 
+    success: true, 
+    message: 'Sipariş onaylandı ve hesaplar gönderildi',
+    userNewCredits: user.credits,
+    productNewQuantity: product.quantity
+  });
 });
 
-// Kullanıcı Bilgilerini Güncelle
+// Kullanıcı Bilgilerini Güncelle - Geliştirilmiş
 app.get('/api/user/:userId', (req, res) => {
   const { userId } = req.params;
   
@@ -347,11 +647,81 @@ app.get('/api/user/:userId', (req, res) => {
     return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
   }
   
+  // Kullanıcının kredi geçmişi
+  const creditHistory = db.creditHistory.filter(h => h.userId === userId).slice(-10);
+  
+  // Kullanıcının sipariş geçmişi
+  const orders = db.completedOrders.filter(o => o.userId === userId).slice(-5);
+  
   res.json({
     id: user.id,
     name: user.name,
-    credits: user.credits
+    discordId: user.discordId,
+    credits: user.credits,
+    totalSpent: user.totalSpent || 0,
+    totalEarned: user.totalEarned || 0,
+    registrationDate: user.registrationDate,
+    lastLogin: user.lastLogin,
+    loginCount: user.loginCount,
+    profile: user.profile,
+    recentCreditHistory: creditHistory,
+    recentOrders: orders
   });
+});
+
+// Admin: Kullanıcı İstatistikleri
+app.get('/api/admin/stats', (req, res) => {
+  const db = getDatabase();
+  
+  const stats = {
+    totalUsers: db.users.length,
+    activeUsers: db.users.filter(u => u.isActive).length,
+    totalProducts: db.products.length,
+    pendingOrders: db.pendingOrders.length,
+    completedOrders: db.completedOrders.length,
+    totalCreditsDistributed: db.users.reduce((sum, u) => sum + (u.totalEarned || 0), 0),
+    totalCreditsSpent: db.users.reduce((sum, u) => sum + (u.totalSpent || 0), 0),
+    recentRegistrations: db.users.filter(u => {
+      const regDate = new Date(u.registrationDate);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return regDate > weekAgo;
+    }).length,
+    database: db.metadata
+  };
+  
+  res.json(stats);
+});
+
+// Admin: Sistem Logları
+app.get('/api/admin/logs', (req, res) => {
+  const db = getDatabase();
+  const limit = parseInt(req.query.limit) || 50;
+  
+  const logs = db.systemLogs.slice(-limit).reverse();
+  
+  res.json(logs);
+});
+
+// Admin: Son Kredi İşlemleri
+app.get('/api/admin/recent-credits', (req, res) => {
+  const db = getDatabase();
+  const limit = parseInt(req.query.limit) || 20;
+  
+  // Kredi geçmişini kullanıcı isimleriyle birleştir
+  const recentCredits = db.creditHistory
+    .slice(-limit)
+    .reverse()
+    .map(credit => {
+      const user = db.users.find(u => u.id === credit.userId);
+      return {
+        ...credit,
+        userName: user ? user.name : 'Bilinmeyen Kullanıcı',
+        userDiscordId: user ? user.discordId : 'Bilinmiyor'
+      };
+    });
+  
+  res.json(recentCredits);
 });
 
 // Bekleyen Siparişleri Getir
