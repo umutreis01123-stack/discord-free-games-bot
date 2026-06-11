@@ -79,6 +79,12 @@ function getDatabase() {
       if (!data.creditHistory) data.creditHistory = [];
       if (!data.loginHistory) data.loginHistory = [];
       if (!data.systemLogs) data.systemLogs = [];
+      if (!data.owoPendingPayments) data.owoPendingPayments = [];
+      if (!data.owoHistory) data.owoHistory = [];
+      if (!data.events) data.events = {};
+      if (!data.giveaways) data.giveaways = {};
+      if (!data.settings) data.settings = { owoPrice: 7650 };
+      if (!data.staff) data.staff = { supportStaff: [] };
       
       return data;
     }
@@ -119,7 +125,13 @@ function getDatabase() {
     completedOrders: [],
     creditHistory: [],
     loginHistory: [],
-    systemLogs: []
+    systemLogs: [],
+    owoPendingPayments: [],
+    owoHistory: [],
+    events: {},
+    giveaways: {},
+    settings: { owoPrice: 7650 },
+    staff: { supportStaff: [] }
   };
 }
 
@@ -927,7 +939,7 @@ client.on('messageCreate', async (message) => {
         id: eventId,
         channelId: message.channel.id,
         messageId: null,
-        participants: new Set(),
+        participants: [], // Array olarak sakla (Set değil)
         participantCount: participantCount,
         winners: [],
         createdAt: new Date().toISOString(),
@@ -995,14 +1007,14 @@ client.on('messageCreate', async (message) => {
 
       // Tüm aktif event'leri bitir
       for (const event of activeEvents) {
-        if (event.participants.size === 0) {
+        if (event.participants.length === 0) {
           await message.channel.send(`⚠️ Event ID: ${event.id} - Kimse katılmadı!`);
           event.finished = true;
           continue;
         }
 
         // Random kazanan seç
-        const participantArray = Array.from(event.participants);
+        const participantArray = event.participants; // Already an array
         const winners = [];
         
         // Her button başına 1 kazanan
@@ -1026,7 +1038,7 @@ client.on('messageCreate', async (message) => {
           .setDescription('Kazananlar:')
           .addFields(
             { name: '👑 Kazananlar', value: winnersText || 'Hiç kimse', inline: false },
-            { name: '👥 Toplam Katılımcı', value: event.participants.size.toString(), inline: true }
+            { name: '👥 Toplam Katılımcı', value: event.participants.length.toString(), inline: true }
           )
           .setFooter({ text: `Event ID: ${event.id}` })
           .setTimestamp();
@@ -1069,18 +1081,16 @@ client.on('interactionCreate', async (interaction) => {
       // Katılımcı ekle
       const participant = { userId: user.id, username: user.username, buttonNumber };
       
-      // Set'i array'e çevir, kontrol et, ekle
-      let participants = Array.from(event.participants || []);
-      if (!participants.some(p => p.userId === user.id)) {
-        participants.push(participant);
-        event.participants = new Set(participants);
+      // Array'de kontrol et ve ekle
+      if (!event.participants.some(p => p.userId === user.id)) {
+        event.participants.push(participant);
         saveDatabase(db);
 
         const joinEmbed = new EmbedBuilder()
           .setColor(0x2ecc71)
           .setTitle('✅ Event\'e Katıldın!')
           .setDescription(`Button: #${buttonNumber}`)
-          .setFooter({ text: `Toplam katılımcı: ${event.participants.size}/${event.participantCount}` })
+          .setFooter({ text: `Toplam katılımcı: ${event.participants.length}/${event.participantCount}` })
           .setTimestamp();
 
         interaction.reply({ embeds: [joinEmbed], ephemeral: true });
