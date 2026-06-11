@@ -9,6 +9,7 @@ const path = require('path');
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
@@ -34,9 +35,11 @@ function getDatabase() {
   }
   
   return {
-    stocks: [],
-    supportTickets: [],
-    commandsEnabled: true
+    users: [],
+    products: [],
+    userRights: {}, // userId -> { boostRights: 0, freeRights: 0 }
+    pendingOrders: [],
+    completedOrders: []
   };
 }
 
@@ -48,6 +51,8 @@ function saveDatabase(db) {
   }
 }
 
+const ADMIN_USER = 'umut';
+const ADMIN_PASS = 'umutpapa001122u';
 const OWNER_ID = 'umutpapa123';
 
 // ============ WEB SİTESİ ============
@@ -56,78 +61,192 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API: Stokları Getir
-app.get('/api/stocks', (req, res) => {
-  const db = getDatabase();
-  res.json(db.stocks);
-});
-
-// API: Stok Ekle
-app.post('/api/stocks', (req, res) => {
-  const { name, quantity } = req.body;
+// Kayıt Ol
+app.post('/api/register', (req, res) => {
+  const { name, discordId, email, password } = req.body;
   
-  if (!name || quantity === undefined) {
-    return res.status(400).json({ error: 'Stok adı ve miktarı gerekli' });
+  if (!name || !discordId || !email || !password) {
+    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
   }
   
   const db = getDatabase();
   
-  if (db.stocks.some(s => s.name.toLowerCase() === name.toLowerCase())) {
-    return res.status(400).json({ error: 'Bu stok zaten var' });
+  if (db.users.some(u => u.discordId === discordId || u.email === email)) {
+    return res.status(400).json({ error: 'Bu Discord ID veya E-posta zaten kayıtlı' });
   }
   
-  const stock = {
+  const user = {
     id: Date.now().toString(),
     name,
-    quantity: parseInt(quantity),
-    products: Array(parseInt(quantity)).fill(null).map((_, i) => ({
-      id: i.toString(),
-      name: '',
-      createdAt: new Date()
-    })),
+    discordId,
+    email,
+    password,
+    credits: 0,
     createdAt: new Date()
   };
   
-  db.stocks.push(stock);
+  db.users.push(user);
+  db.userRights[user.id] = { boostRights: 0, freeRights: 0 };
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Stok eklendi', stock });
+  res.json({ success: true, message: 'Kayıt başarılı' });
 });
 
-// API: Ürün Ekle (Slot'a)
-app.post('/api/products', (req, res) => {
-  const { stockId, productIndex, productName } = req.body;
-  
-  if (!stockId || productIndex === undefined || !productName) {
-    return res.status(400).json({ error: 'Parametreler eksik' });
-  }
+// Giriş Yap
+app.post('/api/login', (req, res) => {
+  const { discordId, password } = req.body;
   
   const db = getDatabase();
-  const stock = db.stocks.find(s => s.id === stockId);
+  const user = db.users.find(u => u.discordId === discordId && u.password === password);
   
-  if (!stock) {
-    return res.status(400).json({ error: 'Stok bulunamadı' });
+  if (!user) {
+    return res.status(401).json({ error: 'Hatalı Discord ID veya Şifre' });
   }
   
-  if (productIndex < 0 || productIndex >= stock.products.length) {
-    return res.status(400).json({ error: 'Geçersiz ürün indeksi' });
-  }
-  
-  stock.products[productIndex].name = productName;
-  saveDatabase(db);
-  
-  res.json({ success: true, message: 'Ürün eklendi', product: stock.products[productIndex] });
+  res.json({ 
+    success: true, 
+    user: {
+      id: user.id,
+      name: user.name,
+      credits: user.credits
+    }
+  });
 });
 
-// API: Stok Sil
-app.delete('/api/stocks/:id', (req, res) => {
-  const { id } = req.params;
+// Admin Giriş
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    res.json({ success: true, token: 'admin_authenticated' });
+  } else {
+    res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre' });
+  }
+});
+
+// Ürünleri Getir
+app.get('/api/products', (req, res) => {
+  const db = getDatabase();
+  res.json(db.products);
+});
+
+// Admin: Ürün Ekle
+app.post('/api/admin/products', (req, res) => {
+  const { name, quantity, credits } = req.body;
   
   const db = getDatabase();
-  db.stocks = db.stocks.filter(s => s.id !== id);
+  const product = {
+    id: Date.now().toString(),
+    name,
+    quantity: parseInt(quantity),
+    credits: parseInt(credits),
+    accounts: [],
+    createdAt: new Date()
+  };
+  
+  db.products.push(product);
   saveDatabase(db);
   
-  res.json({ success: true, message: 'Stok silindi' });
+  res.json({ success: true, product });
+});
+
+// Admin: Kredi Ver
+app.post('/api/admin/give-credits', (req, res) => {
+  const { userId, amount } = req.body;
+  
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  
+  if (!user) {
+    return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+  }
+  
+  user.credits += parseInt(amount);
+  saveDatabase(db);
+  
+  res.json({ success: true, newCredits: user.credits });
+});
+
+// Admin: Hesap Gönder
+app.post('/api/admin/send-account', (req, res) => {
+  const { userId, productId, accountDetails } = req.body;
+  
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  const product = db.products.find(p => p.id === productId);
+  
+  if (!user || !product) {
+    return res.status(404).json({ error: 'Kullanıcı veya ürün bulunamadı' });
+  }
+  
+  // Bot'a DM gönder
+  client.users.fetch(user.discordId).then(userDM => {
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('🎁 Hesap Gönderildi')
+      .addFields(
+        { name: '📦 Ürün', value: product.name, inline: true },
+        { name: '🎮 Hesap', value: accountDetails }
+      )
+      .setFooter({ text: 'Zwozez Discord Botu' });
+    
+    userDM.send({ embeds: [embed] });
+  }).catch(err => {
+    console.log('DM gönderilemedi:', err);
+  });
+  
+  res.json({ success: true, message: 'Hesap gönderildi' });
+});
+
+// Kullanıcıları Getir
+app.get('/api/admin/users', (req, res) => {
+  const db = getDatabase();
+  res.json(db.users.map(u => ({
+    id: u.id,
+    name: u.name,
+    discordId: u.discordId,
+    email: u.email,
+    credits: u.credits
+  })));
+});
+
+// Ürün Satın Al
+app.post('/api/buy-product', (req, res) => {
+  const { userId, productId, quantity } = req.body;
+  
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  const product = db.products.find(p => p.id === productId);
+  
+  if (!user || !product) {
+    return res.status(404).json({ error: 'Kullanıcı veya ürün bulunamadı' });
+  }
+  
+  const totalCost = product.credits * quantity;
+  
+  if (user.credits < totalCost) {
+    return res.status(400).json({ error: 'Yetersiz kredi' });
+  }
+  
+  if (product.quantity < quantity) {
+    return res.status(400).json({ error: 'Yetersiz stok' });
+  }
+  
+  // Onay bekleyenler listesine ekle
+  const order = {
+    id: Date.now().toString(),
+    userId: user.id,
+    productId: product.id,
+    quantity,
+    totalCost,
+    status: 'pending',
+    createdAt: new Date()
+  };
+  
+  db.pendingOrders.push(order);
+  saveDatabase(db);
+  
+  res.json({ success: true, message: 'Sipariş onay bekliyor', orderId: order.id });
 });
 
 // ============ DISCORD BOT ============
@@ -140,56 +259,32 @@ client.on('ready', () => {
 async function registerSlashCommands() {
   const commands = [
     new SlashCommandBuilder()
-      .setName('stokekle')
-      .setDescription('Yeni stok ekle')
+      .setName('boosthesap')
+      .setDescription('Boost yapanlar için ücretsiz hesap'),
+    
+    new SlashCommandBuilder()
+      .setName('bedavahesap')
+      .setDescription('Bedava hesap al (hakkın varsa)'),
+    
+    new SlashCommandBuilder()
+      .setName('hakver')
+      .setDescription('Kullanıcıya hak ver (Owner Only)')
       .addStringOption(option =>
-        option.setName('isim')
-          .setDescription('Stok adı')
+        option.setName('tip')
+          .setDescription('Hak tipi')
+          .addChoices(
+            { name: 'Boost Hesap', value: 'boost' },
+            { name: 'Bedava Hesap', value: 'free' }
+          )
+          .setRequired(true))
+      .addUserOption(option =>
+        option.setName('kullanici')
+          .setDescription('Kullanıcı seç')
           .setRequired(true))
       .addIntegerOption(option =>
-        option.setName('miktar')
-          .setDescription('Stok miktarı')
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('stoklar')
-      .setDescription('Tüm stokları göster'),
-    
-    new SlashCommandBuilder()
-      .setName('urunekle')
-      .setDescription('Stoka ürün ekle')
-      .addStringOption(option =>
-        option.setName('stok')
-          .setDescription('Stok adı')
+        option.setName('adet')
+          .setDescription('Kaç hak')
           .setRequired(true))
-      .addStringOption(option =>
-        option.setName('urun')
-          .setDescription('Ürün adı')
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('komutlarıkapat')
-      .setDescription('Komutları kapat (Admin Only)'),
-    
-    new SlashCommandBuilder()
-      .setName('komutlarıaç')
-      .setDescription('Komutları aç (Admin Only)'),
-    
-    new SlashCommandBuilder()
-      .setName('destek')
-      .setDescription('Destek talebi oluştur')
-      .addStringOption(option =>
-        option.setName('konu')
-          .setDescription('Konu')
-          .setRequired(true))
-      .addStringOption(option =>
-        option.setName('mesaj')
-          .setDescription('Mesaj')
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('ticket')
-      .setDescription('Ticket oluştur / kapat')
   ];
 
   try {
@@ -209,171 +304,113 @@ async function registerSlashCommands() {
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  const { commandName, options, user } = interaction;
+  const { commandName, options, user, guild } = interaction;
   const db = getDatabase();
 
-  // Komut kontrolü
-  if (!db.commandsEnabled && user.id !== OWNER_ID) {
-    if (commandName !== 'komutlarıaç') {
-      return interaction.reply('❌ Komutlar şu anda kapalı!');
+  if (commandName === 'boosthesap') {
+    // Boost kontrolü
+    try {
+      const member = await guild.members.fetch(user.id);
+      
+      if (!member.premiumSince) {
+        return interaction.reply({ content: '❌ Bu komutu kullanmak için sunucuya boost yapman gerekiyor!', ephemeral: true });
+      }
+      
+      const userId = user.id;
+      
+      if (!db.userRights[userId]) {
+        db.userRights[userId] = { boostRights: 4, freeRights: 0 };
+        saveDatabase(db);
+        
+        await sendRandomProduct(user, 'boost');
+        return interaction.reply({ content: '🎉 İlk boost hesabın! 4 hakkın var, şimdi 3 kaldı.', ephemeral: true });
+      }
+      
+      if (db.userRights[userId].boostRights <= 0) {
+        return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış!', ephemeral: true });
+      }
+      
+      db.userRights[userId].boostRights--;
+      saveDatabase(db);
+      
+      await sendRandomProduct(user, 'boost');
+      interaction.reply({ content: `✅ Boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
+      
+    } catch (error) {
+      interaction.reply({ content: '❌ Boost durumun kontrol edilemedi!', ephemeral: true });
     }
   }
 
-  if (commandName === 'stokekle') {
-    const name = options.getString('isim');
-    const quantity = options.getInteger('miktar');
-
-    if (db.stocks.some(s => s.name.toLowerCase() === name.toLowerCase())) {
-      return interaction.reply('❌ Bu stok zaten var!');
-    }
-
-    const stock = {
-      id: Date.now().toString(),
-      name,
-      quantity,
-      products: Array(quantity).fill(null).map((_, i) => ({
-        id: i.toString(),
-        name: '',
-        createdAt: new Date()
-      })),
-      createdAt: new Date()
-    };
-
-    db.stocks.push(stock);
-    saveDatabase(db);
-
-    const embed = new EmbedBuilder()
-      .setColor(0x2ecc71)
-      .setTitle('✅ Stok Eklendi')
-      .addFields(
-        { name: '📦 Stok Adı', value: name, inline: true },
-        { name: '📊 Miktar', value: quantity.toString(), inline: true }
-      )
-      .setFooter({ text: 'Zwozez Discord Botu' });
-
-    interaction.reply({ embeds: [embed] });
-  }
-
-  if (commandName === 'stoklar') {
-    if (db.stocks.length === 0) {
-      return interaction.reply('❌ Henüz stok eklenmemiş');
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(0xe94560)
-      .setTitle('📦 Canlı Stoklar');
-
-    db.stocks.forEach(stock => {
-      const filledCount = stock.products.filter(p => p.name).length;
-      embed.addFields({
-        name: `${stock.name}`,
-        value: `📊 Kapasite: **${filledCount}/${stock.quantity}**\n${
-          stock.products.filter(p => p.name).length > 0 
-            ? stock.products.filter(p => p.name).map(p => `✅ ${p.name}`).join('\n')
-            : '(Ürün yok)'
-        }`,
-        inline: false
-      });
-    });
-
-    embed.setFooter({ text: 'Zwozez Discord Botu' });
-    interaction.reply({ embeds: [embed] });
-  }
-
-  if (commandName === 'urunekle') {
-    const stockName = options.getString('stok');
-    const productName = options.getString('urun');
-
-    const stock = db.stocks.find(s => s.name.toLowerCase() === stockName.toLowerCase());
-
-    if (!stock) {
-      return interaction.reply('❌ Stok bulunamadı!');
-    }
-
-    const emptySlot = stock.products.find(p => !p.name);
+  if (commandName === 'bedavahesap') {
+    const userId = user.id;
     
-    if (!emptySlot) {
-      return interaction.reply('❌ Stokta boş yer yok!');
+    if (!db.userRights[userId] || db.userRights[userId].freeRights <= 0) {
+      return interaction.reply({ content: '❌ Bedava hesap hakkın yok!', ephemeral: true });
     }
-
-    emptySlot.name = productName;
+    
+    db.userRights[userId].freeRights--;
     saveDatabase(db);
-
-    const embed = new EmbedBuilder()
-      .setColor(0x2ecc71)
-      .setTitle('✅ Ürün Eklendi')
-      .addFields(
-        { name: '📦 Stok', value: stock.name, inline: true },
-        { name: '🎮 Ürün', value: productName, inline: true }
-      )
-      .setFooter({ text: 'Zwozez Discord Botu' });
-
-    interaction.reply({ embeds: [embed] });
+    
+    await sendRandomProduct(user, 'free');
+    interaction.reply({ content: `✅ Bedava hesap gönderildi! Kalan hakkın: ${db.userRights[userId].freeRights}`, ephemeral: true });
   }
 
-  if (commandName === 'komutlarıkapat') {
+  if (commandName === 'hakver') {
     if (user.id !== OWNER_ID) {
-      return interaction.reply('❌ Buna yetkiniz yok!');
+      return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
     }
-
-    db.commandsEnabled = false;
-    saveDatabase(db);
-
-    interaction.reply('🔒 Komutlar kapatıldı!');
-  }
-
-  if (commandName === 'komutlarıaç') {
-    if (user.id !== OWNER_ID) {
-      return interaction.reply('❌ Buna yetkiniz yok!');
+    
+    const tip = options.getString('tip');
+    const targetUser = options.getUser('kullanici');
+    const adet = options.getInteger('adet');
+    
+    if (!db.userRights[targetUser.id]) {
+      db.userRights[targetUser.id] = { boostRights: 0, freeRights: 0 };
     }
-
-    db.commandsEnabled = true;
+    
+    if (tip === 'boost') {
+      db.userRights[targetUser.id].boostRights += adet;
+    } else {
+      db.userRights[targetUser.id].freeRights += adet;
+    }
+    
     saveDatabase(db);
-
-    interaction.reply('🔓 Komutlar açıldı!');
-  }
-
-  if (commandName === 'destek') {
-    const konu = options.getString('konu');
-    const mesaj = options.getString('mesaj');
-
-    const ticket = {
-      id: Date.now().toString(),
-      userId: user.id,
-      username: user.username,
-      konu,
-      mesaj,
-      createdAt: new Date(),
-      status: 'açık'
-    };
-
-    if (!db.supportTickets) db.supportTickets = [];
-    db.supportTickets.push(ticket);
-    saveDatabase(db);
-
-    const embed = new EmbedBuilder()
-      .setColor(0x3498db)
-      .setTitle('🎫 Destek Talebi Oluşturuldu')
-      .addFields(
-        { name: 'Konu', value: konu, inline: true },
-        { name: 'Ticket ID', value: ticket.id, inline: true },
-        { name: 'Mesaj', value: mesaj }
-      )
-      .setFooter({ text: 'Zwozez Discord Botu' });
-
-    interaction.reply({ embeds: [embed] });
-  }
-
-  if (commandName === 'ticket') {
-    const embed = new EmbedBuilder()
-      .setColor(0x3498db)
-      .setTitle('🎫 Ticket Sistemi')
-      .setDescription('`/destek konu mesaj` komutu ile destek talebi oluştur')
-      .setFooter({ text: 'Zwozez Discord Botu' });
-
-    interaction.reply({ embeds: [embed] });
+    
+    const tipText = tip === 'boost' ? 'Boost Hesap' : 'Bedava Hesap';
+    interaction.reply({ content: `✅ ${targetUser.username} kullanıcısına ${adet} adet ${tipText} hakkı verildi!`, ephemeral: true });
   }
 });
+
+async function sendRandomProduct(user, type) {
+  const db = getDatabase();
+  
+  if (db.products.length === 0) {
+    try {
+      await user.send('❌ Şu anda stokta ürün yok.');
+    } catch (e) {
+      console.log('DM gönderilemedi');
+    }
+    return;
+  }
+  
+  const randomProduct = db.products[Math.floor(Math.random() * db.products.length)];
+  
+  const embed = new EmbedBuilder()
+    .setColor(type === 'boost' ? 0xf39c12 : 0x2ecc71)
+    .setTitle(type === 'boost' ? '🚀 Boost Hesap!' : '🎁 Bedava Hesap!')
+    .addFields(
+      { name: '📦 Ürün', value: randomProduct.name, inline: true },
+      { name: '💰 Değeri', value: `${randomProduct.credits} kredi`, inline: true }
+    )
+    .setDescription('Hesap bilgileri yakında admin tarafından gönderilecek.')
+    .setFooter({ text: 'Zwozez Discord Botu' });
+  
+  try {
+    await user.send({ embeds: [embed] });
+  } catch (e) {
+    console.log('DM gönderilemedi');
+  }
+}
 
 // ============ SUNUCU ============
 
