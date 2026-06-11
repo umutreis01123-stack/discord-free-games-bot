@@ -538,14 +538,20 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    // Backend'den dönen TÜM user verisini sakla
                     currentUser = data.user;
                     
-                    // LocalStorage'a kaydet
+                    // LocalStorage'a kaydet - HER ALANI
                     localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
                     localStorage.setItem('zwozez_login_time', Date.now().toString());
+                    localStorage.setItem('zwozez_user_timestamp', Date.now().toString());
+                    
+                    console.log('✅ Giriş başarılı:', currentUser.name);
+                    console.log('💾 LocalStorage güncellendi');
                     
                     closeModal('loginModal');
                     updateUI();
+                    
                     alert('✅ Giriş başarılı!');
                     
                     // Form'u temizle
@@ -554,11 +560,18 @@
                     // Ürünleri ve kullanıcı verisini yenile
                     loadProducts();
                     loadAdminData();
+                    
+                    // Sunucudan hemen güncel veriyi çek
+                    setTimeout(() => {
+                        refreshUserData();
+                    }, 500);
+                    
                 } else {
                     alert('❌ ' + data.error);
                 }
             } catch (error) {
                 alert('❌ Hata: ' + error.message);
+                console.error('Login error:', error);
             }
         }
 
@@ -580,6 +593,8 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    console.log('✅ Kayıt başarılı:', data.user);
+                    
                     closeModal('registerModal');
                     alert('✅ Kayıt başarılı! Giriş yapabilirsiniz.');
                     
@@ -588,6 +603,9 @@
                     
                     // Giriş modal'ını aç
                     setTimeout(() => {
+                        // Login form'unu önceden doldur
+                        document.getElementById('loginDiscordId').value = discordId;
+                        document.getElementById('loginPassword').value = password;
                         openModal('loginModal');
                     }, 500);
                 } else {
@@ -595,6 +613,7 @@
                 }
             } catch (error) {
                 alert('❌ Hata: ' + error.message);
+                console.error('Register error:', error);
             }
         }
 
@@ -777,26 +796,36 @@
             if (!currentUser) return false;
             
             try {
-                const response = await fetch(`/api/user/${currentUser.id}`);
+                // Cache bypass parametresi ekle (timestamp)
+                const timestamp = new Date().getTime();
+                const response = await fetch(`/api/user/${currentUser.id}?t=${timestamp}`);
                 const userData = await response.json();
                 
                 if (response.ok) {
-                    // Tüm veriyi güncelle
+                    // Tüm veriyi güncelle - HİÇ BİR ALANI ATLAMA
+                    currentUser.id = userData.id;
                     currentUser.name = userData.name;
                     currentUser.credits = userData.credits;
                     currentUser.totalSpent = userData.totalSpent || 0;
                     currentUser.totalEarned = userData.totalEarned || 0;
                     currentUser.loginCount = userData.loginCount || 0;
                     currentUser.registrationDate = userData.registrationDate;
+                    currentUser.lastLogin = userData.lastLogin;
                     currentUser.discordId = userData.discordId;
+                    currentUser.email = userData.email;
+                    currentUser.isActive = userData.isActive;
+                    currentUser.profile = userData.profile || currentUser.profile;
+                    currentUser.userRights = userData.userRights || currentUser.userRights;
                     
-                    // LocalStorage güncelle
+                    // LocalStorage güncelle - En güncel veriyi sakla
                     localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
+                    localStorage.setItem('zwozez_user_timestamp', timestamp.toString());
                     
                     // UI'ı güncelle
                     updateUI();
+                    loadAdminData();
                     
-                    console.log('✅ Kullanıcı verileri sunucudan güncellendi');
+                    console.log('✅ Kullanıcı verileri sunucudan güncellendi:', new Date().toLocaleTimeString('tr-TR'));
                     return true;
                 } else {
                     console.error('Kullanıcı verileri alınamadı:', userData.error);
@@ -1183,23 +1212,37 @@
             }
         }
 
-        // Sayfa yüklendiğinde localStorage kontrol et
-        window.addEventListener('DOMContentLoaded', function() {
+        // Sayfa yüklendiğinde localStorage kontrol et - GÜÇLÜ İNİSİYALİZASYON
+        window.addEventListener('DOMContentLoaded', async function() {
+            console.log('🔄 Sayfa yükleniyor...');
+            
             // Kullanıcı session'ını kontrol et
             const savedUser = localStorage.getItem('zwozez_user');
             if (savedUser) {
                 try {
                     currentUser = JSON.parse(savedUser);
+                    console.log('📍 LocalStorage\'dan kullanıcı yüklendi:', currentUser.name);
                     
-                    // Sunucudan güncel veriyi çek
-                    refreshUserData().then(() => {
+                    // Sunucudan güncel veriyi çek - BU ZORUNLU!
+                    const refreshSuccess = await refreshUserData();
+                    
+                    if (refreshSuccess) {
+                        console.log('✅ Sunucudan güncel veri alındı');
                         updateUI();
                         loadProducts();
                         loadAdminData();
-                    });
+                    } else {
+                        console.warn('⚠️ Sunucudan veri alınamadı, localstorage verisi kullanılıyor');
+                        updateUI();
+                        loadProducts();
+                        loadAdminData();
+                    }
                 } catch (e) {
+                    console.error('❌ LocalStorage verisi bozuk:', e);
                     localStorage.removeItem('zwozez_user');
                     localStorage.removeItem('zwozez_login_time');
+                    localStorage.removeItem('zwozez_user_timestamp');
+                    currentUser = null;
                 }
             }
 
@@ -1207,12 +1250,16 @@
             const savedAdmin = localStorage.getItem('zwozez_admin');
             if (savedAdmin === 'true') {
                 adminMode = true;
+                console.log('👑 Admin modu aktif');
                 updateUI();
                 loadAdminData();
             }
 
+            // İlk kez ürünleri yükle
             loadProducts();
-        });
+            
+            console.log('✅ Sayfa başlatma tamamlandı');
+        }, { once: true }); // Sadece bir kez çalıştır
 
         // Logout fonksiyonunu güncelle
         function logout() {
@@ -1223,6 +1270,7 @@
             localStorage.removeItem('zwozez_user');
             localStorage.removeItem('zwozez_admin');
             localStorage.removeItem('zwozez_login_time');
+            localStorage.removeItem('zwozez_user_timestamp');
             
             document.getElementById('headerButtons').innerHTML = `
                 <button class="btn" onclick="openModal('loginModal')">Giriş Yap</button>
@@ -1232,15 +1280,18 @@
             document.getElementById('userInfo').style.display = 'none';
             document.getElementById('adminPanel').style.display = 'none';
             
+            console.log('✅ Çıkış yapıldı, tüm session verileri silindi');
             alert('✅ Çıkış yapıldı');
         }
 
-        // Sayfa yüklendiğinde
+        // Sayfa yüklendiğinde ürünleri yükle
         loadProducts();
         
-        // Her 30 saniyede ürünleri ve kullanıcı verilerini yenile
+        // AĞIRLIKLI SINCRONIZASYON - Her 30 saniyede veriyi yenile
         setInterval(() => {
             if (currentUser) {
+                const timestamp = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                console.log(`🔄 [${timestamp}] Veri güncelleniyor...`);
                 refreshUserData();
             }
             loadProducts();

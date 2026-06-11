@@ -182,7 +182,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Kayıt Ol - Geliştirilmiş Sistem
+// Kayıt Ol - Geliştirilmiş Sistem (HER ALANI DOĞRU BAŞLATLA)
 app.post('/api/register', (req, res) => {
   const { name, discordId, email, password } = req.body;
   
@@ -220,8 +220,9 @@ app.post('/api/register', (req, res) => {
     return res.status(400).json({ error: 'Bu E-posta zaten kayıtlı' });
   }
   
-  // Yeni kullanıcı oluştur
+  // Yeni kullanıcı oluştur - HER ÖZELLİĞİ NET BİR ŞEKİLDE AYARLA
   const userId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  const now = new Date().toISOString();
   const user = {
     id: userId,
     name: name.trim(),
@@ -231,7 +232,7 @@ app.post('/api/register', (req, res) => {
     credits: 10, // Hoş geldin bonusu
     totalSpent: 0,
     totalEarned: 10,
-    registrationDate: new Date().toISOString(),
+    registrationDate: now,
     lastLogin: null,
     loginCount: 0,
     isActive: true,
@@ -243,10 +244,13 @@ app.post('/api/register', (req, res) => {
   };
   
   db.users.push(user);
+  
+  // Kullanıcı hakkı sistemi
   db.userRights[userId] = { 
-    boostRights: 0, 
+    boostRights: 1, // Boost hakkı (ilk kez 4 hesap, sonra 1 1)
+    boostUsageCount: 0, // Kaçıncı kez kullandığını takip et
     boostLastUsed: null,
-    freeRights: 1, // İlk kayıt bonusu
+    freeRights: 1, // Bedava hesap hakkı
     freeLastUsed: null
   };
   
@@ -254,9 +258,10 @@ app.post('/api/register', (req, res) => {
   addSystemLog(db, 'USER_REGISTERED', `Yeni kullanıcı kaydı: ${user.name} (${user.discordId})`, userId);
   addCreditHistory(db, userId, 10, 'earned', 'Hoş geldin bonusu');
   
+  // Veritabanını kaydet
   saveDatabase(db);
   
-  console.log(`✅ Yeni kullanıcı kaydı: ${user.name} (${user.discordId})`);
+  console.log(`✅ Yeni kullanıcı kaydı: ${user.name} (${user.discordId}) - ID: ${userId}`);
   
   res.json({ 
     success: true, 
@@ -264,12 +269,21 @@ app.post('/api/register', (req, res) => {
     user: {
       id: userId,
       name: user.name,
-      credits: user.credits
+      credits: user.credits,
+      discordId: user.discordId,
+      email: user.email,
+      registrationDate: user.registrationDate,
+      lastLogin: user.lastLogin,
+      loginCount: user.loginCount,
+      totalSpent: user.totalSpent,
+      totalEarned: user.totalEarned,
+      profile: user.profile,
+      userRights: db.userRights[userId]
     }
   });
 });
 
-// Giriş Yap - Geliştirilmiş Sistem
+// Giriş Yap - Geliştirilmiş Sistem (HER ALAN DÖNDÜR)
 app.post('/api/login', (req, res) => {
   const { discordId, password } = req.body;
   const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
@@ -312,6 +326,14 @@ app.post('/api/login', (req, res) => {
     db.loginHistory = db.loginHistory.slice(-100);
   }
   
+  // Kullanıcı hakkı bilgileri
+  const userRights = db.userRights[user.id] || { 
+    boostRights: 0, 
+    boostLastUsed: null,
+    freeRights: 1,
+    freeLastUsed: null
+  };
+  
   addSystemLog(db, 'LOGIN_SUCCESS', `Başarılı giriş: ${user.name} (${user.discordId})`, user.id);
   saveDatabase(db);
   
@@ -330,7 +352,10 @@ app.post('/api/login', (req, res) => {
       totalEarned: user.totalEarned || 0,
       loginCount: user.loginCount,
       registrationDate: user.registrationDate,
-      lastLogin: user.lastLogin
+      lastLogin: user.lastLogin,
+      isActive: user.isActive,
+      profile: user.profile,
+      userRights: userRights
     }
   });
 });
@@ -660,7 +685,7 @@ app.post('/api/admin/approve-order', (req, res) => {
   });
 });
 
-// Kullanıcı Bilgilerini Güncelle - Geliştirilmiş
+// Kullanıcı Bilgilerini Güncelle - Geliştirilmiş (Her Zaman En Güncel Veriyi Döndür)
 app.get('/api/user/:userId', (req, res) => {
   const { userId } = req.params;
   
@@ -677,6 +702,14 @@ app.get('/api/user/:userId', (req, res) => {
   // Kullanıcının sipariş geçmişi
   const orders = db.completedOrders.filter(o => o.userId === userId).slice(-5);
   
+  // Kullanıcı hakkı bilgileri (varsa)
+  const userRights = db.userRights[userId] || { 
+    boostRights: 0, 
+    boostLastUsed: null,
+    freeRights: 1,
+    freeLastUsed: null
+  };
+  
   res.json({
     id: user.id,
     name: user.name,
@@ -689,7 +722,10 @@ app.get('/api/user/:userId', (req, res) => {
     loginCount: user.loginCount,
     profile: user.profile,
     recentCreditHistory: creditHistory,
-    recentOrders: orders
+    recentOrders: orders,
+    userRights: userRights,
+    email: user.email,
+    isActive: user.isActive
   });
 });
 
@@ -859,21 +895,12 @@ client.on('interactionCreate', async (interaction) => {
           return interaction.reply({ content: '❌ Bu komutu kullanmak için sunucuya boost yapman gerekiyor!', ephemeral: true });
         }
         
-        // Stokta ürün var mı kontrol et
-        const availableProducts = db.products.filter(p => {
-          const acc = p.accounts.filter(a => !a.used);
-          return p.quantity > 0 && acc.length >= 4;
-        });
-
-        if (availableProducts.length === 0) {
-          return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
-        }
-
         const userId = user.id;
         
         if (!db.userRights[userId]) {
           db.userRights[userId] = { 
-            boostRights: 4, 
+            boostRights: 1, // İlk hak (ilk kullanımda 4, sonra 1 1)
+            boostUsageCount: 0, // Kaçıncı kez kullandığını takip et
             boostLastUsed: null,
             freeRights: 1,
             freeLastUsed: null
@@ -885,28 +912,48 @@ client.on('interactionCreate', async (interaction) => {
           return interaction.reply({ content: '❌ Boost hesap hakkın kalmamış! Daha sonra tekrar dene.', ephemeral: true });
         }
 
-        // Stok kontrol et ve 4 hesap gönder
+        // İlk kullanım mı? (usageCount 0 ise ilk kez)
+        const isFirstUsage = db.userRights[userId].boostUsageCount === 0;
+        const accountCount = isFirstUsage ? 4 : 1; // İlk kez 4, sonra 1
+
+        // Stokta ürün var mı kontrol et
+        const availableProducts = db.products.filter(p => {
+          const acc = p.accounts.filter(a => !a.used);
+          return p.quantity > 0 && acc.length >= accountCount;
+        });
+
+        if (availableProducts.length === 0) {
+          return interaction.reply({ content: `❌ Stokta yeterli hesap yok! (${accountCount} adet gerekli)`, ephemeral: true });
+        }
+
+        // Stok kontrol et ve hesap gönder
         const selectedProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
         const availableAccounts = selectedProduct.accounts.filter(acc => !acc.used);
         
-        if (availableAccounts.length < 4) {
-          return interaction.reply({ content: '❌ Stokta yeterli hesap yok!', ephemeral: true });
+        if (availableAccounts.length < accountCount) {
+          return interaction.reply({ content: `❌ Stokta yeterli hesap yok! (${accountCount} adet gerekli)`, ephemeral: true });
         }
 
+        // Random hesap seç (sayısı: ilk kez 4, sonra 1)
         const selectedAccounts = [];
-        for (let i = 0; i < 4; i++) {
+        for (let i = 0; i < accountCount; i++) {
           const randomIndex = Math.floor(Math.random() * availableAccounts.length);
           const account = availableAccounts.splice(randomIndex, 1)[0];
           account.used = true;
           selectedAccounts.push(account);
         }
 
-        selectedProduct.quantity -= 4;
-        db.userRights[userId].boostRights--;
+        // Stok azalt ve hakkı güncelleştir
+        selectedProduct.quantity -= accountCount;
+        db.userRights[userId].boostRights--; // Her kullanımda bir hak azal
+        db.userRights[userId].boostUsageCount++; // Kullanım sayısını artır
         db.userRights[userId].boostLastUsed = new Date().toISOString();
 
         // Sistem logları
-        addSystemLog(db, 'BOOST_USED', `${user.username} boost hesap kullandı (${db.userRights[userId].boostRights} kaldı)`, userId);
+        const logMessage = isFirstUsage 
+          ? `${user.username} ilk boost'unu kullandı (4 hesap aldı, ${db.userRights[userId].boostRights} hak kaldı)`
+          : `${user.username} boost kullandı (1 hesap aldı, ${db.userRights[userId].boostRights} hak kaldı)`;
+        addSystemLog(db, 'BOOST_USED', logMessage, userId);
         
         saveDatabase(db);
 
@@ -919,8 +966,8 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`**Zwozez** mağazasından boost hediyeniz aşağıda:`)
           .addFields(
             { name: 'Ürün', value: selectedProduct.name, inline: true },
-            { name: 'Adet', value: '4', inline: true },
-            { name: 'Değeri', value: `💰 ${selectedProduct.credits * 4} Kredi`, inline: true },
+            { name: 'Adet', value: accountCount.toString(), inline: true },
+            { name: 'Değeri', value: `💰 ${selectedProduct.credits * accountCount} Kredi`, inline: true },
             { name: 'Hesap Bilgileri', value: `\`\`\`\n${accountDetails}\n\`\`\``, inline: false },
             { name: 'Kalan Hakkın', value: `${db.userRights[userId].boostRights}`, inline: true }
           )
@@ -941,7 +988,11 @@ client.on('interactionCreate', async (interaction) => {
           console.log('DM gönderilemedi');
         }
 
-        interaction.reply({ content: `✅ 4 boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`, ephemeral: true });
+        const replyMessage = isFirstUsage
+          ? `✅ İlk boost'unu kullansın! 4 hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`
+          : `✅ 1 boost hesap gönderildi! Kalan hakkın: ${db.userRights[userId].boostRights}`;
+        
+        interaction.reply({ content: replyMessage, ephemeral: true });
         
       } catch (error) {
         console.log('Boost hatası:', error);
@@ -1054,11 +1105,21 @@ client.on('interactionCreate', async (interaction) => {
       const adet = options.getInteger('adet');
       
       if (!db.userRights[targetUser.id]) {
-        db.userRights[targetUser.id] = { boostRights: 0, freeRights: 0 };
+        db.userRights[targetUser.id] = { 
+          boostRights: 0, 
+          boostUsageCount: 0,
+          boostLastUsed: null,
+          freeRights: 0,
+          freeLastUsed: null
+        };
       }
       
       if (tip === 'boost') {
         db.userRights[targetUser.id].boostRights += adet;
+        // Eğer boostUsageCount yoksa 0'la initialize et
+        if (!db.userRights[targetUser.id].boostUsageCount) {
+          db.userRights[targetUser.id].boostUsageCount = 0;
+        }
       } else {
         db.userRights[targetUser.id].freeRights += adet;
       }
