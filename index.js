@@ -904,50 +904,79 @@ client.on('messageCreate', async (message) => {
 
   try {
     // -sil komutunu kontrol et
-    if (message.content.startsWith('-sil')) {
+    if (message.content.trim() === '-sil') {
       // Admin kontrolü
       if (message.author.id !== OWNER_ID) {
         return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
       }
 
-      // Kanal mesajlarını getir
+      await message.reply('⏳ Siliniyor...');
+
+      // Bugünün başı ve sonu (Türkiye saati)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const messages = await message.channel.messages.fetch({ limit: 100 });
-      const messagesToDelete = messages.filter(msg => {
-        const msgDate = new Date(msg.createdTimestamp);
-        msgDate.setHours(0, 0, 0, 0);
-        return msgDate.getTime() === today.getTime();
-      });
-
-      if (messagesToDelete.size === 0) {
-        return message.reply('❌ Bugün hiç mesaj yok!');
-      }
-
-      // Mesajları sil
       let deleted = 0;
-      for (const msg of messagesToDelete.values()) {
-        try {
-          await msg.delete();
-          deleted++;
-        } catch (e) {
-          console.log('Mesaj silinemedi:', e);
+      let fetchedMessages = 0;
+      let lastMessageId = null;
+
+      // Tüm mesajları getir ve sil
+      while (true) {
+        const options = { limit: 100 };
+        if (lastMessageId) {
+          options.before = lastMessageId;
+        }
+
+        const messages = await message.channel.messages.fetch(options);
+        
+        if (messages.size === 0) break;
+
+        let hasOldMessages = false;
+
+        for (const msg of messages.values()) {
+          fetchedMessages++;
+          const msgDate = new Date(msg.createdTimestamp);
+
+          // Bugüne ait mi kontrol et
+          if (msgDate >= today && msgDate < tomorrow) {
+            try {
+              await msg.delete();
+              deleted++;
+            } catch (e) {
+              console.log('Mesaj silinemedi:', e.message);
+            }
+          } else if (msgDate < today) {
+            // Eski mesajlara ulaştık
+            hasOldMessages = true;
+            break;
+          }
+
+          lastMessageId = msg.id;
+        }
+
+        if (hasOldMessages || messages.size < 100) {
+          break;
         }
       }
 
-      message.reply({ 
-        content: `✅ **${deleted}** mesaj silindi!`,
-        components: [],
-        ephemeral: false
-      }).then(msg => {
-        setTimeout(() => msg.delete(), 3000);
+      // Sonuç mesajı
+      const resultMsg = await message.channel.send({ 
+        content: `✅ **${deleted}** mesaj silindi!`
       });
 
-      console.log(`🗑️ ${deleted} mesaj silindi - ${message.author.username}`);
+      // 3 saniye sonra sonuç mesajını sil
+      setTimeout(() => {
+        resultMsg.delete().catch(e => console.log('Sonuç mesajı silinemedi'));
+      }, 3000);
+
+      console.log(`🗑️ ${deleted} mesaj silindi (${fetchedMessages} kontrol edilen) - ${message.author.username}`);
     }
   } catch (error) {
     console.error('-sil komutu hatası:', error);
+    message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
   }
 });
 
