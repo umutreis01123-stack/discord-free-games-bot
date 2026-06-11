@@ -542,6 +542,7 @@
                     
                     // LocalStorage'a kaydet
                     localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
+                    localStorage.setItem('zwozez_login_time', Date.now().toString());
                     
                     closeModal('loginModal');
                     updateUI();
@@ -549,6 +550,10 @@
                     
                     // Form'u temizle
                     event.target.reset();
+                    
+                    // Ürünleri ve kullanıcı verisini yenile
+                    loadProducts();
+                    loadAdminData();
                 } else {
                     alert('❌ ' + data.error);
                 }
@@ -769,19 +774,37 @@
         }
 
         async function refreshUserData() {
-            if (!currentUser) return;
+            if (!currentUser) return false;
             
             try {
                 const response = await fetch(`/api/user/${currentUser.id}`);
                 const userData = await response.json();
                 
                 if (response.ok) {
-                    currentUser = userData;
+                    // Tüm veriyi güncelle
+                    currentUser.name = userData.name;
+                    currentUser.credits = userData.credits;
+                    currentUser.totalSpent = userData.totalSpent || 0;
+                    currentUser.totalEarned = userData.totalEarned || 0;
+                    currentUser.loginCount = userData.loginCount || 0;
+                    currentUser.registrationDate = userData.registrationDate;
+                    currentUser.discordId = userData.discordId;
+                    
+                    // LocalStorage güncelle
                     localStorage.setItem('zwozez_user', JSON.stringify(currentUser));
+                    
+                    // UI'ı güncelle
                     updateUI();
+                    
+                    console.log('✅ Kullanıcı verileri sunucudan güncellendi');
+                    return true;
+                } else {
+                    console.error('Kullanıcı verileri alınamadı:', userData.error);
+                    return false;
                 }
             } catch (error) {
                 console.error('Kullanıcı verileri güncellenemedi:', error);
+                return false;
             }
         }
 
@@ -1167,9 +1190,16 @@
             if (savedUser) {
                 try {
                     currentUser = JSON.parse(savedUser);
-                    updateUI();
+                    
+                    // Sunucudan güncel veriyi çek
+                    refreshUserData().then(() => {
+                        updateUI();
+                        loadProducts();
+                        loadAdminData();
+                    });
                 } catch (e) {
                     localStorage.removeItem('zwozez_user');
+                    localStorage.removeItem('zwozez_login_time');
                 }
             }
 
@@ -1189,9 +1219,10 @@
             currentUser = null;
             adminMode = false;
             
-            // LocalStorage'ı temizle
+            // LocalStorage'ı tamamen temizle
             localStorage.removeItem('zwozez_user');
             localStorage.removeItem('zwozez_admin');
+            localStorage.removeItem('zwozez_login_time');
             
             document.getElementById('headerButtons').innerHTML = `
                 <button class="btn" onclick="openModal('loginModal')">Giriş Yap</button>
@@ -1206,7 +1237,14 @@
 
         // Sayfa yüklendiğinde
         loadProducts();
-        setInterval(loadProducts, 5000); // Her 5 saniyede yenile
+        
+        // Her 30 saniyede ürünleri ve kullanıcı verilerini yenile
+        setInterval(() => {
+            if (currentUser) {
+                refreshUserData();
+            }
+            loadProducts();
+        }, 30000);
     </script>
 </body>
 </html>

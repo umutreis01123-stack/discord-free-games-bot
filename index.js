@@ -325,10 +325,12 @@ app.post('/api/login', (req, res) => {
       name: user.name,
       credits: user.credits,
       discordId: user.discordId,
+      email: user.email,
       totalSpent: user.totalSpent || 0,
       totalEarned: user.totalEarned || 0,
       loginCount: user.loginCount,
-      registrationDate: user.registrationDate
+      registrationDate: user.registrationDate,
+      lastLogin: user.lastLogin
     }
   });
 });
