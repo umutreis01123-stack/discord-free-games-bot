@@ -897,98 +897,57 @@ client.on('ready', () => {
   registerSlashCommands();
 });
 
-// ✅ OWO ÖDEME OTOMATİK ALGILAMA
+// ✅ MESAJ KOMUTU: -sil (Bugünün tüm mesajlarını sil)
 client.on('messageCreate', async (message) => {
   // Bot kendi mesajlarını yoksay
-  if (message.author.id === client.user.id) return;
-  
+  if (message.author.bot) return;
+
   try {
-    // OWO botunun mesajlarını dinle (embed içinde OWO miktarını arayacağız)
-    if (message.embeds && message.embeds.length > 0) {
-      const embed = message.embeds[0];
-      
-      // OWO bot genellikle "send" işlemlerini embed ile gösterir
-      // Burada pattern matching yapacağız
-      const embedText = `${embed.title || ''} ${embed.description || ''}`.toLowerCase();
-      
-      if (embedText.includes('send') || embedText.includes('gönder')) {
-        // OWO işlemi gerçekleşti
-        const db = getDatabase();
-        if (!db.owoPendingPayments) db.owoPendingPayments = [];
-        
-        // Pending payment bulup tamamla
-        const pendingPayment = db.owoPendingPayments.find(p => p.status === 'awaiting_payment');
-        
-        if (pendingPayment) {
-          // Ürün bulup random hesap seç
-          const product = db.products.find(p => p.id === pendingPayment.productId);
-          
-          if (product) {
-            const availableAccounts = product.accounts.filter(acc => !acc.used);
-            
-            if (availableAccounts.length > 0) {
-              // Random hesap seç
-              const randomIndex = Math.floor(Math.random() * availableAccounts.length);
-              const selectedAccount = availableAccounts[randomIndex];
-              selectedAccount.used = true;
-              product.quantity -= 1;
-              
-              // Status güncelle ve history'ye ekle
-              pendingPayment.status = 'completed';
-              pendingPayment.completedAt = new Date().toISOString();
-              pendingPayment.accountDetails = selectedAccount.details;
-              
-              // History'ye ekle
-              if (!db.owoHistory) db.owoHistory = [];
-              db.owoHistory.push({
-                id: Date.now().toString(),
-                userId: pendingPayment.userId,
-                userName: pendingPayment.userName,
-                productId: pendingPayment.productId,
-                productName: pendingPayment.productName,
-                owoAmount: pendingPayment.owoAmount,
-                completedAt: new Date().toISOString()
-              });
-              
-              saveDatabase(db);
-              
-              // Kullanıcıya DM gönder
-              const successEmbed = new EmbedBuilder()
-                .setColor(0x2ecc71)
-                .setTitle('✅ Ödeme Alındı! Hesap Geliyor!')
-                .setDescription(`Satın aldığınız ürün aşağıda:`)
-                .addFields(
-                  { name: '🎮 Ürün', value: product.name, inline: true },
-                  { name: '💜 Ödenen Tutar', value: `${pendingPayment.owoAmount} OWO`, inline: true },
-                  { name: '📦 Steam Hesabı', value: `\`\`\`\n${selectedAccount.details}\n\`\`\``, inline: false },
-                  { name: '⏰ Tarih', value: new Date().toLocaleString('tr-TR'), inline: false }
-                )
-                .setFooter({ text: 'Teşekkür ederiz! - Zwozez' })
-                .setTimestamp();
-              
-              const noteEmbed = new EmbedBuilder()
-                .setColor(0xff9900)
-                .setDescription('⚠️ **Önemli Not:** Hesaplar net giriş değildir, çalışmayabilir. Bizi tercih ettiğiniz için teşekkürler!')
-                .setTimestamp();
-              
-              try {
-                const targetUser = await client.users.fetch(pendingPayment.userId);
-                await targetUser.send({ embeds: [successEmbed] });
-                setTimeout(async () => {
-                  await targetUser.send({ embeds: [noteEmbed] });
-                }, 1000);
-              } catch (e) {
-                console.log('DM gönderilemedi:', pendingPayment.userId);
-              }
-              
-              console.log(`✅ OWO ÖDEME TAMAMLANDI: ${pendingPayment.userName} → ${product.name}`);
-            }
-          }
+    // -sil komutunu kontrol et
+    if (message.content.startsWith('-sil')) {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      // Kanal mesajlarını getir
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const messages = await message.channel.messages.fetch({ limit: 100 });
+      const messagesToDelete = messages.filter(msg => {
+        const msgDate = new Date(msg.createdTimestamp);
+        msgDate.setHours(0, 0, 0, 0);
+        return msgDate.getTime() === today.getTime();
+      });
+
+      if (messagesToDelete.size === 0) {
+        return message.reply('❌ Bugün hiç mesaj yok!');
+      }
+
+      // Mesajları sil
+      let deleted = 0;
+      for (const msg of messagesToDelete.values()) {
+        try {
+          await msg.delete();
+          deleted++;
+        } catch (e) {
+          console.log('Mesaj silinemedi:', e);
         }
       }
+
+      message.reply({ 
+        content: `✅ **${deleted}** mesaj silindi!`,
+        components: [],
+        ephemeral: false
+      }).then(msg => {
+        setTimeout(() => msg.delete(), 3000);
+      });
+
+      console.log(`🗑️ ${deleted} mesaj silindi - ${message.author.username}`);
     }
   } catch (error) {
-    console.error('OWO algılama hatası:', error);
+    console.error('-sil komutu hatası:', error);
   }
 });
 
