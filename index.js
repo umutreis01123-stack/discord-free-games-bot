@@ -1086,7 +1086,7 @@ client.on('interactionCreate', async (interaction) => {
             .setEmoji('🎫')
         );
 
-      interaction.reply({ embeds: [ticketEmbed], components: [row], ephemeral: true });
+      await interaction.reply({ embeds: [ticketEmbed], components: [row] });
     }
 
     // DESTEK KUR KOMUTU - Herkes Kullansın
@@ -1106,7 +1106,7 @@ client.on('interactionCreate', async (interaction) => {
             .setEmoji('💬')
         );
 
-      interaction.reply({ embeds: [supportEmbed], components: [row], ephemeral: true });
+      await interaction.reply({ embeds: [supportEmbed], components: [row] });
     }
 
     // SORUMLU EKLE KOMUTU
@@ -1133,59 +1133,66 @@ client.on('interactionCreate', async (interaction) => {
     // ÇEKİLİŞ KOMUTU
     if (commandName === 'çekiliş') {
       if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
       }
 
-      const duration = options.getInteger('süre');
-      const winnerCount = options.getInteger('kazanan');
+      try {
+        const duration = options.getInteger('süre');
+        const winnerCount = options.getInteger('kazanan');
 
-      // Stokta olan ürünleri al
-      const availableProducts = db.products.filter(p => {
-        const acc = p.accounts.filter(a => !a.used);
-        return p.quantity > 0 && acc.length > 0;
-      });
+        // Stokta olan ürünleri al
+        const availableProducts = db.products.filter(p => {
+          const acc = p.accounts.filter(a => !a.used);
+          return p.quantity > 0 && acc.length > 0;
+        });
 
-      if (availableProducts.length === 0) {
-        return interaction.reply({ content: '❌ Stokta ürün yok! Çekiliş başlatılamıyor.', ephemeral: true });
+        if (availableProducts.length === 0) {
+          return interaction.reply({ content: '❌ Stokta ürün yok! Çekiliş başlatılamıyor.', ephemeral: true });
+        }
+
+        const selectedProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+
+        const giveawayEmbed = new EmbedBuilder()
+          .setColor(0xf1c40f)
+          .setTitle('🎉 Çekiliş!')
+          .setDescription(`**Ödül:** ${selectedProduct.name}\n**Kazanan Sayısı:** ${winnerCount}\n**Süre:** ${duration} saniye`)
+          .addFields(
+            { name: 'Katılmak İçin', value: 'Aşağıdaki butona tıklayın!', inline: false }
+          )
+          .setFooter({ text: `Çekiliş ${duration} saniye sonra sona erecek` });
+
+        const row = new (require('discord.js')).ActionRowBuilder()
+          .addComponents(
+            new (require('discord.js')).ButtonBuilder()
+              .setCustomId('join_giveaway')
+              .setLabel('Çekilişe Katıl')
+              .setStyle((require('discord.js')).ButtonStyle.Success)
+              .setEmoji('🎁')
+          );
+
+        const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [row], fetchReply: true });
+
+        // Çekiliş veritabanı
+        if (!db.giveaways) db.giveaways = {};
+        db.giveaways[msg.id] = {
+          id: msg.id,
+          product: selectedProduct,
+          winners: winnerCount,
+          participants: [],
+          endTime: Date.now() + (duration * 1000),
+          channelId: interaction.channelId,
+          messageId: msg.id
+        };
+        saveDatabase(db);
+
+        // Süre bitince çekiliş sonuçlandır
+        setTimeout(() => {
+          endGiveaway(msg.id, db);
+        }, duration * 1000);
+      } catch (error) {
+        console.error('Çekiliş hatası:', error);
+        interaction.reply({ content: `❌ Çekiliş başlatılamadı: ${error.message}`, ephemeral: true });
       }
-
-      const giveawayEmbed = new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setTitle('🎉 Çekiliş!')
-        .setDescription(`**Ödül:** ${availableProducts[Math.floor(Math.random() * availableProducts.length)].name}\n**Kazanan Sayısı:** ${winnerCount}\n**Süre:** ${duration} saniye`)
-        .addFields(
-          { name: 'Katılmak İçin', value: 'Aşağıdaki butona tıklayın!', inline: false }
-        )
-        .setFooter({ text: `Çekiliş ${duration} saniye sonra sona erecek` });
-
-      const row = new (require('discord.js')).ActionRowBuilder()
-        .addComponents(
-          new (require('discord.js')).ButtonBuilder()
-            .setCustomId('join_giveaway')
-            .setLabel('Çekilişe Katıl')
-            .setStyle((require('discord.js')).ButtonStyle.Success)
-            .setEmoji('🎁')
-        );
-
-      const msg = await interaction.reply({ embeds: [giveawayEmbed], components: [row], fetchReply: true });
-
-      // Çekiliş veritabanı
-      if (!db.giveaways) db.giveaways = {};
-      db.giveaways[msg.id] = {
-        id: msg.id,
-        product: availableProducts[Math.floor(Math.random() * availableProducts.length)],
-        winners: winnerCount,
-        participants: [],
-        endTime: Date.now() + (duration * 1000),
-        channelId: interaction.channelId,
-        messageId: msg.id
-      };
-      saveDatabase(db);
-
-      // Süre bitince çekiliş sonuçlandır
-      setTimeout(() => {
-        endGiveaway(msg.id, db);
-      }, duration * 1000);
     }
 
     // LOG KOMUTU
