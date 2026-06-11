@@ -1199,60 +1199,68 @@ client.on('interactionCreate', async (interaction) => {
     // LOG KOMUTU
     if (commandName === 'log') {
       if (user.id !== OWNER_ID) {
-        return interaction.reply({ content: '❌ Bu komutu sadece owner (umutpapa123) kullanabilir!', ephemeral: true });
+        return interaction.reply({ content: '❌ Bu komutu sadece owner kullanabilir!', ephemeral: true });
       }
 
-      // Log kanalı oluştur
-      let logChannel = guild.channels.cache.find(ch => ch.name === 'bot-logları');
-      
-      if (!logChannel) {
-        logChannel = await guild.channels.create({
-          name: 'bot-logları',
-          type: 0, // Text channel
-          permissionOverwrites: [
-            {
-              id: guild.id,
-              deny: ['ViewChannel']
-            },
-            {
-              id: client.user.id,
-              allow: ['ViewChannel', 'SendMessages']
-            },
-            {
-              id: OWNER_ID,
-              allow: ['ViewChannel', 'ReadMessageHistory']
-            }
-          ]
-        });
-      }
-
-      // Ses kanallarındaki aktiviteyi kontrol et
-      const voiceChannels = guild.channels.cache.filter(ch => ch.type === 2); // Voice channels
-      let voiceActivityLog = '📊 **Ses Kanal Aktivitesi:**\n\n';
-
-      for (const [, channel] of voiceChannels) {
-        const members = channel.members.filter(m => !m.user.bot);
-        if (members.size > 0) {
-          voiceActivityLog += `🔊 ${channel.name}: ${members.size} kişi\n`;
-          members.forEach(m => {
-            const voiceState = m.voice;
-            voiceActivityLog += `  • ${m.user.username} (${voiceState.streaming ? '📡 Yayın' : 'Dinliyor'})\n`;
+      try {
+        // Log kanalı oluştur veya bul
+        let logChannel = guild.channels.cache.find(ch => ch.name === 'bot-logları');
+        
+        if (!logChannel) {
+          logChannel = await guild.channels.create({
+            name: 'bot-logları',
+            type: 0, // Text channel
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: ['ViewChannel']
+              },
+              {
+                id: client.user.id,
+                allow: ['ViewChannel', 'SendMessages']
+              },
+              {
+                id: OWNER_ID,
+                allow: ['ViewChannel', 'ReadMessageHistory']
+              }
+            ]
           });
         }
+
+        // Ses kanallarındaki aktiviteyi kontrol et
+        const voiceChannels = guild.channels.cache.filter(ch => ch.type === 2); // Voice channels
+        let voiceActivityLog = '📊 **Ses Kanal Aktivitesi:**\n\n';
+
+        let hasVoiceActivity = false;
+        for (const [, channel] of voiceChannels) {
+          const members = channel.members.filter(m => !m.user.bot);
+          if (members.size > 0) {
+            hasVoiceActivity = true;
+            voiceActivityLog += `🔊 ${channel.name}: ${members.size} kişi\n`;
+            members.forEach(m => {
+              const voiceState = m.voice;
+              voiceActivityLog += `  • ${m.user.username} (${voiceState.streaming ? '📡 Yayın' : 'Dinliyor'})\n`;
+            });
+          }
+        }
+
+        const logEmbed = new EmbedBuilder()
+          .setColor(0x34495e)
+          .setTitle('📋 Bot Logları')
+          .setDescription(hasVoiceActivity ? voiceActivityLog : '📭 Şu anda hiç kimse ses kanalında değil.')
+          .addFields(
+            { name: '👥 Sunucu Üye Sayısı', value: `${guild.memberCount}`, inline: true },
+            { name: '📅 Tarih', value: `${new Date().toLocaleString('tr-TR')}`, inline: true },
+            { name: '🎙️ Ses Kanalları', value: `${voiceChannels.size}`, inline: true }
+          )
+          .setFooter({ text: 'Log sistemi aktif' });
+
+        await logChannel.send({ embeds: [logEmbed] });
+        await interaction.reply({ content: `✅ Loglar **#${logChannel.name}** kanalına gönderildi!`, ephemeral: true });
+      } catch (error) {
+        console.error('Log komutu hatası:', error);
+        await interaction.reply({ content: `❌ Log kanalı oluşturulamadı: ${error.message}`, ephemeral: true });
       }
-
-      const logEmbed = new EmbedBuilder()
-        .setColor(0x34495e)
-        .setTitle('📋 Bot Logları')
-        .setDescription(voiceActivityLog || 'Şu anda hiç kimse ses kanalında değil.')
-        .addFields(
-          { name: '👥 Sunucu Üye Sayısı', value: `${guild.memberCount}`, inline: true },
-          { name: '📅 Tarih', value: `${new Date().toLocaleString('tr-TR')}`, inline: true }
-        )
-        .setFooter({ text: 'Log sistemi aktif' });
-
-      await logChannel.send({ embeds: [logEmbed] });
-      interaction.reply({ content: `✅ Loglar **#${logChannel.name}** kanalına gönderildi!`, ephemeral: true });
     }
 
     // SUNUCU BİLGİ KOMUTU
