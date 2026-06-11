@@ -994,7 +994,15 @@ async function registerSlashCommands() {
 
     new SlashCommandBuilder()
       .setName('owoçek')
-      .setDescription('OWO satın alma taleplerini kontrol et ve onayla (Admin Only)')
+      .setDescription('OWO satın alma taleplerini kontrol et ve onayla (Admin Only)'),
+
+    new SlashCommandBuilder()
+      .setName('owotarıfı')
+      .setDescription('OWO fiyatını ayarla (Admin Only)')
+      .addIntegerOption(option =>
+        option.setName('tutar')
+          .setDescription('1 ürün için kaç OWO gerekli (örn: 8999)')
+          .setRequired(true))
   ];
 
   try {
@@ -1553,86 +1561,128 @@ client.on('interactionCreate', async (interaction) => {
           db.users.push(dbUser);
         }
 
-        // OWO transfer request embed'i oluştur
+        // OWO transfer request embed'i
         const transferEmbed = new EmbedBuilder()
           .setColor(0x9b59b6)
-          .setTitle('💜 OWO Kredi Transfer')
-          .setDescription(`**${user.username}** adlı kullanıcıdan **${owoAmount} OWO** kredi talebiniz alındı!`)
+          .setTitle('💜 OWO Kredi Transfer Talebi')
+          .setDescription(`Kredi satın almak için OWO gönderme talebiniz kaydedildi.`)
           .addFields(
-            { name: '👤 Gönderen', value: `<@${user.id}>`, inline: true },
-            { name: '💜 Miktar', value: `**${owoAmount} OWO**`, inline: true },
-            { name: '📧 Discord ID', value: user.id, inline: false },
-            { name: '⏰ Talep Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false },
-            { name: '📝 Talimat', value: 'Aşağıdaki komutu OWO botuna yazın:\n```\n/w send <BotID> ' + owoAmount + '\n```', inline: false }
+            { name: '👤 Kullanıcı', value: user.username, inline: true },
+            { name: '💜 İstenen Miktar', value: `**${owoAmount} OWO**`, inline: true },
+            { name: '📝 Talimat', value: `OWO botuna şu komutu yazın:\n\`/w send @umutpapa123 ${owoAmount}\`\n\nAdmin tarafından onaylandıktan sonra krediler hesabınıza eklenecektir.`, inline: false },
+            { name: '⏳ Durum', value: 'Admin Onayı Bekleniyor...', inline: false }
           )
-          .setFooter({ text: 'Transfer talebiniz kaydedildi' })
+          .setFooter({ text: 'OWO Kredi Sistemi' })
           .setTimestamp();
 
-        // Owner'a bildir
+        // Admin'a bildir - DM'ye gönder
         const ownerUser = await client.users.fetch(OWNER_ID);
-        await ownerUser.send({ embeds: [transferEmbed] });
-
-        // Kullanıcıya onay mesajı
-        const confirmEmbed = new EmbedBuilder()
-          .setColor(0x2ecc71)
-          .setTitle('✅ Kredi Transfer Talebiniz Gönderildi')
-          .setDescription(`Admin tarafından doğrulandıktan sonra **${owoAmount}** kredi hesabınıza eklenecektir.`)
+        
+        const adminNotificationEmbed = new EmbedBuilder()
+          .setColor(0x9b59b6)
+          .setTitle('💜 Yeni OWO Kredi Talebi')
+          .setDescription(`**${user.username}** kredi satın almak için OWO göndereceğini söyledi.`)
           .addFields(
-            { name: '💜 OWO Miktarı', value: owoAmount.toString(), inline: true },
-            { name: '⏳ Durum', value: 'Bekleniyor...', inline: true }
+            { name: '👤 Kullanıcı', value: `<@${user.id}>`, inline: true },
+            { name: '💜 Tutar', value: `${owoAmount} OWO`, inline: true },
+            { name: '📧 Discord ID', value: user.id, inline: true },
+            { name: '⏰ Talep Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false }
           )
-          .setFooter({ text: 'Kredi transfer sistemi' })
+          .setFooter({ text: 'Kredi Satın Alma Talebi' })
           .setTimestamp();
 
-        interaction.reply({ embeds: [confirmEmbed], ephemeral: true });
+        await ownerUser.send({ embeds: [adminNotificationEmbed] });
+
+        // Kullanıcıya sunucuda ephemeral mesaj gönder (sadece kendisi görsün)
+        interaction.reply({ embeds: [transferEmbed], ephemeral: true });
 
         // Sistem logları
-        addSystemLog(db, 'CREDIT_REQUEST', `Kullanıcı kredi talebinde bulundu: ${user.username} (${owoAmount} OWO)`, user.id);
+        addSystemLog(db, 'CREDIT_REQUEST', `Kredi satın alma talebinin: ${user.username} (${owoAmount} OWO)`, user.id);
         saveDatabase(db);
 
-        console.log(`💜 Kredi transfer talebinin: ${user.username} → ${owoAmount} OWO`);
+        console.log(`💜 Kredi transfer talebi: ${user.username} → ${owoAmount} OWO`);
       } catch (error) {
         console.error('Kredi alma hatası:', error);
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
 
-    // ✅ YENİ: OWO İLE ÜRÜN SATINA AL
+    // ✅ YENİ: OWO İLE ÜRÜN SATINA AL (RANDOM ÜRÜN)
     if (commandName === 'owoileode') {
       try {
-        // Stokları göster (ürün seçmesi için)
-        const categories = db.categories;
+        // Stokta ürün var mı kontrol et
+        const availableProducts = db.products.filter(p => {
+          const acc = p.accounts.filter(a => !a.used);
+          return p.quantity > 0 && acc.length > 0;
+        });
 
-        if (categories.length === 0) {
+        if (availableProducts.length === 0) {
           return interaction.reply({ content: '❌ Şu anda stokta ürün yok!', ephemeral: true });
         }
 
-        // Dropdown menu oluştur
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId('select_stock')
-          .setPlaceholder('📦 Stok seçin...')
-          .addOptions(
-            categories.map(cat => ({
-              label: `${cat.name} (${cat.quantity} adet)`,
-              value: cat.id,
-              description: `${cat.quantity} ürün mevcuttur`
-            }))
-          );
+        // Random ürün seç
+        const randomProduct = availableProducts[Math.floor(Math.random() * availableProducts.length)];
+        
+        const owoPrice = (db.settings && db.settings.owoPrice) || 7650; // Default 7650
 
-        const row = new ActionRowBuilder().addComponents(selectMenu);
-
-        const selectEmbed = new EmbedBuilder()
-          .setColor(0x9b59b6)
-          .setTitle('🛍️ OWO ile Satın Al')
-          .setDescription('Aşağıdan bir stok seçin. Ürünü seçtikten sonra **7650 OWO** göndermeniz gerekecek.')
+        // OWO transfer talimatı embed'i
+        const instructionEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('🎁 Random Ürün Seçildi!')
+          .setDescription('Aşağıdaki komutu OWO botuna yazın ve ödemenizi tamamlayın:')
           .addFields(
-            { name: '💜 Gerekli Tutar', value: '**7650 OWO**', inline: true },
-            { name: '📊 Mevcut Stoklar', value: categories.length.toString(), inline: true }
+            { name: '🎮 Ürün', value: randomProduct.name, inline: true },
+            { name: '💜 Tutar', value: `**${owoPrice} OWO**`, inline: true },
+            { name: '📝 OWO Bot Komutu', value: `\`\`\`\n/w send @umutpapa123 ${owoPrice}\n\`\`\``, inline: false },
+            { name: '⏳ Sonraki Adım', value: 'OWO gönderdikten sonra admin `/owoçek` yazıp ödemenizi onayladığında hesaplar DM\'den gönderilecek!', inline: false }
           )
-          .setFooter({ text: 'Stok seçim sistemi' })
+          .setFooter({ text: 'OWO Ödeme Sistemi' })
           .setTimestamp();
 
-        interaction.reply({ embeds: [selectEmbed], components: [row], ephemeral: true });
+        // Initialize pending payments array
+        if (!db.owoPendingPayments) db.owoPendingPayments = [];
+
+        // Pending payment'a ekle
+        const pendingPayment = {
+          id: Date.now().toString() + Math.random(),
+          userId: user.id,
+          userName: user.username,
+          productId: randomProduct.id,
+          productName: randomProduct.name,
+          owoAmount: owoPrice,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        };
+
+        db.owoPendingPayments.push(pendingPayment);
+        saveDatabase(db);
+
+        // Kullanıcıya sunucuda ephemeral mesaj
+        interaction.reply({ embeds: [instructionEmbed], ephemeral: true });
+
+        // Admin'e bildir - DM'ye gönder
+        const ownerUser = await client.users.fetch(OWNER_ID);
+        const adminNotificationEmbed = new EmbedBuilder()
+          .setColor(0x9b59b6)
+          .setTitle('💜 Yeni OWO Ödeme Talebi')
+          .setDescription(`**${user.username}** ödeme talebinde bulundu.`)
+          .addFields(
+            { name: '🎮 Ürün', value: randomProduct.name, inline: true },
+            { name: '💜 Tutar', value: `${owoPrice} OWO`, inline: true },
+            { name: '👤 Kullanıcı', value: `<@${user.id}>`, inline: true },
+            { name: '📧 ID', value: user.id, inline: true },
+            { name: '⏰ Talep Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false },
+            { name: '📝 Sonraki Adım', value: '`/owoçek` yazıp ödemeleri kontrol edin!', inline: false }
+          )
+          .setFooter({ text: 'OWO ödeme talebiniz alındı' })
+          .setTimestamp();
+
+        await ownerUser.send({ embeds: [adminNotificationEmbed] });
+
+        // Sistem logları
+        addSystemLog(db, 'OWO_PAYMENT_INITIATED', `OWO ödeme talebinin başlatıldı: ${user.username} - ${randomProduct.name} (${owoPrice} OWO) [RANDOM]`, user.id);
+
+        console.log(`💜 OWO ödeme talebi (RANDOM): ${user.username} → ${randomProduct.name}`);
       } catch (error) {
         console.error('OWO satın alma hatası:', error);
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
@@ -1685,6 +1735,47 @@ client.on('interactionCreate', async (interaction) => {
         interaction.reply({ embeds: [pendingEmbed], components: [row], ephemeral: true });
       } catch (error) {
         console.error('OWO çek hatası:', error);
+        interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
+    }
+
+    // ✅ YENİ: OWO TARİFİNİ AYARLA (Admin)
+    if (commandName === 'owotarıfı') {
+      if (user.id !== OWNER_ID) {
+        return interaction.reply({ content: '❌ Bu komutu sadece admin kullanabilir!', ephemeral: true });
+      }
+
+      try {
+        const tutar = options.getInteger('tutar');
+
+        if (tutar <= 0) {
+          return interaction.reply({ content: '❌ OWO tutarı 0\'dan büyük olmalı!', ephemeral: true });
+        }
+
+        // Settings'i initialize et
+        if (!db.settings) db.settings = {};
+        db.settings.owoPrice = tutar;
+
+        saveDatabase(db);
+
+        const settingEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('✅ OWO Tarifi Güncellendi')
+          .addFields(
+            { name: '💜 Yeni Tutar', value: `**${tutar} OWO**`, inline: true },
+            { name: '📝 Komutu', value: `\`/w send @umutpapa123 ${tutar}\``, inline: true }
+          )
+          .setFooter({ text: 'Yeni fiyat uygulandı' })
+          .setTimestamp();
+
+        interaction.reply({ embeds: [settingEmbed], ephemeral: true });
+
+        // Sistem logları
+        addSystemLog(db, 'OWO_PRICE_UPDATED', `OWO tarifi güncellendi: ${tutar}`, user.id);
+
+        console.log(`✅ OWO Tarifi Güncellendi: ${tutar}`);
+      } catch (error) {
+        console.error('OWO tarifi hatası:', error);
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
@@ -1834,100 +1925,17 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // ✅ YENİ: STRING SELECT HANDLER (STOK SEÇİMİ)
+  // ✅ YENİ: STRING SELECT HANDLER (STOK SEÇİMİ) - Şu an kullanılmıyor, random sistem kullanılıyor
+  // Eski kod burada duruyordu ama artık gerek yok
   if (interaction.isStringSelectMenu()) {
     const db = getDatabase();
     const { customId, values, user, guild } = interaction;
 
     if (customId === 'select_stock') {
       try {
-        const selectedCategoryId = values[0];
-        const selectedCategory = db.categories.find(c => c.id === selectedCategoryId);
-
-        if (!selectedCategory) {
-          return interaction.reply({ content: '❌ Stok bulunamadı!', ephemeral: true });
-        }
-
-        // Ürün seçim dropdown'ını oluştur
-        const categoryProducts = db.products.filter(p => p.categoryId === selectedCategoryId);
-
-        if (categoryProducts.length === 0) {
-          return interaction.reply({ content: `❌ **${selectedCategory.name}** stokta ürün yok!`, ephemeral: true });
-        }
-
-        const productMenu = new StringSelectMenuBuilder()
-          .setCustomId('select_product_owo')
-          .setPlaceholder('🎮 Ürün seçin...')
-          .addOptions(
-            categoryProducts.map(product => ({
-              label: product.name,
-              value: product.id,
-              description: `${product.credits} kredi • ${product.quantity} adet • ${product.accounts.filter(a => !a.used).length} hesap`
-            })).slice(0, 25) // Discord max 25 option
-          );
-
-        const row = new ActionRowBuilder().addComponents(productMenu);
-
-        const productEmbed = new EmbedBuilder()
-          .setColor(0x9b59b6)
-          .setTitle(`🛍️ ${selectedCategory.name} - Ürün Seç`)
-          .setDescription('Satın almak istediğiniz ürünü seçin. Ödeme için **7650 OWO** göndermeniz gerekecek.')
-          .addFields(
-            { name: '📦 Stok', value: selectedCategory.name, inline: true },
-            { name: '📊 Ürün Sayısı', value: categoryProducts.length.toString(), inline: true },
-            { name: '💜 Fiyat', value: '7650 OWO', inline: true }
-          )
-          .setFooter({ text: 'Ürün seçim sistemi' })
-          .setTimestamp();
-
-        interaction.reply({ embeds: [productEmbed], components: [row], ephemeral: true });
+        interaction.reply({ content: '⚠️ Stok seçim sistemi kapatıldı. Lütfen `/owoileode` komutu kullanın!', ephemeral: true });
       } catch (error) {
         console.error('Stok seçim hatası:', error);
-        interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
-      }
-    }
-
-    if (customId === 'select_product_owo') {
-      try {
-        const selectedProductId = values[0];
-        const selectedProduct = db.products.find(p => p.id === selectedProductId);
-
-        if (!selectedProduct) {
-          return interaction.reply({ content: '❌ Ürün bulunamadı!', ephemeral: true });
-        }
-
-        // Ürün detayı ve ödeme button'ı
-        const paymentEmbed = new EmbedBuilder()
-          .setColor(0x9b59b6)
-          .setTitle(`💳 ${selectedProduct.name} - Ödeme`)
-          .setDescription('Ürün detaylarını aşağıda görebilirsiniz. OWO ile ödeme yapıp hesabınızı alabilirsiniz.')
-          .addFields(
-            { name: '🎮 Ürün Adı', value: selectedProduct.name, inline: true },
-            { name: '📊 Adet', value: selectedProduct.quantity.toString(), inline: true },
-            { name: '💜 Ödeme Tutarı', value: '**7650 OWO**', inline: false },
-            { name: '👤 Alıcı', value: `<@${user.id}>`, inline: true },
-            { name: '📧 Discord ID', value: user.id, inline: true },
-            { name: '📝 Talimat', value: 'Aşağıdaki button\'a tıklayıp OWO botuna `/w send <AdminBotID> 7650` yazın. Sonra admin `/owoçek` yazacak!', inline: false }
-          )
-          .setFooter({ text: 'OWO ödeme sistemi' })
-          .setTimestamp();
-
-        const row = new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder()
-              .setCustomId(`confirm_owo_${selectedProductId}_${user.id}`)
-              .setLabel('✅ Ödeme Başlat (OWO Gönder)')
-              .setStyle(ButtonStyle.Success)
-              .setEmoji('💜'),
-            new ButtonBuilder()
-              .setCustomId('cancel_owo')
-              .setLabel('❌ İptal')
-              .setStyle(ButtonStyle.Danger)
-          );
-
-        interaction.reply({ embeds: [paymentEmbed], components: [row], ephemeral: true });
-      } catch (error) {
-        console.error('Ürün seçim hatası:', error);
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
@@ -1957,6 +1965,9 @@ client.on('interactionCreate', async (interaction) => {
         // Initialize pending payments array
         if (!db.owoPendingPayments) db.owoPendingPayments = [];
 
+        // OWO fiyatını al (default 7650)
+        const owoPrice = (db.settings && db.settings.owoPrice) || 7650;
+
         // Pending payment'a ekle
         const pendingPayment = {
           id: Date.now().toString() + Math.random(),
@@ -1964,7 +1975,7 @@ client.on('interactionCreate', async (interaction) => {
           userName: user.username,
           productId: productId,
           productName: product.name,
-          owoAmount: 7650,
+          owoAmount: owoPrice,
           status: 'pending',
           createdAt: new Date().toISOString()
         };
@@ -1979,8 +1990,8 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription('Aşağıdaki komutu OWO botuna yazın:')
           .addFields(
             { name: '🎮 Ürün', value: product.name, inline: true },
-            { name: '💜 Tutar', value: '**7650 OWO**', inline: true },
-            { name: '📝 OWO Bot Komutu', value: '```\n/w send <BotID> 7650\n```', inline: false },
+            { name: '💜 Tutar', value: `**${owoPrice} OWO**`, inline: true },
+            { name: '📝 OWO Bot Komutu', value: `\`\`\`\n/w send @umutpapa123 ${owoPrice}\n\`\`\``, inline: false },
             { name: '⏳ Sonraki Adım', value: 'Admin `/owoçek` yazıp ödemenizi onayladığında hesaplar gönderilecek!', inline: false }
           )
           .setFooter({ text: 'OWO Ödeme Sistemi' })
@@ -1996,7 +2007,7 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`**${user.username}** ödeme talebinde bulundu.`)
           .addFields(
             { name: '🎮 Ürün', value: product.name, inline: true },
-            { name: '💜 Tutar', value: '7650 OWO', inline: true },
+            { name: '💜 Tutar', value: `${owoPrice} OWO`, inline: true },
             { name: '👤 Kullanıcı', value: `<@${user.id}>`, inline: true },
             { name: '📧 ID', value: user.id, inline: true },
             { name: '⏰ Talep Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false },
@@ -2008,7 +2019,7 @@ client.on('interactionCreate', async (interaction) => {
         await ownerUser.send({ embeds: [notificationEmbed] });
 
         // Sistem logları
-        addSystemLog(db, 'OWO_PAYMENT_INITIATED', `OWO ödeme talebinin başlatıldı: ${user.username} - ${product.name} (7650 OWO)`, user.id);
+        addSystemLog(db, 'OWO_PAYMENT_INITIATED', `OWO ödeme talebinin başlatıldı: ${user.username} - ${product.name} (${owoPrice} OWO)`, user.id);
 
         console.log(`💜 OWO ödeme talebi kaydedildi: ${user.username} → ${product.name}`);
       } catch (error) {
