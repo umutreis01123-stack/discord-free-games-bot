@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { REST } = require('discord.js');
 const { Routes } = require('discord.js');
 const express = require('express');
@@ -1263,12 +1263,12 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription('Destek talebiniz için bir ticket oluşturun.')
         .setFooter({ text: 'Butona tıklayarak başlayın' });
 
-      const row = new (require('discord.js')).ActionRowBuilder()
+      const row = new ActionRowBuilder()
         .addComponents(
-          new (require('discord.js')).ButtonBuilder()
+          new ButtonBuilder()
             .setCustomId('create_ticket')
             .setLabel('Ticket Aç')
-            .setStyle((require('discord.js')).ButtonStyle.Primary)
+            .setStyle(ButtonStyle.Primary)
             .setEmoji('🎫')
         );
 
@@ -1283,12 +1283,12 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription('Destek talebinizi oluşturmak için butona tıklayın.')
         .setFooter({ text: 'Ekibimiz kısa sürede yanıt verecektir' });
 
-      const row = new (require('discord.js')).ActionRowBuilder()
+      const row = new ActionRowBuilder()
         .addComponents(
-          new (require('discord.js')).ButtonBuilder()
+          new ButtonBuilder()
             .setCustomId('create_support')
             .setLabel('Destek Talebi Aç')
-            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setStyle(ButtonStyle.Danger)
             .setEmoji('💬')
         );
 
@@ -1347,12 +1347,12 @@ client.on('interactionCreate', async (interaction) => {
           )
           .setFooter({ text: `Çekiliş ${duration} saniye sonra sona erecek` });
 
-        const row = new (require('discord.js')).ActionRowBuilder()
+        const row = new ActionRowBuilder()
           .addComponents(
-            new (require('discord.js')).ButtonBuilder()
+            new ButtonBuilder()
               .setCustomId('join_giveaway')
               .setLabel('Çekilişe Katıl')
-              .setStyle((require('discord.js')).ButtonStyle.Success)
+              .setStyle(ButtonStyle.Success)
               .setEmoji('🎁')
           );
 
@@ -1604,8 +1604,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Dropdown menu oluştur
-        const { StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
-
         const selectMenu = new StringSelectMenuBuilder()
           .setCustomId('select_stock')
           .setPlaceholder('📦 Stok seçin...')
@@ -1666,12 +1664,12 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(`Merhaba ${user}! Destek ekibimiz kısa sürede yanıt verecektir.`)
         .setTimestamp();
 
-      const row = new (require('discord.js')).ActionRowBuilder()
+      const row = new ActionRowBuilder()
         .addComponents(
-          new (require('discord.js')).ButtonBuilder()
+          new ButtonBuilder()
             .setCustomId('close_ticket')
             .setLabel('Ticketi Kapat')
-            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setStyle(ButtonStyle.Danger)
             .setEmoji('❌')
         );
 
@@ -1721,16 +1719,16 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(`${user} tarafından destek talebi açıldı.`)
         .setTimestamp();
 
-      const row = new (require('discord.js')).ActionRowBuilder()
+      const row = new ActionRowBuilder()
         .addComponents(
-          new (require('discord.js')).ButtonBuilder()
+          new ButtonBuilder()
             .setCustomId('support_ustlen')
             .setLabel('Talebi Üstlen')
-            .setStyle((require('discord.js')).ButtonStyle.Primary),
-          new (require('discord.js')).ButtonBuilder()
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
             .setCustomId('support_kapat')
             .setLabel('Talebi Kapat')
-            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setStyle(ButtonStyle.Danger)
         );
 
       await supportChannel.send({ embeds: [supportEmbed], components: [row] });
@@ -1747,12 +1745,12 @@ client.on('interactionCreate', async (interaction) => {
       embed.data.fields = embed.data.fields || [];
       embed.data.fields.push({ name: '👤 Sorumlu', value: `${user}`, inline: false });
 
-      const row = new (require('discord.js')).ActionRowBuilder()
+      const row = new ActionRowBuilder()
         .addComponents(
-          new (require('discord.js')).ButtonBuilder()
+          new ButtonBuilder()
             .setCustomId('support_kapat')
             .setLabel('Talebi Kapat')
-            .setStyle((require('discord.js')).ButtonStyle.Danger)
+            .setStyle(ButtonStyle.Danger)
         );
 
       await msg.edit({ embeds: [embed], components: [row] });
@@ -1797,9 +1795,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Ürün seçim dropdown'ını oluştur
-        const { StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
-
-        // Bu stokta olan ürünleri getir
         const categoryProducts = db.products.filter(p => p.categoryId === selectedCategoryId);
 
         if (categoryProducts.length === 0) {
@@ -1848,8 +1843,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Ürün detayı ve ödeme button'ı
-        const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
         const paymentEmbed = new EmbedBuilder()
           .setColor(0x9b59b6)
           .setTitle(`💳 ${selectedProduct.name} - Ödeme`)
@@ -1957,8 +1950,142 @@ client.on('interactionCreate', async (interaction) => {
       interaction.reply({ content: '❌ İşlem iptal edildi.', ephemeral: true });
     }
 
-    // Diğer button handlers...
+    // TICKET BUTTONS
     if (customId === 'create_ticket') {
+      const ticketChannel = await guild.channels.create({
+        name: `ticket-${user.username}`,
+        type: 0,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: ['ViewChannel']
+          },
+          {
+            id: user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+          }
+        ]
+      });
+
+      const ticketEmbed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🎫 Ticket Açıldı')
+        .setDescription(`Merhaba ${user}! Destek ekibimiz kısa sürede yanıt verecektir.`)
+        .setTimestamp();
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('Ticketi Kapat')
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji('❌')
+        );
+
+      await ticketChannel.send({ embeds: [ticketEmbed], components: [row] });
+      
+      // Sorumlulara bildirim
+      if (db.staff && db.staff.supportStaff) {
+        for (const staffId of db.staff.supportStaff) {
+          try {
+            const staffUser = await client.users.fetch(staffId);
+            await staffUser.send(`📝 Yeni ticket: <#${ticketChannel.id}> - ${user.username}`);
+          } catch (e) {
+            console.log('Staff bildirim gönderilemedi');
+          }
+        }
+      }
+
+      interaction.reply({ content: `✅ Ticket oluşturuldu: <#${ticketChannel.id}>`, ephemeral: true });
+    }
+
+    if (customId === 'close_ticket') {
+      if (channel.name.startsWith('ticket-')) {
+        await channel.delete();
+      }
+    }
+
+    // DESTEK BUTTONS
+    if (customId === 'create_support') {
+      const supportChannel = await guild.channels.create({
+        name: `destek-${user.username}`,
+        type: 0,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: ['ViewChannel']
+          },
+          {
+            id: user.id,
+            allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
+          }
+        ]
+      });
+
+      const supportEmbed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('💬 Destek Talebi Oluşturuldu')
+        .setDescription(`${user} tarafından destek talebi açıldı.`)
+        .setTimestamp();
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('support_ustlen')
+            .setLabel('Talebi Üstlen')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId('support_kapat')
+            .setLabel('Talebi Kapat')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+      await supportChannel.send({ embeds: [supportEmbed], components: [row] });
+      interaction.reply({ content: `✅ Destek talebi oluşturuldu: <#${supportChannel.id}>`, ephemeral: true });
+    }
+
+    if (customId === 'support_ustlen') {
+      if (!db.staff || !db.staff.supportStaff.includes(user.id)) {
+        return interaction.reply({ content: '❌ Yalnızca sorumlular bu işlemi yapabilir!', ephemeral: true });
+      }
+
+      const msg = await channel.messages.fetch(interaction.message.id);
+      const embed = msg.embeds[0];
+      embed.data.fields = embed.data.fields || [];
+      embed.data.fields.push({ name: '👤 Sorumlu', value: `${user}`, inline: false });
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('support_kapat')
+            .setLabel('Talebi Kapat')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+      await channel.send({ embeds: [embed], components: [row] });
+      interaction.reply({ content: '✅ Talebi üstlendi!', ephemeral: true });
+    }
+
+    if (customId === 'support_kapat' || customId === 'support_close') {
+      await channel.delete();
+    }
+
+    // ÇEKİLİŞ BUTTONS
+    if (customId === 'join_giveaway') {
+      const msg = interaction.message;
+      if (db.giveaways && db.giveaways[msg.id]) {
+        const giveaway = db.giveaways[msg.id];
+        
+        if (!giveaway.participants.includes(user.id)) {
+          giveaway.participants.push(user.id);
+          saveDatabase(db);
+          interaction.reply({ content: '✅ Çekilişe katıldın!', ephemeral: true });
+        } else {
+          interaction.reply({ content: '⚠️ Zaten çekilişte varsın!', ephemeral: true });
+        }
+      }
+    }
+  }
 });
 
 async function endGiveaway(messageId, db) {
