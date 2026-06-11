@@ -897,70 +897,203 @@ client.on('ready', () => {
   registerSlashCommands();
 });
 
-// ✅ MESAJ KOMUTU: -resetle (Kanalı sil ve ayarlarıyla yeniden oluştur)
+// ✅ MESAJ KOMUTU: -eventyap (Event oluştur)
 client.on('messageCreate', async (message) => {
   // Bot kendi mesajlarını yoksay
   if (message.author.bot) return;
 
   try {
-    // -resetle komutunu kontrol et
-    if (message.content.trim() === '-resetle') {
+    // -eventyap komutunu kontrol et
+    if (message.content.trim().startsWith('-eventyap')) {
       // Admin kontrolü
       if (message.author.id !== OWNER_ID) {
         return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
       }
 
-      try {
-        // Kanalın ayarlarını kaydet
-        const channel = message.channel;
-        const channelData = {
-          name: channel.name,
-          topic: channel.topic,
-          position: channel.position,
-          parent: channel.parentId,
-          permissionOverwrites: channel.permissionOverwrites.cache.map(overwrite => ({
-            id: overwrite.id,
-            type: overwrite.type,
-            allow: overwrite.allow.bitfield,
-            deny: overwrite.deny.bitfield
-          }))
-        };
+      const args = message.content.trim().split(' ');
+      const participantCount = parseInt(args[1]);
 
-        await message.reply('⏳ Kanal sıfırlanıyor...');
+      if (isNaN(participantCount) || participantCount <= 0 || participantCount > 25) {
+        return message.reply({ content: '❌ 1-25 arası geçerli bir sayı girin! Örn: `-eventyap 5`', ephemeral: true });
+      }
 
-        // Kanalı sil
-        await channel.delete();
+      const db = getDatabase();
+      if (!db.events) db.events = {};
 
-        // Yeni kanalı oluştur (aynı ayarlarla)
-        const newChannel = await message.guild.channels.create({
-          name: channelData.name,
-          type: 0, // Text channel
-          topic: channelData.topic,
-          position: channelData.position,
-          parent: channelData.parent,
-          permissionOverwrites: channelData.permissionOverwrites
-        });
+      const eventId = Date.now().toString();
+      
+      // Event oluştur
+      const event = {
+        id: eventId,
+        channelId: message.channel.id,
+        messageId: null,
+        participants: new Set(),
+        participantCount: participantCount,
+        winners: [],
+        createdAt: new Date().toISOString(),
+        finished: false
+      };
 
-        // Yeni kanala onay mesajı gönder
-        const confirmEmbed = new EmbedBuilder()
+      db.events[eventId] = event;
+      saveDatabase(db);
+
+      // Button'ları oluştur
+      const buttons = [];
+      for (let i = 1; i <= participantCount; i++) {
+        buttons.push(
+          new ButtonBuilder()
+            .setCustomId(`event_join_${eventId}_${i}`)
+            .setLabel(`Katıl #${i}`)
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🎮')
+        );
+      }
+
+      // 5 button per row (Discord limiti)
+      const rows = [];
+      for (let i = 0; i < buttons.length; i += 5) {
+        rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+      }
+
+      const eventEmbed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('🎮 Event Başladı!')
+        .setDescription(`**${participantCount}** kişi katılabilir. Katılmak için aşağıdaki button'a tıklayın!`)
+        .addFields(
+          { name: '👥 Katılımcılar', value: '0', inline: true },
+          { name: '📊 Kapasitesi', value: participantCount.toString(), inline: true }
+        )
+        .setFooter({ text: `Event ID: ${eventId}` })
+        .setTimestamp();
+
+      const eventMsg = await message.channel.send({ embeds: [eventEmbed], components: rows });
+      event.messageId = eventMsg.id;
+      db.events[eventId].messageId = eventMsg.id;
+      saveDatabase(db);
+
+      console.log(`🎮 Event oluşturuldu: ${participantCount} kişi - ${message.author.username}`);
+    }
+
+    // -eventbitir komutunu kontrol et
+    if (message.content.trim() === '-eventbitir') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      const db = getDatabase();
+      if (!db.events || Object.keys(db.events).length === 0) {
+        return message.reply({ content: '❌ Aktif event yok!', ephemeral: true });
+      }
+
+      // Aktif event'leri bul (finished = false)
+      const activeEvents = Object.values(db.events).filter(e => !e.finished && e.channelId === message.channel.id);
+
+      if (activeEvents.length === 0) {
+        return message.reply({ content: '❌ Bu kanalda aktif event yok!', ephemeral: true });
+      }
+
+      // Tüm aktif event'leri bitir
+      for (const event of activeEvents) {
+        if (event.participants.size === 0) {
+          await message.channel.send(`⚠️ Event ID: ${event.id} - Kimse katılmadı!`);
+          event.finished = true;
+          continue;
+        }
+
+        // Random kazanan seç
+        const participantArray = Array.from(event.participants);
+        const winners = [];
+        
+        // Her button başına 1 kazanan
+        for (let i = 1; i <= event.participantCount; i++) {
+          const buttonParticipants = participantArray.filter(p => p.buttonNumber === i);
+          if (buttonParticipants.length > 0) {
+            const randomWinner = buttonParticipants[Math.floor(Math.random() * buttonParticipants.length)];
+            winners.push(randomWinner);
+          }
+        }
+
+        // Kazananları etiketle
+        let winnersText = '';
+        if (winners.length > 0) {
+          winnersText = winners.map(w => `<@${w.userId}>`).join(', ');
+        }
+
+        const resultEmbed = new EmbedBuilder()
           .setColor(0x2ecc71)
-          .setTitle('✅ Kanal Sıfırlandı!')
-          .setDescription('Kanal başarıyla silindi ve yeniden oluşturuldu.')
+          .setTitle('🏆 Event Bitti!')
+          .setDescription('Kazananlar:')
           .addFields(
-            { name: '📝 Kanal Adı', value: channelData.name, inline: true },
-            { name: '🔧 Ayarlar', value: 'Korundu ✓', inline: true }
+            { name: '👑 Kazananlar', value: winnersText || 'Hiç kimse', inline: false },
+            { name: '👥 Toplam Katılımcı', value: event.participants.size.toString(), inline: true }
           )
-          .setFooter({ text: 'Kanal Sıfırlama' })
+          .setFooter({ text: `Event ID: ${event.id}` })
           .setTimestamp();
 
-        await newChannel.send({ embeds: [confirmEmbed] });
+        await message.channel.send({ embeds: [resultEmbed] });
+        event.finished = true;
+      }
 
-        console.log(`🔄 Kanal sıfırlandı: ${channelData.name} - ${message.author.username}`);
-      } catch (error) {
-        console.error('-resetle komutu hatası:', error);
-        message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      saveDatabase(db);
+      console.log(`🏆 Event(ler) bitti - ${message.author.username}`);
+    }
+  } catch (error) {
+    console.error('Event komutu hatası:', error);
+  }
+});
+
+// ✅ EVENT BUTTON HANDLER
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  try {
+    const { customId, user } = interaction;
+
+    if (customId.startsWith('event_join_')) {
+      const parts = customId.split('_');
+      const eventId = parts[2];
+      const buttonNumber = parseInt(parts[3]);
+
+      const db = getDatabase();
+      if (!db.events || !db.events[eventId]) {
+        return interaction.reply({ content: '❌ Event bulunamadı!', ephemeral: true });
+      }
+
+      const event = db.events[eventId];
+
+      if (event.finished) {
+        return interaction.reply({ content: '❌ Bu event bitti!', ephemeral: true });
+      }
+
+      // Katılımcı ekle
+      const participant = { userId: user.id, username: user.username, buttonNumber };
+      
+      // Set'i array'e çevir, kontrol et, ekle
+      let participants = Array.from(event.participants || []);
+      if (!participants.some(p => p.userId === user.id)) {
+        participants.push(participant);
+        event.participants = new Set(participants);
+        saveDatabase(db);
+
+        const joinEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('✅ Event\'e Katıldın!')
+          .setDescription(`Button: #${buttonNumber}`)
+          .setFooter({ text: `Toplam katılımcı: ${event.participants.size}/${event.participantCount}` })
+          .setTimestamp();
+
+        interaction.reply({ embeds: [joinEmbed], ephemeral: true });
+
+        console.log(`🎮 ${user.username} Event'e katıldı (Button #${buttonNumber})`);
+      } else {
+        interaction.reply({ content: '⚠️ Zaten bu event\'e katıldın!', ephemeral: true });
       }
     }
+  } catch (error) {
+    console.error('Event button hatası:', error);
+  }
+});
 
     // -sil komutunu kontrol et
     if (message.content.trim() === '-sil') {
