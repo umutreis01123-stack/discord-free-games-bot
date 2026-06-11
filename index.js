@@ -1326,10 +1326,6 @@ async function registerSlashCommands() {
       .setDescription('OWO ile ürün satın al'),
 
     new SlashCommandBuilder()
-      .setName('owoçek')
-      .setDescription('OWO satın alma taleplerini kontrol et ve onayla (Admin Only)'),
-
-    new SlashCommandBuilder()
       .setName('owogeçmişi')
       .setDescription('Bana gönderilen tüm OWO\'ları göster'),
 
@@ -2358,7 +2354,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: '🎮 Ürün', value: product.name, inline: true },
             { name: '💜 Tutar', value: `**${owoPrice} OWO**`, inline: true },
             { name: '📝 OWO Bot Komutu', value: `\`\`\`\n/w send @umutpapa123 ${owoPrice}\n\`\`\``, inline: false },
-            { name: '⏳ Sonraki Adım', value: 'Admin `/owoçek` yazıp ödemenizi onayladığında hesaplar gönderilecek!', inline: false }
+            { name: '⏳ Sonraki Adım', value: 'OWO gönderdikten sonra `/owoödemealdı` yazın ve random hesabınızı alın!', inline: false }
           )
           .setFooter({ text: 'OWO Ödeme Sistemi' })
           .setTimestamp();
@@ -2377,7 +2373,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: '👤 Kullanıcı', value: `<@${user.id}>`, inline: true },
             { name: '📧 ID', value: user.id, inline: true },
             { name: '⏰ Talep Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false },
-            { name: '📝 Sonraki Adım', value: '`/owoçek` yazıp ödemeleri kontrol edin!', inline: false }
+            { name: '📝 Sonraki Adım', value: 'Kullanıcı OWO gönderdikten sonra `/owoödemealdı` yazacak!', inline: false }
           )
           .setFooter({ text: 'OWO ödeme talebiniz alındı' })
           .setTimestamp();
