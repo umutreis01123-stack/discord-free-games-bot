@@ -174,7 +174,7 @@ function addCreditHistory(db, userId, amount, type, description) {
 
 const ADMIN_USER = 'umut';
 const ADMIN_PASS = 'umutpapa001122u';
-const OWNER_ID = 'umutpapa123';
+const OWNER_ID = '1403495996138323989';
 
 // ============ WEB SİTESİ ============
 
