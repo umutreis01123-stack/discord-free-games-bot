@@ -1029,7 +1029,9 @@
             event.target.classList.add('active');
 
             // Tab değiştiğinde ilgili verileri yükle
-            if (tab === 'orders') {
+            if (tab === 'categories') {
+                loadCategoryManagement();
+            } else if (tab === 'orders') {
                 loadPendingOrders();
             } else if (tab === 'stats') {
                 loadAdminStats();
@@ -1114,6 +1116,13 @@
         }
 
         async function loadAdminData() {
+            // Load categories for select and management
+            try {
+                reloadCategorySelect();
+            } catch (error) {
+                console.error('Category select yüklenemedi:', error);
+            }
+            
             // Load users for selects
             try {
                 const response = await fetch('/api/admin/users');
@@ -1291,16 +1300,13 @@
         async function addProduct(event) {
             event.preventDefault();
             
+            const categoryId = document.getElementById('adminProductCategory').value;
             const name = document.getElementById('adminProductName').value;
-            const quantity = document.getElementById('adminProductQuantity').value;
             const credits = document.getElementById('adminProductCredits').value;
             const accounts = document.getElementById('adminProductAccounts').value;
 
-            // Hesap sayısı kontrolü
-            const accountLines = accounts.split('\n').filter(line => line.trim());
-            
-            if (accountLines.length < quantity) {
-                alert(`❌ Hesap sayısı yetersiz! ${quantity} adet ürün için en az ${quantity} hesap gerekli. Şu an ${accountLines.length} hesap var.`);
+            if (!categoryId) {
+                alert('❌ Lütfen stok seçin!');
                 return;
             }
 
@@ -1308,17 +1314,160 @@
                 const response = await fetch('/api/admin/products', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, quantity, credits, accounts })
+                    body: JSON.stringify({ name, quantity: 1, credits, accounts, categoryId })
                 });
 
                 if (response.ok) {
                     alert('✅ Ürün ve hesaplar eklendi!');
                     event.target.reset();
                     loadProducts();
+                    loadCategories();
                     loadAdminData();
                 } else {
                     const data = await response.json();
                     alert('❌ Hata: ' + (data.error || 'Bilinmeyen hata'));
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // ✅ YENİ: Stok Oluştur
+        async function addCategory(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById('categoryName').value;
+            const image = document.getElementById('categoryImage').value;
+            const quantity = document.getElementById('categoryQuantity').value;
+
+            try {
+                const response = await fetch('/api/admin/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, image, quantity })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Stok oluşturuldu!');
+                    event.target.reset();
+                    loadCategories();
+                    loadAdminData();
+                    
+                    // Category select'ini güncelle
+                    reloadCategorySelect();
+                } else {
+                    alert('❌ ' + (data.error || 'Hata oluştu'));
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // ✅ YENİ: Category Select'ini Yükle ve Güncelle
+        async function reloadCategorySelect() {
+            try {
+                const response = await fetch('/api/categories');
+                const categories = await response.json();
+                
+                const select = document.getElementById('adminProductCategory');
+                select.innerHTML = '<option value="">Stok Seç</option>';
+                categories.forEach(category => {
+                    select.innerHTML += `<option value="${category.id}">${category.name} (${category.quantity} adet)</option>`;
+                });
+            } catch (error) {
+                console.error('Category select yüklenemedi:', error);
+            }
+        }
+
+        // ✅ YENİ: Stokları Admin Panelde Listele
+        async function loadCategoryManagement() {
+            try {
+                const response = await fetch('/api/categories');
+                const categories = await response.json();
+                
+                const list = document.getElementById('categoriesList');
+                
+                if (categories.length === 0) {
+                    list.innerHTML = '<p style="color: #7f8c8d; text-align: center;">Henüz stok eklenmemiş</p>';
+                    return;
+                }
+
+                list.innerHTML = categories.map(category => `
+                    <div class="user-item">
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 20px;">
+                            <div>
+                                <img src="${category.image}" alt="${category.name}" style="width: 80px; height: 60px; object-fit: cover; border-radius: 5px; margin-bottom: 8px;">
+                                <strong style="color: #e94560;">${category.name}</strong><br>
+                                <span style="color: #95a5a6;">📦 ${category.quantity} adet</span><br>
+                                <span style="color: #2ecc71;">🎮 ${category.products ? category.products.length : 0} ürün</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <button class="btn" style="padding: 5px 10px; font-size: 0.8em; margin-bottom: 5px;" onclick="editCategory('${category.id}')">Düzenle</button><br>
+                                <button class="btn" style="padding: 5px 10px; font-size: 0.8em; background: #e74c3c;" onclick="deleteCategory('${category.id}')">Sil</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Stoklar yüklenemedi:', error);
+            }
+        }
+
+        // ✅ YENİ: Stok Düzenle (Modal aç)
+        function editCategory(categoryId) {
+            const newQuantity = prompt('Yeni stok miktarını girin:');
+            if (newQuantity === null || newQuantity === '') return;
+            
+            updateCategoryQuantity(categoryId, parseInt(newQuantity));
+        }
+
+        // ✅ YENİ: Stok Miktarını Güncelle
+        async function updateCategoryQuantity(categoryId, newQuantity) {
+            try {
+                const response = await fetch(`/api/admin/categories/${categoryId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quantity: newQuantity })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Stok güncelleştirildi!');
+                    loadCategoryManagement();
+                    loadCategories();
+                    reloadCategorySelect();
+                } else {
+                    alert('❌ ' + (data.error || 'Hata oluştu'));
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // ✅ YENİ: Stok Sil
+        async function deleteCategory(categoryId) {
+            if (!confirm('Bu stoku silmek istediğinizden emin misiniz?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/categories/${categoryId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Stok silindi!');
+                    loadCategoryManagement();
+                    loadCategories();
+                    reloadCategorySelect();
+                } else {
+                    alert('❌ ' + (data.error || 'Hata oluştu'));
                 }
             } catch (error) {
                 alert('❌ Hata: ' + error.message);
