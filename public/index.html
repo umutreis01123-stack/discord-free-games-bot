@@ -313,9 +313,9 @@
     <nav class="navbar">
         <div class="logo">🎮 Zwozez</div>
         <div class="nav-buttons">
-            <button class="btn btn-primary" onclick="alert('Giriş Yap')">Giriş Yap</button>
-            <button class="btn btn-success" onclick="alert('Kayıt Ol')">Kayıt Ol</button>
-            <button class="btn btn-gold" onclick="alert('Admin Panel')">👑 Admin</button>
+            <button class="btn btn-primary" onclick="openLoginModal()">Giriş Yap</button>
+            <button class="btn btn-success" onclick="openRegisterModal()">Kayıt Ol</button>
+            <button class="btn btn-gold" onclick="window.location.href='/admin'">👑 Admin</button>
         </div>
     </nav>
 
@@ -481,8 +481,157 @@
         </div>
     </div>
 
+    <!-- Giriş Yap Modal -->
+    <div id="loginModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #667eea; border-radius: 20px; padding: 40px; width: 90%; max-width: 450px; box-shadow: 0 20px 60px rgba(102,126,234,0.3);">
+            <h2 style="color: #667eea; margin-bottom: 25px; text-align: center;">🔐 Giriş Yap</h2>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Discord ID:</label>
+                <input type="text" id="loginDiscordId" placeholder="Kullanıcı adı veya ID" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Şifre:</label>
+                <input type="password" id="loginPassword" placeholder="Şifreni gir" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeLoginModal()" style="flex: 1; padding: 12px; background: #666; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">İptal</button>
+                <button onclick="handleLogin()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">Giriş Yap</button>
+            </div>
+
+            <p style="text-align: center; color: #888; margin-top: 15px;">Hesabın yok mu? <span onclick="switchToRegister()" style="color: #667eea; cursor: pointer; font-weight: bold;">Kayıt Ol</span></p>
+        </div>
+    </div>
+
+    <!-- Kayıt Ol Modal -->
+    <div id="registerModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #f093fb; border-radius: 20px; padding: 40px; width: 90%; max-width: 450px; box-shadow: 0 20px 60px rgba(240,147,251,0.3);">
+            <h2 style="color: #f093fb; margin-bottom: 25px; text-align: center;">✨ Kayıt Ol</h2>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Kullanıcı Adı:</label>
+                <input type="text" id="regName" placeholder="Adın nedir?" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #f093fb; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Discord ID:</label>
+                <input type="text" id="regDiscordId" placeholder="Discord ID'nin" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #f093fb; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">E-posta:</label>
+                <input type="email" id="regEmail" placeholder="Email adressin" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #f093fb; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Şifre:</label>
+                <input type="password" id="regPassword" placeholder="Güçlü bir şifre seç" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #f093fb; border-radius: 8px; color: #fff;">
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <button onclick="closeRegisterModal()" style="flex: 1; padding: 12px; background: #666; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">İptal</button>
+                <button onclick="handleRegister()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #f093fb, #f5576c); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">Kayıt Ol</button>
+            </div>
+
+            <p style="text-align: center; color: #888; margin-top: 15px;">Zaten hesabın var mı? <span onclick="switchToLogin()" style="color: #f093fb; cursor: pointer; font-weight: bold;">Giriş Yap</span></p>
+        </div>
+    </div>
+
     <script>
         let selectedCategory = null;
+
+        function openLoginModal() {
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').style.display = 'none';
+        }
+
+        function openRegisterModal() {
+            document.getElementById('registerModal').style.display = 'flex';
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('registerModal').style.display = 'none';
+        }
+
+        function switchToLogin() {
+            closeRegisterModal();
+            openLoginModal();
+        }
+
+        function switchToRegister() {
+            closeLoginModal();
+            openRegisterModal();
+        }
+
+        async function handleLogin() {
+            const discordId = document.getElementById('loginDiscordId').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!discordId || !password) {
+                alert('❌ Tüm alanları doldur!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ discordId, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('zwozez_user', JSON.stringify(data.user));
+                    alert('✅ Giriş başarılı!');
+                    closeLoginModal();
+                    location.reload();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        async function handleRegister() {
+            const name = document.getElementById('regName').value;
+            const discordId = document.getElementById('regDiscordId').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            if (!name || !discordId || !email || !password) {
+                alert('❌ Tüm alanları doldur!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, discordId, email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('✅ Kayıt başarılı! Şimdi giriş yap.');
+                    closeRegisterModal();
+                    document.getElementById('loginDiscordId').value = discordId;
+                    document.getElementById('loginPassword').value = password;
+                    openLoginModal();
+                } else {
+                    alert('❌ ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
 
         // Dinamik stok yükleme (API'den)
         async function loadStocks() {
@@ -588,6 +737,20 @@
                     loadStocks(); // Stokları yenile
                 } else {
                     alert(`❌ ${data.error}`);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // Sayfa yüklendiğinde stokları yükle
+        window.onload = () => {
+            loadStocks();
+        };
+    </script>
+</body>
+</html>
+data.error}`;
                 }
             } catch (error) {
                 alert('❌ Hata: ' + error.message);
