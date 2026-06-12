@@ -458,7 +458,32 @@
         <p style="color: #888;">Discord botu ile güvenli ve hızlı teslimat</p>
     </footer>
 
+    <!-- Stok Satın Alma Modal -->
+    <div id="buyStockModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #ffd700; border-radius: 20px; padding: 40px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(255,215,0,0.3);">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div style="font-size: 4em; margin-bottom: 15px;" id="modalIcon">🎮</div>
+                <h2 style="color: #ffd700; font-size: 2em; margin-bottom: 10px;" id="modalTitle">Steam Hesapları</h2>
+                <p style="color: #aaa;" id="modalStock">Stokta: 45 adet</p>
+                <p style="color: #888; font-size: 0.95em; margin-top: 10px;">🎲 Random hesap seçimi yapılacak</p>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; color: #ffd700; font-weight: bold; margin-bottom: 10px; font-size: 1.1em;">📦 Kaç tane almak istiyorsun?</label>
+                <input type="number" id="stockQuantity" min="1" value="1" style="width: 100%; padding: 15px; background: rgba(255,255,255,0.1); border: 2px solid #ffd700; border-radius: 10px; color: #fff; font-size: 1.2em; text-align: center;">
+                <p style="color: #888; font-size: 0.9em; margin-top: 8px; text-align: center;">Stoktan rastgele hesaplar seçilecek</p>
+            </div>
+
+            <div style="display: flex; gap: 15px;">
+                <button onclick="closeBuyModal()" style="flex: 1; padding: 15px; background: #666; border: none; border-radius: 10px; color: white; font-size: 1.1em; font-weight: bold; cursor: pointer;">İptal</button>
+                <button onclick="confirmPurchase()" style="flex: 1; padding: 15px; background: linear-gradient(135deg, #ffd700, #ff6b35); border: none; border-radius: 10px; color: #000; font-size: 1.1em; font-weight: bold; cursor: pointer;">Satın Al 🎁</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let selectedCategory = null;
+
         // Dinamik stok yükleme (API'den)
         async function loadStocks() {
             try {
@@ -466,14 +491,20 @@
                 const categories = await response.json();
                 
                 const grid = document.getElementById('stockGrid');
+                
+                if (categories.length === 0) {
+                    grid.innerHTML = '<p style="text-align: center; color: #888;">Henüz stok eklenmemiş</p>';
+                    return;
+                }
+                
                 grid.innerHTML = categories.map(cat => `
-                    <div class="stock-card" onclick="viewStock('${cat.id}')">
+                    <div class="stock-card" onclick='openBuyModal(${JSON.stringify(cat)})'>
                         <div class="stock-icon">${getStockIcon(cat.name)}</div>
                         <div class="stock-name">${cat.name}</div>
                         <div class="stock-quantity ${cat.quantity > 10 ? '' : cat.quantity > 0 ? 'low' : 'out'}">
                             ${cat.quantity > 0 ? `✅ Stokta: ${cat.quantity} adet` : '❌ Tükendi'}
                         </div>
-                        <p style="color: #888; margin-top: 10px;">${cat.products?.length || 0} ürün</p>
+                        <p style="color: #888; margin-top: 10px;">${cat.products?.length || 0} ürün çeşidi</p>
                     </div>
                 `).join('');
             } catch (error) {
@@ -488,14 +519,79 @@
                 'spotify': '🎵',
                 'netflix': '🎬',
                 'discord': '💜',
-                'minecraft': '⛏️'
+                'minecraft': '⛏️',
+                'valorant': '🔫',
+                'lol': '⚔️',
+                'pubg': '🪂'
             };
-            return icons[name.toLowerCase()] || '📦';
+            const normalized = name.toLowerCase().replace(/\s+/g, '');
+            return icons[normalized] || '📦';
         }
 
-        function viewStock(id) {
-            alert(`Stok detayı: ${id}`);
-            // Modal açılabilir
+        function openBuyModal(category) {
+            if (category.quantity <= 0) {
+                alert('❌ Bu stok tükendi!');
+                return;
+            }
+
+            selectedCategory = category;
+            
+            document.getElementById('modalIcon').textContent = getStockIcon(category.name);
+            document.getElementById('modalTitle').textContent = category.name;
+            document.getElementById('modalStock').textContent = `Stokta: ${category.quantity} adet`;
+            document.getElementById('stockQuantity').max = category.quantity;
+            document.getElementById('stockQuantity').value = 1;
+            
+            const modal = document.getElementById('buyStockModal');
+            modal.style.display = 'flex';
+        }
+
+        function closeBuyModal() {
+            document.getElementById('buyStockModal').style.display = 'none';
+            selectedCategory = null;
+        }
+
+        async function confirmPurchase() {
+            if (!selectedCategory) return;
+
+            const quantity = parseInt(document.getElementById('stockQuantity').value);
+            
+            if (quantity <= 0 || quantity > selectedCategory.quantity) {
+                alert(`❌ Geçersiz miktar! (1-${selectedCategory.quantity} arası)`);
+                return;
+            }
+
+            // Kullanıcı kontrolü (LocalStorage'dan)
+            const user = JSON.parse(localStorage.getItem('zwozez_user') || 'null');
+            if (!user) {
+                alert('❌ Önce giriş yapmalısın!');
+                closeBuyModal();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/buy-from-stock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: user.id,
+                        categoryId: selectedCategory.id,
+                        quantity: quantity
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(`✅ ${quantity} adet hesap Discord DM'nize gönderildi!`);
+                    closeBuyModal();
+                    loadStocks(); // Stokları yenile
+                } else {
+                    alert(`❌ ${data.error}`);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
         }
 
         // Sayfa yüklendiğinde stokları yükle

@@ -594,6 +594,114 @@ app.get('/api/admin/users', (req, res) => {
   })));
 });
 
+// ✅ YENİ: Stoktan Satın Alma (Random Ürün Seçimi)
+app.post('/api/buy-from-stock', async (req, res) => {
+  const { userId, categoryId, quantity } = req.body;
+  
+  if (!userId || !categoryId || !quantity) {
+    return res.status(400).json({ error: 'Tüm alanlar gerekli' });
+  }
+  
+  const purchaseQuantity = parseInt(quantity);
+  if (isNaN(purchaseQuantity) || purchaseQuantity <= 0) {
+    return res.status(400).json({ error: 'Geçersiz adet' });
+  }
+  
+  const db = getDatabase();
+  const user = db.users.find(u => u.id === userId);
+  const category = db.categories.find(c => c.id === categoryId);
+  
+  if (!user) {
+    return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+  }
+  
+  if (!category) {
+    return res.status(404).json({ error: 'Stok bulunamadı' });
+  }
+  
+  // Bu stoktaki tüm ürünleri bul
+  const stockProducts = db.products.filter(p => p.categoryId === categoryId);
+  
+  if (stockProducts.length === 0) {
+    return res.status(400).json({ error: 'Bu stokta ürün yok!' });
+  }
+  
+  // Kullanılabilir hesapları topla
+  let allAvailableAccounts = [];
+  stockProducts.forEach(product => {
+    const availableAccs = product.accounts.filter(acc => !acc.used).map(acc => ({
+      ...acc,
+      productId: product.id,
+      productName: product.name
+    }));
+    allAvailableAccounts = allAvailableAccounts.concat(availableAccs);
+  });
+  
+  if (allAvailableAccounts.length < purchaseQuantity) {
+    return res.status(400).json({ 
+      error: `Stokta yeterli hesap yok! Mevcut: ${allAvailableAccounts.length}, İstenen: ${purchaseQuantity}` 
+    });
+  }
+  
+  // Random hesap seç
+  const selectedAccounts = [];
+  for (let i = 0; i < purchaseQuantity; i++) {
+    const randomIndex = Math.floor(Math.random() * allAvailableAccounts.length);
+    const selected = allAvailableAccounts.splice(randomIndex, 1)[0];
+    selectedAccounts.push(selected);
+  }
+  
+  // Hesapları kullanıldı olarak işaretle
+  selectedAccounts.forEach(acc => {
+    const product = db.products.find(p => p.id === acc.productId);
+    if (product) {
+      const account = product.accounts.find(a => a.id === acc.id);
+      if (account) {
+        account.used = true;
+        product.quantity = Math.max(0, product.quantity - 1);
+      }
+    }
+  });
+  
+  // Kategori stok miktarını güncelle
+  category.quantity = Math.max(0, category.quantity - purchaseQuantity);
+  
+  saveDatabase(db);
+  
+  // Discord DM gönder
+  try {
+    const discordUser = await client.users.fetch(user.discordId);
+    
+    const accountsText = selectedAccounts.map((acc, idx) => 
+      `**${idx + 1}.** ${acc.productName}\n\`\`\`\n${acc.details}\n\`\`\``
+    ).join('\n\n');
+    
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('🎁 Satın Alımınız Tamamlandı!')
+      .setDescription(`**${category.name}** stok hediyeleri:`)
+      .addFields(
+        { name: '📦 Miktar', value: `${purchaseQuantity} adet`, inline: true },
+        { name: '🎮 Hesaplar', value: accountsText, inline: false }
+      )
+      .setFooter({ text: 'Zwozez - Teşekkürler!' })
+      .setTimestamp();
+    
+    await discordUser.send({ embeds: [embed] });
+    
+    console.log(`✅ Stoktan satın alma: ${user.name} → ${category.name} (${purchaseQuantity} adet)`);
+    
+    res.json({ 
+      success: true, 
+      message: `${purchaseQuantity} adet hesap Discord DM'nize gönderildi!`,
+      accounts: selectedAccounts.map(a => ({ productName: a.productName }))
+    });
+  } catch (error) {
+    console.error('DM gönderme hatası:', error);
+    res.status(500).json({ error: 'Hesaplar verildi ama DM gönderilemedi!' });
+  }
+});
+
 // Ürün Satın Al - Geliştirilmiş Sistem
 app.post('/api/buy-product', (req, res) => {
   const { userId, productId, quantity } = req.body;
