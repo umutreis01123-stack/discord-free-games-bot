@@ -599,12 +599,37 @@
             }
         }
         
-        function giveCredits(userId, userName) {
+        async function giveCredits(userId, userName) {
             const amount = prompt(`${userName} kullanıcısına kaç kredi vermek istiyorsunuz?`);
-            if (!amount) return;
+            if (!amount || isNaN(amount)) return;
             
-            // TODO: API call to give credits
-            alert('✅ ' + amount + ' kredi verildi!');
+            const reason = prompt('Kredi verme sebebi (opsiyonel):') || 'Admin tarafından verildi';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/give-credits`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        amount: parseInt(amount),
+                        reason: reason
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ ${amount} kredi başarıyla verildi!`);
+                    loadUsers(); // Tabloyu yenile
+                } else {
+                    alert('❌ Hata: ' + (data.error || 'Kredi verilemedi'));
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
         }
     </script>
 </body>
