@@ -196,6 +196,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Admin Panel
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // Kayıt Ol - Geliştirilmiş Sistem (HER ALANI DOĞRU BAŞLATLA)
 app.post('/api/register', (req, res) => {
   const { name, discordId, email, password } = req.body;
