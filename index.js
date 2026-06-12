@@ -1274,7 +1274,15 @@ async function registerSlashCommands() {
 
     new SlashCommandBuilder()
       .setName('owoödemealdı')
-      .setDescription('OWO ödeme aldıktan sonra hesapı al (Test/Manual)')
+      .setDescription('OWO ödeme aldıktan sonra hesapı al (Test/Manual)'),
+
+    new SlashCommandBuilder()
+      .setName('butonrolkur')
+      .setDescription('Rol seçme butonları oluştur (Admin Only)')
+      .addStringOption(option =>
+        option.setName('rolleri')
+          .setDescription('Rol ID\'leri virgülle ayrılmış (örn: 123,456,789)')
+          .setRequired(true))
   ];
 
   try {
@@ -2084,12 +2092,104 @@ client.on('interactionCreate', async (interaction) => {
         interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
+
+    // ✅ YENİ: BUTON ROL KURMA
+    if (commandName === 'butonrolkur') {
+      try {
+        if (user.id !== OWNER_ID) {
+          return interaction.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+        }
+
+        const rolleriStr = options.getString('rolleri');
+        const roleIds = rolleriStr.split(',').map(id => id.trim());
+
+        // Rol ID'lerini doğrula
+        const roles = [];
+        for (const roleId of roleIds) {
+          try {
+            const role = await guild.roles.fetch(roleId);
+            if (!role) {
+              return interaction.reply({ content: `❌ Rol bulunamadı: ${roleId}`, ephemeral: true });
+            }
+            roles.push(role);
+          } catch (e) {
+            return interaction.reply({ content: `❌ Rol ID geçersiz: ${roleId}`, ephemeral: true });
+          }
+        }
+
+        // Butonları oluştur
+        const buttons = [];
+        for (const role of roles) {
+          buttons.push(
+            new ButtonBuilder()
+              .setCustomId(`role_button_${role.id}`)
+              .setLabel(`${role.name} Rolü Al`)
+              .setStyle(ButtonStyle.Success)
+              .setEmoji('✅')
+          );
+        }
+
+        // 2 button per row
+        const rows = [];
+        for (let i = 0; i < buttons.length; i += 2) {
+          rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 2)));
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle('🎭 Rol Seç')
+          .setDescription('Aşağıdaki butonlardan bir rol seçin!')
+          .addFields(
+            { name: '📋 Mevcut Roller', value: roles.map(r => `• ${r.name}`).join('\n'), inline: false }
+          )
+          .setFooter({ text: 'Butona tıklayarak rol alabilirsin' })
+          .setTimestamp();
+
+        await interaction.channel.send({ embeds: [embed], components: rows });
+        interaction.reply({ content: '✅ Rol butonları oluşturuldu!', ephemeral: true });
+
+        console.log(`🎭 Rol butonları oluşturuldu: ${roles.map(r => r.name).join(', ')}`);
+      } catch (error) {
+        console.error('Rol buton hatası:', error);
+        interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
+    }
   }
 
   // BUTTON INTERACTIONS
   if (interaction.isButton()) {
     const db = getDatabase();
     const { customId, user, guild, channel } = interaction;
+
+    // ✅ ROL BUTON HANDLER
+    if (customId.startsWith('role_button_')) {
+      try {
+        const roleId = customId.replace('role_button_', '');
+        const role = await guild.roles.fetch(roleId);
+
+        if (!role) {
+          return interaction.reply({ content: '❌ Rol bulunamadı!', ephemeral: true });
+        }
+
+        const member = await guild.members.fetch(user.id);
+
+        // Rol zaten var mı kontrol et
+        if (member.roles.cache.has(roleId)) {
+          // Rol varsa çıkar
+          await member.roles.remove(roleId);
+          interaction.reply({ content: `✅ **${role.name}** rolü çıkarıldı!`, ephemeral: true });
+          console.log(`🎭 Rol çıkarıldı: ${user.username} - ${role.name}`);
+        } else {
+          // Rol yoksa ekle
+          await member.roles.add(roleId);
+          interaction.reply({ content: `✅ **${role.name}** rolü verildi!`, ephemeral: true });
+          console.log(`🎭 Rol verildi: ${user.username} - ${role.name}`);
+        }
+      } catch (error) {
+        console.error('Rol verme hatası:', error);
+        interaction.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
+    }
 
     // TICKET BUTTONS
     if (customId === 'create_ticket') {
