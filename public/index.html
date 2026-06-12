@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎮 Zwozez - Oyun Hesap Mağazası</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>🎮 Zwozez - Oyun Hesap Mağazası v2.0</title>
     <style>
         * {
             margin: 0;
@@ -329,7 +332,7 @@
                 </button>
             </div>
             
-            <button class="btn btn-gold" onclick="window.location.href='/admin'">👑 Admin</button>
+            <button class="btn btn-gold" onclick="openAdminModal()">👑 Admin</button>
         </div>
     </nav>
 
@@ -611,6 +614,82 @@
         </div>
     </div>
 
+    <!-- Admin Panel Modal -->
+    <div id="adminModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 10000; align-items: center; justify-content: center; padding: 20px; overflow-y: auto;">
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #667eea; border-radius: 20px; padding: 40px; width: 100%; max-width: 1000px; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(102,126,234,0.4);">
+            
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid #667eea; padding-bottom: 20px;">
+                <h2 style="color: #667eea; margin: 0; font-size: 2em;">👑 Admin Panel</h2>
+                <button onclick="closeAdminModal()" style="background: #ff6b6b; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1.1em;">✕ Kapat</button>
+            </div>
+            
+            <!-- Stats Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 20px; text-align: center;">
+                    <div style="color: #667eea; font-size: 1.2em; margin-bottom: 10px;">📦 Toplam Stok</div>
+                    <div style="color: #ffd700; font-size: 2em; font-weight: bold;" id="adminStockCount">0</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 20px; text-align: center;">
+                    <div style="color: #667eea; font-size: 1.2em; margin-bottom: 10px;">👥 Toplam Kullanıcı</div>
+                    <div style="color: #ffd700; font-size: 2em; font-weight: bold;" id="adminUserCount">0</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 20px; text-align: center;">
+                    <div style="color: #667eea; font-size: 1.2em; margin-bottom: 10px;">🛍️ Toplam Ürün</div>
+                    <div style="color: #ffd700; font-size: 2em; font-weight: bold;" id="adminProductCount">0</div>
+                </div>
+            </div>
+            
+            <!-- Stok Yönetimi -->
+            <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
+                <h3 style="color: #667eea; margin-bottom: 20px; font-size: 1.5em;">📦 Stok Yönetimi</h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; margin-bottom: 20px;">
+                    <input type="text" id="adminStockName" placeholder="Stok Adı" style="padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+                    <input type="number" id="adminStockQuantity" placeholder="Miktar" min="1" style="padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+                    <input type="text" id="adminStockImage" placeholder="Görsel URL (opsiyonel)" style="padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+                    <button onclick="adminAddStock()" style="padding: 12px 25px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">➕ Ekle</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: rgba(102,126,234,0.2);">
+                                <th style="padding: 12px; text-align: left; color: #667eea;">Stok Adı</th>
+                                <th style="padding: 12px; text-align: center; color: #667eea;">Miktar</th>
+                                <th style="padding: 12px; text-align: center; color: #667eea;">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminStocksTable">
+                            <tr><td colspan="3" style="padding: 20px; text-align: center; color: #888;">Yükleniyor...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Kullanıcı Yönetimi -->
+            <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 25px;">
+                <h3 style="color: #667eea; margin-bottom: 20px; font-size: 1.5em;">👥 Kullanıcı Yönetimi</h3>
+                
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: rgba(102,126,234,0.2);">
+                                <th style="padding: 12px; text-align: left; color: #667eea;">Discord ID</th>
+                                <th style="padding: 12px; text-align: left; color: #667eea;">Kullanıcı Adı</th>
+                                <th style="padding: 12px; text-align: center; color: #667eea;">Kredi</th>
+                                <th style="padding: 12px; text-align: center; color: #667eea;">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTable">
+                            <tr><td colspan="4" style="padding: 20px; text-align: center; color: #888;">Yükleniyor...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let selectedCategory = null;
         let currentUser = null;
@@ -723,6 +802,158 @@
                 updateNavbar();
                 closeProfileModal();
                 alert('✅ Başarıyla çıkış yaptın!');
+            }
+        }
+
+        // ========== ADMIN PANEL ==========
+        
+        function openAdminModal() {
+            // Admin kontrolü - sadece owner açabilir
+            const adminPassword = prompt('👑 Admin şifresini gir:');
+            if (adminPassword !== 'umutpapa001122u') {
+                alert('❌ Yanlış şifre!');
+                return;
+            }
+            
+            document.getElementById('adminModal').style.display = 'flex';
+            loadAdminData();
+        }
+        
+        function closeAdminModal() {
+            document.getElementById('adminModal').style.display = 'none';
+        }
+        
+        async function loadAdminData() {
+            try {
+                // Stats
+                const statsRes = await fetch('/api/admin/stats');
+                const stats = await statsRes.json();
+                document.getElementById('adminStockCount').textContent = stats.totalCategories || 0;
+                document.getElementById('adminUserCount').textContent = stats.totalUsers || 0;
+                document.getElementById('adminProductCount').textContent = stats.totalProducts || 0;
+                
+                // Stoklar
+                const stocksRes = await fetch('/api/categories');
+                const stocks = await stocksRes.json();
+                const stocksTable = document.getElementById('adminStocksTable');
+                if (stocks.length === 0) {
+                    stocksTable.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #888;">Henüz stok yok</td></tr>';
+                } else {
+                    stocksTable.innerHTML = stocks.map(s => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 12px; color: #fff;">${s.name}</td>
+                            <td style="padding: 12px; text-align: center; color: #ffd700; font-weight: bold;">${s.quantity}</td>
+                            <td style="padding: 12px; text-align: center;">
+                                <button onclick="adminDeleteStock('${s.id}')" style="background: #ff6b6b; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer;">🗑️ Sil</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+                
+                // Kullanıcılar
+                const usersRes = await fetch('/api/admin/users');
+                const users = await usersRes.json();
+                const usersTable = document.getElementById('adminUsersTable');
+                if (users.length === 0) {
+                    usersTable.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #888;">Henüz kullanıcı yok</td></tr>';
+                } else {
+                    usersTable.innerHTML = users.map(u => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 12px; color: #fff;">${u.id}</td>
+                            <td style="padding: 12px; color: #fff;">${u.name || '-'}</td>
+                            <td style="padding: 12px; text-align: center; color: #ffd700; font-weight: bold;">${u.credits || 0}</td>
+                            <td style="padding: 12px; text-align: center;">
+                                <button onclick="adminGiveCredits('${u.id}', '${u.name}')" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer;">💰 Kredi Ver</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Admin data yüklenemedi:', error);
+            }
+        }
+        
+        async function adminAddStock() {
+            const name = document.getElementById('adminStockName').value;
+            const quantity = document.getElementById('adminStockQuantity').value;
+            const image = document.getElementById('adminStockImage').value;
+            
+            if (!name || !quantity) {
+                alert('❌ Stok adı ve miktar gerekli!');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name, 
+                        quantity: parseInt(quantity), 
+                        image: image || '' 
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Stok eklendi!');
+                    document.getElementById('adminStockName').value = '';
+                    document.getElementById('adminStockQuantity').value = '';
+                    document.getElementById('adminStockImage').value = '';
+                    loadAdminData();
+                    loadStocks(); // Ana sayfadaki stokları da güncelle
+                } else {
+                    alert('❌ Stok eklenemedi!');
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+        
+        async function adminDeleteStock(id) {
+            if (!confirm('Bu stoku silmek istediğine emin misin?')) return;
+            
+            try {
+                const response = await fetch(`/api/admin/categories/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('✅ Stok silindi!');
+                    loadAdminData();
+                    loadStocks();
+                } else {
+                    alert('❌ Silinemedi!');
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+        
+        async function adminGiveCredits(userId, userName) {
+            const amount = prompt(`${userName} kullanıcısına kaç kredi vermek istiyorsun?`);
+            if (!amount || isNaN(amount)) return;
+            
+            const reason = prompt('Sebep (opsiyonel):') || 'Admin tarafından verildi';
+            
+            try {
+                const response = await fetch('/api/admin/give-credits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: userId,
+                        amount: parseInt(amount),
+                        reason: reason
+                    })
+                });
+                
+                if (response.ok) {
+                    alert(`✅ ${amount} kredi verildi!`);
+                    loadAdminData();
+                } else {
+                    alert('❌ Kredi verilemedi!');
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
             }
         }
 
@@ -929,37 +1160,6 @@
             }
         }
 
-        // Sayfa yüklendiğinde stokları yükle
-        window.onload = () => {
-            loadStocks();
-        };
-    </script>
-</body>
-</html>data.error}`);
-                }
-            } catch (error) {
-                alert('❌ Hata: ' + error.message);
-            }
-        }
-
-        // Sayfa yüklendiğinde stokları yükle
-        window.onload = () => {
-            loadStocks();
-        };
-    </script>
-</body>
-</html>
-data.error}`;
-                }
-            } catch (error) {
-                alert('❌ Hata: ' + error.message);
-            }
-        }
-
-        // Sayfa yüklendiğinde stokları yükle
-        window.onload = () => {
-            loadStocks();
-        };
     </script>
 </body>
 </html>

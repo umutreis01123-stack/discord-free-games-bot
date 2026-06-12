@@ -962,6 +962,7 @@ app.get('/api/admin/stats', (req, res) => {
     totalUsers: db.users.length,
     activeUsers: db.users.filter(u => u.isActive).length,
     totalProducts: db.products.length,
+    totalCategories: db.categories.length, // ✅ YENİ: Stok kategorileri sayısı
     pendingOrders: db.pendingOrders.length,
     completedOrders: db.completedOrders.length,
     totalCreditsDistributed: db.users.reduce((sum, u) => sum + (u.totalEarned || 0), 0),
@@ -1162,6 +1163,62 @@ client.on('messageCreate', async (message) => {
 
       saveDatabase(db);
       console.log(`🏆 Event(ler) bitti - ${message.author.username}`);
+    }
+
+    // ✅ YENİ: -genelçekiliş (Tüm sunucu üyeleri arasında random çekiliş)
+    if (message.content.trim() === '-genelçekiliş') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      try {
+        // Tüm sunucu üyelerini al (online + offline)
+        const guild = message.guild;
+        
+        // Tüm üyeleri fetch et
+        await guild.members.fetch();
+        
+        // Bot olmayan tüm üyeleri al
+        const allMembers = guild.members.cache.filter(member => !member.user.bot);
+        
+        if (allMembers.size === 0) {
+          return message.reply({ content: '❌ Sunucuda üye yok!', ephemeral: true });
+        }
+
+        // Random bir üye seç
+        const membersArray = Array.from(allMembers.values());
+        const randomWinner = membersArray[Math.floor(Math.random() * membersArray.length)];
+
+        // Online ve offline sayılarını hesapla
+        const onlineCount = allMembers.filter(m => m.presence?.status && m.presence.status !== 'offline').size;
+        const offlineCount = allMembers.size - onlineCount;
+
+        // Sonuç embed'i
+        const giveawayEmbed = new EmbedBuilder()
+          .setColor(0xffd700)
+          .setTitle('🎉 Genel Çekiliş Sonucu!')
+          .setDescription('Sunucudaki tüm üyeler arasından random kazanan seçildi!')
+          .addFields(
+            { name: '👑 Kazanan', value: `<@${randomWinner.id}>`, inline: false },
+            { name: '👥 Toplam Üye', value: `${allMembers.size} kişi`, inline: true },
+            { name: '🟢 Online', value: `${onlineCount} kişi`, inline: true },
+            { name: '⚫ Offline', value: `${offlineCount} kişi`, inline: true }
+          )
+          .setThumbnail(randomWinner.user.displayAvatarURL({ dynamic: true }))
+          .setFooter({ text: `Kazanan: ${randomWinner.user.username}` })
+          .setTimestamp();
+
+        await message.channel.send({ 
+          content: `🎊 **KAZANAN:** <@${randomWinner.id}> 🎊`, 
+          embeds: [giveawayEmbed] 
+        });
+
+        console.log(`🎉 Genel çekiliş: ${randomWinner.user.username} kazandı! (${allMembers.size} üye arasından)`);
+      } catch (error) {
+        console.error('Genel çekiliş hatası:', error);
+        message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
+      }
     }
   } catch (error) {
     console.error('Event komutu hatası:', error);
