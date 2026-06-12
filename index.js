@@ -190,6 +190,9 @@ const ADMIN_USER = 'umut';
 const ADMIN_PASS = 'umutpapa001122u';
 const OWNER_ID = '1403495996138323989';
 
+// ✅ GLOBAL: Patat spam tracker
+let patatIntervals = {}; // { channelId: intervalId }
+
 // ============ WEB SİTESİ ============
 
 app.get('/', (req, res) => {
@@ -1336,6 +1339,111 @@ client.on('messageCreate', async (message) => {
         if (message.channel && !message.channel.deleted) {
           message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
         }
+      }
+    }
+
+    // ✅ YENİ: -patat (Sürekli mesaj gönder)
+    if (message.content.trim() === '-patat') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      const channelId = message.channel.id;
+
+      // Eğer zaten bu kanalda patat çalışıyorsa
+      if (patatIntervals[channelId]) {
+        return message.reply({ content: '⚠️ Bu kanalda zaten patat çalışıyor! Durdurmak için: `-durdur`', ephemeral: true });
+      }
+
+      // Sürekli mesaj gönder (her 2 saniyede bir)
+      const interval = setInterval(async () => {
+        try {
+          await message.channel.send('⚠️sohbet temizleme⚠️\n✔️Chat Temizlendi✔');
+        } catch (error) {
+          console.error('Patat mesaj gönderme hatası:', error);
+          // Hata olursa interval'i durdur
+          clearInterval(patatIntervals[channelId]);
+          delete patatIntervals[channelId];
+        }
+      }, 2000); // 2 saniye
+
+      patatIntervals[channelId] = interval;
+
+      message.reply({ content: '✅ Patat başlatıldı! Durdurmak için: `-durdur`', ephemeral: true });
+      console.log(`🥔 Patat başlatıldı: ${message.channel.name} - ${message.author.username}`);
+    }
+
+    // ✅ YENİ: -durdur (Patat'ı durdur)
+    if (message.content.trim() === '-durdur') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      const channelId = message.channel.id;
+
+      if (!patatIntervals[channelId]) {
+        return message.reply({ content: '⚠️ Bu kanalda çalışan patat yok!', ephemeral: true });
+      }
+
+      // Interval'i durdur
+      clearInterval(patatIntervals[channelId]);
+      delete patatIntervals[channelId];
+
+      message.reply({ content: '✅ Patat durduruldu!', ephemeral: true });
+      console.log(`🛑 Patat durduruldu: ${message.channel.name} - ${message.author.username}`);
+    }
+
+    // ✅ YENİ: -sestenatall (Tüm kullanıcıları sesten at)
+    if (message.content.trim() === '-sestenatall') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      try {
+        const guild = message.guild;
+        
+        // Ses kanallarındaki tüm üyeleri topla
+        let kickedCount = 0;
+        let totalInVoice = 0;
+
+        // Tüm üyeleri fetch et
+        await guild.members.fetch();
+
+        // Her üyeyi kontrol et
+        for (const [memberId, member] of guild.members.cache) {
+          // Üye ses kanalında mı?
+          if (member.voice.channel) {
+            totalInVoice++;
+            try {
+              // Üyeyi sesten at (disconnect)
+              await member.voice.disconnect('Admin tarafından atıldı');
+              kickedCount++;
+            } catch (error) {
+              console.error(`Ses atma hatası (${member.user.username}):`, error.message);
+            }
+          }
+        }
+
+        const kickEmbed = new EmbedBuilder()
+          .setColor(0xff6b6b)
+          .setTitle('🔇 Sesli Kanallar Temizlendi!')
+          .setDescription('Tüm kullanıcılar sesli kanallardan atıldı.')
+          .addFields(
+            { name: '👥 Toplam Sesteki', value: totalInVoice.toString(), inline: true },
+            { name: '✅ Atılan', value: kickedCount.toString(), inline: true },
+            { name: '❌ Atılamayan', value: (totalInVoice - kickedCount).toString(), inline: true }
+          )
+          .setFooter({ text: `İşlemi yapan: ${message.author.username}` })
+          .setTimestamp();
+
+        await message.channel.send({ embeds: [kickEmbed] });
+        console.log(`🔇 Sesli kanallar temizlendi: ${kickedCount}/${totalInVoice} üye atıldı - ${message.author.username}`);
+      } catch (error) {
+        console.error('Ses atma hatası:', error);
+        message.reply({ content: `❌ Hata: ${error.message}`, ephemeral: true });
       }
     }
   } catch (error) {
