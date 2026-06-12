@@ -312,9 +312,23 @@
     <!-- Navbar -->
     <nav class="navbar">
         <div class="logo">🎮 Zwozez</div>
-        <div class="nav-buttons">
-            <button class="btn btn-primary" onclick="openLoginModal()">Giriş Yap</button>
-            <button class="btn btn-success" onclick="openRegisterModal()">Kayıt Ol</button>
+        <div class="nav-buttons" id="navButtons">
+            <!-- Giriş yapmamış kullanıcılar için -->
+            <div id="guestButtons">
+                <button class="btn btn-primary" onclick="openLoginModal()">Giriş Yap</button>
+                <button class="btn btn-success" onclick="openRegisterModal()">Kayıt Ol</button>
+            </div>
+            
+            <!-- Giriş yapmış kullanıcılar için -->
+            <div id="userButtons" style="display: none;">
+                <button class="btn btn-gold" onclick="openProfileModal()">
+                    <span id="userCredits">0</span> 💰 Kredi
+                </button>
+                <button class="btn btn-primary" onclick="openProfileModal()">
+                    👤 <span id="userName">Profil</span>
+                </button>
+            </div>
+            
             <button class="btn btn-gold" onclick="window.location.href='/admin'">👑 Admin</button>
         </div>
     </nav>
@@ -539,8 +553,178 @@
         </div>
     </div>
 
+    <!-- Profil Modal -->
+    <div id="profileModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #ffd700; border-radius: 20px; padding: 40px; width: 90%; max-width: 600px; box-shadow: 0 20px 60px rgba(255,215,0,0.3); max-height: 90vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid #667eea; padding-bottom: 20px;">
+                <h2 style="color: #ffd700; margin: 0;">👤 Profilim</h2>
+                <button onclick="closeProfileModal()" style="background: #ff6b6b; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">✕</button>
+            </div>
+            
+            <!-- Kullanıcı Bilgileri -->
+            <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
+                <h3 style="color: #667eea; margin-bottom: 20px; font-size: 1.3em;">📊 Hesap Bilgileri</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <p style="color: #888; font-size: 0.9em; margin-bottom: 5px;">Kullanıcı Adı</p>
+                        <p style="color: #fff; font-weight: bold;" id="profileName">-</p>
+                    </div>
+                    <div>
+                        <p style="color: #888; font-size: 0.9em; margin-bottom: 5px;">Discord ID</p>
+                        <p style="color: #fff; font-weight: bold;" id="profileDiscordId">-</p>
+                    </div>
+                    <div>
+                        <p style="color: #888; font-size: 0.9em; margin-bottom: 5px;">💰 Kredi Bakiyesi</p>
+                        <p style="color: #ffd700; font-weight: bold; font-size: 1.5em;" id="profileCredits">0</p>
+                    </div>
+                    <div>
+                        <p style="color: #888; font-size: 0.9em; margin-bottom: 5px;">E-posta</p>
+                        <p style="color: #fff; font-weight: bold;" id="profileEmail">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Satın Alımlar -->
+            <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
+                <h3 style="color: #667eea; margin-bottom: 20px; font-size: 1.3em;">🛍️ Son Satın Alımlar</h3>
+                <div id="purchaseHistory" style="max-height: 200px; overflow-y: auto;">
+                    <p style="color: #888; text-align: center;">Henüz satın alım yok</p>
+                </div>
+            </div>
+            
+            <!-- Şifre Değiştir -->
+            <div style="background: rgba(255,255,255,0.05); border: 2px solid #667eea; border-radius: 15px; padding: 25px; margin-bottom: 25px;">
+                <h3 style="color: #667eea; margin-bottom: 20px; font-size: 1.3em;">🔐 Şifre Değiştir</h3>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Eski Şifre:</label>
+                    <input type="password" id="oldPassword" placeholder="Mevcut şifreni gir" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; color: #aaa; font-weight: bold; margin-bottom: 8px;">Yeni Şifre:</label>
+                    <input type="password" id="newPassword" placeholder="Yeni şifreni gir" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); border: 2px solid #667eea; border-radius: 8px; color: #fff;">
+                </div>
+                <button onclick="changePassword()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer;">Şifreyi Değiştir</button>
+            </div>
+            
+            <!-- Çıkış Yap -->
+            <button onclick="logout()" style="width: 100%; padding: 15px; background: #ff6b6b; border: none; border-radius: 8px; color: white; font-weight: bold; cursor: pointer; font-size: 1.1em;">Çıkış Yap 🚪</button>
+        </div>
+    </div>
+
     <script>
         let selectedCategory = null;
+        let currentUser = null;
+
+        // Sayfa yüklenince kullanıcı kontrolü
+        window.onload = () => {
+            checkUser();
+            loadStocks();
+        };
+
+        function checkUser() {
+            const userData = localStorage.getItem('zwozez_user');
+            if (userData) {
+                currentUser = JSON.parse(userData);
+                updateNavbar();
+                // Kullanıcı bilgilerini güncelle
+                fetchUserData();
+            }
+        }
+
+        function updateNavbar() {
+            if (currentUser) {
+                document.getElementById('guestButtons').style.display = 'none';
+                document.getElementById('userButtons').style.display = 'flex';
+                document.getElementById('userName').textContent = currentUser.name || 'Profil';
+                document.getElementById('userCredits').textContent = currentUser.credits || 0;
+            } else {
+                document.getElementById('guestButtons').style.display = 'flex';
+                document.getElementById('userButtons').style.display = 'none';
+            }
+        }
+
+        async function fetchUserData() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch(`/api/user/${currentUser.id}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentUser = data;
+                    localStorage.setItem('zwozez_user', JSON.stringify(data));
+                    updateNavbar();
+                }
+            } catch (error) {
+                console.error('Kullanıcı bilgisi yüklenemedi:', error);
+            }
+        }
+
+        function openProfileModal() {
+            if (!currentUser) {
+                alert('❌ Önce giriş yapmalısın!');
+                return;
+            }
+            
+            // Profil bilgilerini doldur
+            document.getElementById('profileName').textContent = currentUser.name || '-';
+            document.getElementById('profileDiscordId').textContent = currentUser.id || '-';
+            document.getElementById('profileCredits').textContent = currentUser.credits || 0;
+            document.getElementById('profileEmail').textContent = currentUser.email || '-';
+            
+            // Satın alım geçmişini yükle
+            loadPurchaseHistory();
+            
+            document.getElementById('profileModal').style.display = 'flex';
+        }
+
+        function closeProfileModal() {
+            document.getElementById('profileModal').style.display = 'none';
+            // Şifre alanlarını temizle
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+        }
+
+        async function loadPurchaseHistory() {
+            // TODO: Backend'den satın alım geçmişi çek
+            const historyDiv = document.getElementById('purchaseHistory');
+            historyDiv.innerHTML = '<p style="color: #888; text-align: center;">Satın alım geçmişi yükleniyor...</p>';
+            
+            // Placeholder - gerçek veriler backend'den gelecek
+            setTimeout(() => {
+                historyDiv.innerHTML = '<p style="color: #888; text-align: center;">Henüz satın alım yok</p>';
+            }, 500);
+        }
+
+        async function changePassword() {
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            
+            if (!oldPassword || !newPassword) {
+                alert('❌ Tüm alanları doldur!');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                alert('❌ Yeni şifre en az 6 karakter olmalı!');
+                return;
+            }
+            
+            // TODO: Backend API call
+            alert('✅ Şifre değiştirme özelliği yakında aktif olacak!');
+            document.getElementById('oldPassword').value = '';
+            document.getElementById('newPassword').value = '';
+        }
+
+        function logout() {
+            if (confirm('Çıkış yapmak istediğine emin misin?')) {
+                localStorage.removeItem('zwozez_user');
+                currentUser = null;
+                updateNavbar();
+                closeProfileModal();
+                alert('✅ Başarıyla çıkış yaptın!');
+            }
+        }
 
         function openLoginModal() {
             document.getElementById('loginModal').style.display = 'flex';
@@ -587,10 +771,12 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    currentUser = data.user;
                     localStorage.setItem('zwozez_user', JSON.stringify(data.user));
                     alert('✅ Giriş başarılı!');
                     closeLoginModal();
-                    location.reload();
+                    updateNavbar();
+                    fetchUserData();
                 } else {
                     alert('❌ ' + data.error);
                 }
