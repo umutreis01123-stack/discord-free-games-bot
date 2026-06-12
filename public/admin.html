@@ -217,6 +217,29 @@
     </style>
 </head>
 <body>
+    <!-- Login Container (hidden by default) -->
+    <div id="loginContainer" style="display: none; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; padding: 20px;">
+        <div style="background: rgba(20, 20, 40, 0.9); border: 2px solid #667eea; border-radius: 15px; padding: 40px; width: 100%; max-width: 400px; box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);">
+            <h1 style="text-align: center; color: #667eea; margin-bottom: 30px; font-size: 28px;">👑 Admin Giriş</h1>
+            
+            <div class="form-group">
+                <label>Kullanıcı Adı:</label>
+                <input type="text" id="adminUsername" placeholder="umut">
+            </div>
+            
+            <div class="form-group">
+                <label>Şifre:</label>
+                <input type="password" id="adminPassword" placeholder="Şifreni gir">
+            </div>
+            
+            <button class="btn-submit" onclick="handleAdminLogin()" style="width: 100%;">Giriş Yap 🔐</button>
+            
+            <p style="text-align: center; color: #888; margin-top: 20px;">Admin panele erişim için giriş gerekli</p>
+        </div>
+    </div>
+    
+    <!-- Dashboard Container -->
+    <div id="dashboardContainer" style="display: none;">
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -327,19 +350,79 @@
     
     <script>
         const API_BASE = window.location.origin;
-        const token = localStorage.getItem('adminToken');
+        let token = localStorage.getItem('adminToken');
         
-        // Giriş kontrol
+        // Login sayfası göster eğer token yoksa
         if (!token) {
-            alert('❌ Giriş gerekli!');
-            window.location.href = '/';
+            showLoginPage();
+        }
+    </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        let token = localStorage.getItem('adminToken');
+        
+        // Login sayfası göster eğer token yoksa
+        if (!token) {
+            showLoginPage();
         }
         
-        // Sayfa yüklendiğinde
-        document.addEventListener('DOMContentLoaded', () => {
+        // Functions
+        function showLoginPage() {
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('dashboardContainer').style.display = 'none';
+        }
+        
+        function showDashboard() {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('dashboardContainer').style.display = 'block';
             loadStats();
             loadStocks();
             loadUsers();
+        }
+        
+        async function handleAdminLogin() {
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            if (!username || !password) {
+                alert('❌ Kullanıcı adı ve şifre gerekli!');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success || data.token) {
+                    token = data.token;
+                    localStorage.setItem('adminToken', token);
+                    showDashboard();
+                } else {
+                    alert('❌ Hatalı kullanıcı adı veya şifre!');
+                }
+            } catch (error) {
+                alert('❌ Giriş hatası: ' + error.message);
+            }
+        }
+        
+        // Sayfa yüklendiğinde (token varsa dashboard göster)
+        if (token) {
+            showDashboard();
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            if (token) {
+                loadStats();
+                loadStocks();
+                loadUsers();
+            }
         });
         
         async function loadStats() {
@@ -486,7 +569,8 @@
         
         function logout() {
             localStorage.removeItem('adminToken');
-            window.location.href = '/';
+            token = null;
+            showLoginPage();
         }
         
         async function addProduct() {

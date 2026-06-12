@@ -749,6 +749,19 @@
         };
     </script>
 </body>
+</html>data.error}`);
+                }
+            } catch (error) {
+                alert('❌ Hata: ' + error.message);
+            }
+        }
+
+        // Sayfa yüklendiğinde stokları yükle
+        window.onload = () => {
+            loadStocks();
+        };
+    </script>
+</body>
 </html>
 data.error}`;
                 }
