@@ -1,27 +1,7 @@
-# Dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment variables
-# .env   <-- Açıkça açtık, token Railway'de de olacak
-.env.local
-.env.*.local
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-logs/
+.env
 *.log
-
-# Config (optional - comment out if you want to commit config.json)
-# config.json
+logs.json
+log-channels.json
+database.json
+backups/
