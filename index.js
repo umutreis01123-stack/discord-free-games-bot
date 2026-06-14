@@ -1,15 +1,12 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits, ChannelType, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v10');
-const fs = require('fs');
+const { Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits, ChannelType, AuditLogEvent } = require('discord.js');
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -18,6 +15,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildInvites,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
@@ -27,695 +25,316 @@ const client = new Client({
 const OWNER_ID = '1403495996138323989';
 const botStartTime = Date.now();
 
-// Log sistemi için veri yapısı
-let logs = {
-  messages: [], // { userId, username, channelId, channelName, content, timestamp }
-  voice: [], // { userId, username, channelId, channelName, action: 'join'/'leave', timestamp }
-  ratings: {} // { userId: { totalScore, ratingCount, ratings: [{from, score, timestamp}] } }
-};
+// Her sunucu için log kanalı ID'leri
+let logChannels = {}; // { guildId: channelId }
 
-// Log dosyasını yükle
-function loadLogs() {
+// Log kanallarını yükle
+function loadLogChannels() {
   try {
-    if (fs.existsSync('logs.json')) {
-      logs = JSON.parse(fs.readFileSync('logs.json', 'utf8'));
+    if (fs.existsSync('log-channels.json')) {
+      logChannels = JSON.parse(fs.readFileSync('log-channels.json', 'utf8'));
     }
   } catch (error) {
-    console.error('Log yükleme hatası:', error);
+    console.error('Log kanalları yükleme hatası:', error);
   }
 }
 
-// Log dosyasını kaydet
-function saveLogs() {
+// Log kanallarını kaydet
+function saveLogChannels() {
   try {
-    fs.writeFileSync('logs.json', JSON.stringify(logs, null, 2));
+    fs.writeFileSync('log-channels.json', JSON.stringify(logChannels, null, 2));
   } catch (error) {
-    console.error('Log kaydetme hatası:', error);
+    console.error('Log kanalları kaydetme hatası:', error);
   }
 }
 
-// Bot hazır olduğunda
-client.once('ready', async () => {
+// Bot hazır
+client.once('ready', () => {
   console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
   console.log(`🎮 ${client.guilds.cache.size} sunucuda aktif`);
   
-  loadLogs();
+  loadLogChannels();
   
-  // Slash komutlarını kaydet
-  await registerSlashCommands();
+  client.user.setActivity('Loglar izleniyor...', { type: 3 });
+});
+
+// Log kanalına mesaj gönder
+async function sendLog(guild, embed) {
+  if (!logChannels[guild.id]) return;
   
-  client.user.setActivity('Loglar kaydediliyor...', { type: 3 }); // 3 = WATCHING
-});
-
-// 7/24 Mesaj Loglama
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-
-  // Her mesajı logla
-  logs.messages.push({
-    userId: message.author.id,
-    username: message.author.username,
-    channelId: message.channel.id,
-    channelName: message.channel.name,
-    content: message.content,
-    timestamp: new Date().toISOString()
-  });
-
-  // Son 10000 mesajı sakla (performans için)
-  if (logs.messages.length > 10000) {
-    logs.messages = logs.messages.slice(-10000);
-  }
-
-  saveLogs();
-});
-
-// 7/24 Ses Loglama
-client.on('voiceStateUpdate', async (oldState, newState) => {
-  const member = newState.member;
-
-  // Ses kanalına giriş
-  if (!oldState.channel && newState.channel) {
-    logs.voice.push({
-      userId: member.id,
-      username: member.user.username,
-      channelId: newState.channel.id,
-      channelName: newState.channel.name,
-      action: 'join',
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // Ses kanalından çıkış
-  if (oldState.channel && !newState.channel) {
-    logs.voice.push({
-      userId: member.id,
-      username: member.user.username,
-      channelId: oldState.channel.id,
-      channelName: oldState.channel.name,
-      action: 'leave',
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // Kanal değiştirme
-  if (oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id) {
-    logs.voice.push({
-      userId: member.id,
-      username: member.user.username,
-      channelId: oldState.channel.id,
-      channelName: oldState.channel.name,
-      action: 'leave',
-      timestamp: new Date().toISOString()
-    });
-    logs.voice.push({
-      userId: member.id,
-      username: member.user.username,
-      channelId: newState.channel.id,
-      channelName: newState.channel.name,
-      action: 'join',
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  // Son 5000 ses logunu sakla
-  if (logs.voice.length > 5000) {
-    logs.voice = logs.voice.slice(-5000);
-  }
-
-  saveLogs();
-});
-
-// Slash Komutları
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isCommand()) return;
-
-  const { commandName } = interaction;
-
-  // /tiketkur
-  if (commandName === 'tiketkur') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ Bu komutu kullanmak için yönetici olmalısın!', ephemeral: true });
-    }
-
-    try {
-      // Ticket kategorisi oluştur
-      const category = await interaction.guild.channels.create({
-        name: '📩 DESTEK',
-        type: ChannelType.GuildCategory,
-        position: 0
-      });
-
-      // Ticket açma kanalı oluştur
-      const ticketChannel = await interaction.guild.channels.create({
-        name: '📩・ticket-aç',
-        type: ChannelType.GuildText,
-        parent: category.id,
-        topic: 'Destek talebi oluşturmak için butona tıklayın'
-      });
-
-      // Ticket açma mesajı
-      const embed = new EmbedBuilder()
-        .setColor(0x2ecc71)
-        .setTitle('🎫 Destek Sistemi')
-        .setDescription('Destek talebi oluşturmak için aşağıdaki butona tıklayın.\n\nYetkili ekibimiz en kısa sürede size yardımcı olacaktır.')
-        .addFields(
-          { name: '⏰ Yanıt Süresi', value: 'Ortalama 5-10 dakika', inline: true },
-          { name: '📊 Durum', value: 'Aktif', inline: true }
-        )
-        .setFooter({ text: 'Destek Sistemi' })
-        .setTimestamp();
-
-      const button = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_ticket')
-          .setLabel('🎫 Ticket Aç')
-          .setStyle(ButtonStyle.Success)
-      );
-
-      await ticketChannel.send({ embeds: [embed], components: [button] });
-
-      interaction.reply({ content: `✅ Ticket sistemi kuruldu! Kanal: ${ticketChannel}`, ephemeral: true });
-    } catch (error) {
-      console.error('Ticket kurulum hatası:', error);
-      interaction.reply({ content: '❌ Hata: ' + error.message, ephemeral: true });
-    }
-  }
-
-  // /destekkur
-  if (commandName === 'destekkur') {
-    try {
-      // Kullanıcıya özel ticket kanalı oluştur
-      const ticketChannel = await interaction.guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        topic: `Destek talebi: ${interaction.user.tag}`,
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: interaction.user.id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-          },
-          {
-            id: OWNER_ID,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
-          }
-        ]
-      });
-
-      const embed = new EmbedBuilder()
-        .setColor(0x3498db)
-        .setTitle('🎫 Destek Talebi')
-        .setDescription(`Merhaba ${interaction.user}, \n\nDestek talebiniz oluşturuldu. Lütfen sorununuzu detaylı bir şekilde açıklayın.\n\nYetkili ekibimiz en kısa sürede size dönüş yapacaktır.`)
-        .addFields(
-          { name: '👤 Kullanıcı', value: interaction.user.tag, inline: true },
-          { name: '🆔 ID', value: interaction.user.id, inline: true },
-          { name: '📅 Tarih', value: new Date().toLocaleString('tr-TR'), inline: true }
-        )
-        .setFooter({ text: 'Destek talebi kapatmak için yöneticiye bildirin' })
-        .setTimestamp();
-
-      await ticketChannel.send({ content: `${interaction.user} | <@${OWNER_ID}>`, embeds: [embed] });
-
-      interaction.reply({ content: `✅ Destek talebiniz oluşturuldu: ${ticketChannel}`, ephemeral: true });
-    } catch (error) {
-      console.error('Destek kurulum hatası:', error);
-      interaction.reply({ content: '❌ Hata: ' + error.message, ephemeral: true });
-    }
-  }
-
-  // /log
-  if (commandName === 'log') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: '❌ Bu komutu kullanmak için yönetici olmalısın!', ephemeral: true });
-    }
-
-    const userId = interaction.options.getUser('kullanici')?.id;
-
-    try {
-      // Log kanalı oluştur
-      const logChannel = await interaction.guild.channels.create({
-        name: `📊-log-${userId ? 'user' : 'genel'}`,
-        type: ChannelType.GuildText,
-        topic: 'Sunucu logları',
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: OWNER_ID,
-            allow: [PermissionFlagsBits.ViewChannel]
-          }
-        ]
-      });
-
-      // Mesaj logları
-      let messageLogs = logs.messages;
-      if (userId) {
-        messageLogs = messageLogs.filter(m => m.userId === userId);
-      }
-
-      const recentMessages = messageLogs.slice(-50); // Son 50 mesaj
-      const messageText = recentMessages.map(m => 
-        `[${new Date(m.timestamp).toLocaleString('tr-TR')}] ${m.username} (#${m.channelName}): ${m.content}`
-      ).join('\n') || 'Mesaj logu yok';
-
-      // Ses logları
-      let voiceLogs = logs.voice;
-      if (userId) {
-        voiceLogs = voiceLogs.filter(v => v.userId === userId);
-      }
-
-      const recentVoice = voiceLogs.slice(-30); // Son 30 ses hareketi
-      const voiceText = recentVoice.map(v => 
-        `[${new Date(v.timestamp).toLocaleString('tr-TR')}] ${v.username} - ${v.action === 'join' ? '🟢 Girdi' : '🔴 Çıktı'} - ${v.channelName}`
-      ).join('\n') || 'Ses logu yok';
-
-      // Logları dosya olarak kaydet
-      const logContent = `=== MESAJ LOGLARI ===\n${messageText}\n\n=== SES LOGLARI ===\n${voiceText}`;
-      fs.writeFileSync('temp_log.txt', logContent);
-
-      const embed = new EmbedBuilder()
-        .setColor(0xe74c3c)
-        .setTitle('📊 Sunucu Logları')
-        .setDescription(userId ? `Kullanıcı: <@${userId}>` : 'Tüm sunucu logları')
-        .addFields(
-          { name: '📨 Toplam Mesaj', value: messageLogs.length.toString(), inline: true },
-          { name: '🎙️ Toplam Ses Hareketi', value: voiceLogs.length.toString(), inline: true },
-          { name: '📂 Kanal', value: logChannel.toString(), inline: true }
-        )
-        .setFooter({ text: 'Detaylı loglar dosya olarak gönderildi' })
-        .setTimestamp();
-
-      await logChannel.send({ embeds: [embed], files: ['temp_log.txt'] });
-      fs.unlinkSync('temp_log.txt');
-
-      interaction.reply({ content: `✅ Loglar oluşturuldu: ${logChannel}`, ephemeral: true });
-    } catch (error) {
-      console.error('Log oluşturma hatası:', error);
-      interaction.reply({ content: '❌ Hata: ' + error.message, ephemeral: true });
-    }
-  }
-
-  // /puanla
-  if (commandName === 'puanla') {
-    const targetUser = interaction.options.getUser('kullanici');
-    const score = interaction.options.getInteger('puan');
-
-    if (targetUser.id === interaction.user.id) {
-      return interaction.reply({ content: '❌ Kendine puan veremezsin!', ephemeral: true });
-    }
-
-    if (score < 1 || score > 10) {
-      return interaction.reply({ content: '❌ Puan 1-10 arasında olmalı!', ephemeral: true });
-    }
-
-    // Puanlama sistemi
-    if (!logs.ratings[targetUser.id]) {
-      logs.ratings[targetUser.id] = {
-        totalScore: 0,
-        ratingCount: 0,
-        ratings: []
-      };
-    }
-
-    logs.ratings[targetUser.id].totalScore += score;
-    logs.ratings[targetUser.id].ratingCount += 1;
-    logs.ratings[targetUser.id].ratings.push({
-      from: interaction.user.id,
-      fromUsername: interaction.user.username,
-      score: score,
-      timestamp: new Date().toISOString()
-    });
-
-    saveLogs();
-
-    const avgScore = (logs.ratings[targetUser.id].totalScore / logs.ratings[targetUser.id].ratingCount).toFixed(1);
-
-    const embed = new EmbedBuilder()
-      .setColor(0xf39c12)
-      .setTitle('⭐ Puanlama Sistemi')
-      .setDescription(`${interaction.user} → ${targetUser} kullanıcısını puanladı!`)
-      .addFields(
-        { name: '🎯 Verilen Puan', value: `${score}/10`, inline: true },
-        { name: '📊 Ortalama Puan', value: `${avgScore}/10`, inline: true },
-        { name: '🔢 Toplam Değerlendirme', value: logs.ratings[targetUser.id].ratingCount.toString(), inline: true }
-      )
-      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: `${targetUser.username} - Puanlama Sistemi` })
-      .setTimestamp();
-
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // /shiple
-  if (commandName === 'shiple') {
-    const user1 = interaction.options.getUser('kullanici1');
-    const user2 = interaction.options.getUser('kullanici2');
-
-    if (user1.id === user2.id) {
-      return interaction.reply({ content: '❌ Aynı kişiyi kendisiyle shipleyemezsin!', ephemeral: true });
-    }
-
-    // Ship skoru hesapla (pseudo-random ama tutarlı)
-    const seed = parseInt(user1.id) + parseInt(user2.id);
-    const shipScore = ((seed % 100) + 1); // 1-100 arası
-
-    // Ship ismi oluştur (Marpelin tarzı)
-    const name1 = user1.username.substring(0, Math.ceil(user1.username.length / 2));
-    const name2 = user2.username.substring(Math.floor(user2.username.length / 2));
-    const shipName = name1 + name2;
-
-    // Ship durumu
-    let shipStatus = '';
-    let shipEmoji = '';
-    let shipColor = 0xff0000;
-
-    if (shipScore >= 80) {
-      shipStatus = 'Mükemmel Uyum! 💕';
-      shipEmoji = '❤️❤️❤️';
-      shipColor = 0xe91e63;
-    } else if (shipScore >= 60) {
-      shipStatus = 'Güzel Uyum! 💖';
-      shipEmoji = '❤️❤️';
-      shipColor = 0xf48fb1;
-    } else if (shipScore >= 40) {
-      shipStatus = 'Orta Uyum 💛';
-      shipEmoji = '❤️';
-      shipColor = 0xffeb3b;
-    } else if (shipScore >= 20) {
-      shipStatus = 'Zayıf Uyum 💔';
-      shipEmoji = '💔';
-      shipColor = 0xff9800;
-    } else {
-      shipStatus = 'Uyumsuz 😢';
-      shipEmoji = '💔💔';
-      shipColor = 0x607d8b;
-    }
-
-    // Ship bar oluştur
-    const filledBars = Math.floor(shipScore / 10);
-    const emptyBars = 10 - filledBars;
-    const shipBar = '█'.repeat(filledBars) + '░'.repeat(emptyBars);
-
-    const embed = new EmbedBuilder()
-      .setColor(shipColor)
-      .setTitle('💕 Ship Hesaplayıcı')
-      .setDescription(`${user1} ${shipEmoji} ${user2}`)
-      .addFields(
-        { name: '💑 Ship İsmi', value: `**${shipName}**`, inline: true },
-        { name: '💯 Uyum Oranı', value: `**%${shipScore}**`, inline: true },
-        { name: '📊 Durum', value: shipStatus, inline: true },
-        { name: '📈 Uyum Barı', value: `\`${shipBar}\` ${shipScore}%`, inline: false }
-      )
-      .setFooter({ text: 'Marpelin Ship Sistemi' })
-      .setTimestamp();
-
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ✅ YENİ: /puanbas (Sadece umutpapa123 kullanabilir)
-  if (commandName === 'puanbas') {
-    // Sadece umutpapa123 kullanabilir
-    if (interaction.user.id !== OWNER_ID) {
-      return interaction.reply({ content: '❌ Bu komutu sadece umutpapa123 kullanabilir!', ephemeral: true });
-    }
-
-    const targetUser = interaction.options.getUser('kullanici');
-    const score = interaction.options.getInteger('puan');
-
-    if (score < 1 || score > 10) {
-      return interaction.reply({ content: '❌ Puan 1-10 arasında olmalı!', ephemeral: true });
-    }
-
-    // Puanlama sistemi
-    if (!logs.ratings[targetUser.id]) {
-      logs.ratings[targetUser.id] = {
-        totalScore: 0,
-        ratingCount: 0,
-        ratings: []
-      };
-    }
-
-    logs.ratings[targetUser.id].totalScore += score;
-    logs.ratings[targetUser.id].ratingCount += 1;
-    logs.ratings[targetUser.id].ratings.push({
-      from: interaction.user.id,
-      fromUsername: interaction.user.username,
-      score: score,
-      timestamp: new Date().toISOString()
-    });
-
-    saveLogs();
-
-    const avgScore = (logs.ratings[targetUser.id].totalScore / logs.ratings[targetUser.id].ratingCount).toFixed(1);
-
-    const embed = new EmbedBuilder()
-      .setColor(0x9b59b6)
-      .setTitle('👑 Admin Puanlama')
-      .setDescription(`${interaction.user} → ${targetUser} kullanıcısına puan verdi!`)
-      .addFields(
-        { name: '🎯 Verilen Puan', value: `${score}/10`, inline: true },
-        { name: '📊 Ortalama Puan', value: `${avgScore}/10`, inline: true },
-        { name: '🔢 Toplam Değerlendirme', value: logs.ratings[targetUser.id].ratingCount.toString(), inline: true }
-      )
-      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: `${targetUser.username} - Admin Puanlama` })
-      .setTimestamp();
-
-    interaction.reply({ embeds: [embed] });
-  }
-
-  // ✅ YENİ: /puantablosu (Puan sıralaması)
-  if (commandName === 'puantablosu') {
-    if (Object.keys(logs.ratings).length === 0) {
-      return interaction.reply({ content: '❌ Henüz kimse puanlanmamış!', ephemeral: true });
-    }
-
-    // Kullanıcıları ortalama puana göre sırala
-    const sortedUsers = Object.entries(logs.ratings)
-      .map(([userId, data]) => ({
-        userId,
-        avgScore: (data.totalScore / data.ratingCount).toFixed(1),
-        ratingCount: data.ratingCount
-      }))
-      .sort((a, b) => b.avgScore - a.avgScore)
-      .slice(0, 10); // İlk 10
-
-    const leaderboard = await Promise.all(
-      sortedUsers.map(async (user, index) => {
-        try {
-          const discordUser = await client.users.fetch(user.userId);
-          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-          return `${medal} **${discordUser.username}** - ${user.avgScore}/10 ⭐ (${user.ratingCount} değerlendirme)`;
-        } catch {
-          return `${index + 1}. Bilinmeyen Kullanıcı - ${user.avgScore}/10 ⭐`;
-        }
-      })
-    );
-
-    const embed = new EmbedBuilder()
-      .setColor(0xf1c40f)
-      .setTitle('🏆 Puan Tablosu')
-      .setDescription('En yüksek puanlı kullanıcılar:\n\n' + leaderboard.join('\n'))
-      .setFooter({ text: `Toplam ${Object.keys(logs.ratings).length} kullanıcı puanlandı` })
-      .setTimestamp();
-
-    interaction.reply({ embeds: [embed] });
-  }
-});
-
-// Ticket button handler
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return;
-
-  if (interaction.customId === 'create_ticket') {
-    try {
-      // Ticket kanalı oluştur
-      const ticketChannel = await interaction.guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        topic: `Destek talebi: ${interaction.user.tag}`,
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: interaction.user.id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
-          },
-          {
-            id: OWNER_ID,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels]
-          }
-        ]
-      });
-
-      const embed = new EmbedBuilder()
-        .setColor(0x3498db)
-        .setTitle('🎫 Destek Talebi')
-        .setDescription(`Merhaba ${interaction.user}, \n\nDestek talebiniz oluşturuldu. Lütfen sorununuzu detaylı bir şekilde açıklayın.\n\nYetkili ekibimiz en kısa sürede size dönüş yapacaktır.`)
-        .addFields(
-          { name: '👤 Kullanıcı', value: interaction.user.tag, inline: true },
-          { name: '🆔 ID', value: interaction.user.id, inline: true },
-          { name: '📅 Tarih', value: new Date().toLocaleString('tr-TR'), inline: true }
-        )
-        .setFooter({ text: 'Destek talebi kapatmak için yöneticiye bildirin' })
-        .setTimestamp();
-
-      await ticketChannel.send({ content: `${interaction.user} | <@${OWNER_ID}>`, embeds: [embed] });
-
-      interaction.reply({ content: `✅ Destek talebiniz oluşturuldu: ${ticketChannel}`, ephemeral: true });
-    } catch (error) {
-      console.error('Ticket oluşturma hatası:', error);
-      interaction.reply({ content: '❌ Hata: ' + error.message, ephemeral: true });
-    }
-  }
-});
-
-// Slash komutlarını kaydet
-async function registerSlashCommands() {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName('tiketkur')
-      .setDescription('Ticket sistemi kurar (Admin)'),
-    
-    new SlashCommandBuilder()
-      .setName('destekkur')
-      .setDescription('Destek talebi oluşturur'),
-    
-    new SlashCommandBuilder()
-      .setName('log')
-      .setDescription('Sunucu loglarını gösterir (Admin)')
-      .addUserOption(option =>
-        option.setName('kullanici')
-          .setDescription('Belirli bir kullanıcının loglarını göster (opsiyonel)')
-          .setRequired(false)),
-    
-    new SlashCommandBuilder()
-      .setName('puanla')
-      .setDescription('Kullanıcıya puan ver (1-10)')
-      .addUserOption(option =>
-        option.setName('kullanici')
-          .setDescription('Puanlanacak kullanıcı')
-          .setRequired(true))
-      .addIntegerOption(option =>
-        option.setName('puan')
-          .setDescription('Puan (1-10 arası)')
-          .setMinValue(1)
-          .setMaxValue(10)
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('shiple')
-      .setDescription('İki kullanıcı arasındaki uyum oranını hesapla')
-      .addUserOption(option =>
-        option.setName('kullanici1')
-          .setDescription('İlk kullanıcı')
-          .setRequired(true))
-      .addUserOption(option =>
-        option.setName('kullanici2')
-          .setDescription('İkinci kullanıcı')
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('puanbas')
-      .setDescription('Kullanıcıya puan ver (Sadece umutpapa123)')
-      .addUserOption(option =>
-        option.setName('kullanici')
-          .setDescription('Puanlanacak kullanıcı')
-          .setRequired(true))
-      .addIntegerOption(option =>
-        option.setName('puan')
-          .setDescription('Puan (1-10 arası)')
-          .setMinValue(1)
-          .setMaxValue(10)
-          .setRequired(true)),
-    
-    new SlashCommandBuilder()
-      .setName('puantablosu')
-      .setDescription('En yüksek puanlı kullanıcıları gösterir')
-  ].map(command => command.toJSON());
-
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-
   try {
-    console.log('Slash komutları kaydediliyor...');
-    
-    for (const guild of client.guilds.cache.values()) {
-      await rest.put(
-        Routes.applicationGuildCommands(client.user.id, guild.id),
-        { body: commands }
-      );
+    const channel = await guild.channels.fetch(logChannels[guild.id]);
+    if (channel) {
+      await channel.send({ embeds: [embed] });
     }
-    
-    console.log('✅ Slash komutları kaydedildi!');
   } catch (error) {
-    console.error('Slash komut kaydı hatası:', error);
+    console.error('Log gönderme hatası:', error);
   }
 }
 
-// Bot'u başlat
-client.login(process.env.DISCORD_TOKEN);
+// ========== MESAJ LOGLARI ==========
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
 
-// ============ WEB SERVER ============
+  const embed = new EmbedBuilder()
+    .setColor(0x3498db)
+    .setAuthor({ name: message.author.tag, iconURL: message.author.displayAvatarURL() })
+    .setTitle('📝 Yeni Mesaj')
+    .setDescription(`**Kanal:** ${message.channel}\n**Mesaj:**\n${message.content || '*Mesaj içeriği yok*'}`)
+    .addFields(
+      { name: '👤 Kullanıcı', value: `<@${message.author.id}>`, inline: true },
+      { name: '📺 Kanal', value: `<#${message.channel.id}>`, inline: true },
+      { name: '🆔 Mesaj ID', value: message.id, inline: true }
+    )
+    .setFooter({ text: `Kullanıcı ID: ${message.author.id}` })
+    .setTimestamp();
 
-// Ana sayfa
+  await sendLog(message.guild, embed);
+});
+
+// Mesaj silindi
+client.on('messageDelete', async (message) => {
+  if (!message.guild) return;
+  if (message.author?.bot) return;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xe74c3c)
+    .setAuthor({ name: message.author?.tag || 'Bilinmeyen', iconURL: message.author?.displayAvatarURL() })
+    .setTitle('🗑️ Mesaj Silindi')
+    .setDescription(`**Kanal:** ${message.channel}\n**Silinen Mesaj:**\n${message.content || '*İçerik alınamadı*'}`)
+    .addFields(
+      { name: '👤 Kullanıcı', value: message.author ? `<@${message.author.id}>` : 'Bilinmeyen', inline: true },
+      { name: '📺 Kanal', value: `<#${message.channel.id}>`, inline: true }
+    )
+    .setFooter({ text: `Kullanıcı ID: ${message.author?.id || 'Bilinmeyen'}` })
+    .setTimestamp();
+
+  await sendLog(message.guild, embed);
+});
+
+// Mesaj düzenlendi
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  if (!newMessage.guild) return;
+  if (newMessage.author?.bot) return;
+  if (oldMessage.content === newMessage.content) return;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xf39c12)
+    .setAuthor({ name: newMessage.author.tag, iconURL: newMessage.author.displayAvatarURL() })
+    .setTitle('✏️ Mesaj Düzenlendi')
+    .setDescription(`**Kanal:** ${newMessage.channel}`)
+    .addFields(
+      { name: '📄 Eski Mesaj', value: oldMessage.content || '*İçerik yok*', inline: false },
+      { name: '📝 Yeni Mesaj', value: newMessage.content || '*İçerik yok*', inline: false },
+      { name: '👤 Kullanıcı', value: `<@${newMessage.author.id}>`, inline: true },
+      { name: '📺 Kanal', value: `<#${newMessage.channel.id}>`, inline: true }
+    )
+    .setFooter({ text: `Kullanıcı ID: ${newMessage.author.id}` })
+    .setTimestamp();
+
+  await sendLog(newMessage.guild, embed);
+});
+
+// ========== SES LOGLARI ==========
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  const member = newState.member;
+  if (!member || member.user.bot) return;
+
+  // Ses kanalına katıldı
+  if (!oldState.channel && newState.channel) {
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+      .setTitle('🎙️ Ses Kanalına Katıldı')
+      .addFields(
+        { name: '👤 Kullanıcı', value: `<@${member.id}>`, inline: true },
+        { name: '📢 Kanal', value: newState.channel.name, inline: true },
+        { name: '🆔 Kanal ID', value: newState.channel.id, inline: true }
+      )
+      .setFooter({ text: `Kullanıcı ID: ${member.id}` })
+      .setTimestamp();
+
+    await sendLog(newState.guild, embed);
+  }
+
+  // Ses kanalından ayrıldı
+  if (oldState.channel && !newState.channel) {
+    const embed = new EmbedBuilder()
+      .setColor(0xe74c3c)
+      .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+      .setTitle('🔇 Ses Kanalından Ayrıldı')
+      .addFields(
+        { name: '👤 Kullanıcı', value: `<@${member.id}>`, inline: true },
+        { name: '📢 Kanal', value: oldState.channel.name, inline: true },
+        { name: '🆔 Kanal ID', value: oldState.channel.id, inline: true }
+      )
+      .setFooter({ text: `Kullanıcı ID: ${member.id}` })
+      .setTimestamp();
+
+    await sendLog(oldState.guild, embed);
+  }
+
+  // Kanal değiştirdi
+  if (oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id) {
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setAuthor({ name: member.user.tag, iconURL: member.user.displayAvatarURL() })
+      .setTitle('🔄 Ses Kanalı Değiştirdi')
+      .addFields(
+        { name: '👤 Kullanıcı', value: `<@${member.id}>`, inline: true },
+        { name: '📢 Eski Kanal', value: oldState.channel.name, inline: true },
+        { name: '📢 Yeni Kanal', value: newState.channel.name, inline: true }
+      )
+      .setFooter({ text: `Kullanıcı ID: ${member.id}` })
+      .setTimestamp();
+
+    await sendLog(newState.guild, embed);
+  }
+});
+
+// ========== DAVET LOGLARI ==========
+client.on('inviteCreate', async (invite) => {
+  const embed = new EmbedBuilder()
+    .setColor(0x1abc9c)
+    .setAuthor({ name: invite.inviter?.tag || 'Bilinmeyen', iconURL: invite.inviter?.displayAvatarURL() })
+    .setTitle('🔗 Davet Oluşturuldu')
+    .addFields(
+      { name: '👤 Oluşturan', value: invite.inviter ? `<@${invite.inviter.id}>` : 'Bilinmeyen', inline: true },
+      { name: '📺 Kanal', value: `<#${invite.channel.id}>`, inline: true },
+      { name: '🔗 Kod', value: invite.code, inline: true },
+      { name: '⏰ Süre', value: invite.maxAge ? `${invite.maxAge / 3600} saat` : 'Sınırsız', inline: true },
+      { name: '👥 Kullanım', value: invite.maxUses ? `${invite.maxUses} kez` : 'Sınırsız', inline: true }
+    )
+    .setFooter({ text: `Davet Kodu: ${invite.code}` })
+    .setTimestamp();
+
+  await sendLog(invite.guild, embed);
+});
+
+// Davet silindi
+client.on('inviteDelete', async (invite) => {
+  const embed = new EmbedBuilder()
+    .setColor(0xe67e22)
+    .setTitle('🗑️ Davet Silindi')
+    .addFields(
+      { name: '🔗 Kod', value: invite.code, inline: true },
+      { name: '📺 Kanal', value: `<#${invite.channel.id}>`, inline: true }
+    )
+    .setFooter({ text: `Davet Kodu: ${invite.code}` })
+    .setTimestamp();
+
+  await sendLog(invite.guild, embed);
+});
+
+// ========== KOMUTLAR ==========
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith('-')) return;
+
+  const args = message.content.slice(1).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // -logkur [kanal]
+  if (command === 'logkur') {
+    if (message.author.id !== OWNER_ID) {
+      return message.reply('❌ Bu komutu sadece bot sahibi kullanabilir!');
+    }
+
+    const channel = message.mentions.channels.first() || message.channel;
+
+    logChannels[message.guild.id] = channel.id;
+    saveLogChannels();
+
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('✅ Log Sistemi Kuruldu!')
+      .setDescription(`Tüm sunucu aktiviteleri ${channel} kanalına kaydedilecek.`)
+      .addFields(
+        { name: '📊 İzlenecekler', value: '• Mesajlar (gönderim/silme/düzenleme)\n• Ses hareketleri (giriş/çıkış/kanal değiştirme)\n• Davetler (oluşturma/silme)', inline: false }
+      )
+      .setFooter({ text: 'Log sistemi aktif!' })
+      .setTimestamp();
+
+    message.reply({ embeds: [embed] });
+    console.log(`📊 Log kanalı kuruldu: ${message.guild.name} → #${channel.name}`);
+  }
+
+  // -logkapat
+  if (command === 'logkapat') {
+    if (message.author.id !== OWNER_ID) {
+      return message.reply('❌ Bu komutu sadece bot sahibi kullanabilir!');
+    }
+
+    if (!logChannels[message.guild.id]) {
+      return message.reply('⚠️ Bu sunucuda log sistemi kurulu değil!');
+    }
+
+    delete logChannels[message.guild.id];
+    saveLogChannels();
+
+    message.reply('✅ Log sistemi kapatıldı!');
+    console.log(`🛑 Log sistemi kapatıldı: ${message.guild.name}`);
+  }
+});
+
+// ========== WEB SERVER ==========
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Bot istatistikleri API
-app.get('/api/bot-stats', (req, res) => {
+app.get('/api/bot-stats', async (req, res) => {
   try {
     if (!client.user) {
       return res.json({
         status: 'offline',
         servers: 0,
-        users: 0,
-        channels: 0,
-        uptime: '0s',
-        bot: null
+        bot: null,
+        founder: null
       });
     }
 
-    // Toplam kullanıcı sayısı
-    let totalUsers = 0;
-    let totalChannels = 0;
-
-    client.guilds.cache.forEach(guild => {
-      totalUsers += guild.memberCount;
-      totalChannels += guild.channels.cache.size;
-    });
-
-    // Uptime hesapla
-    const uptimeMs = Date.now() - botStartTime;
-    const uptimeSeconds = Math.floor(uptimeMs / 1000);
-    const days = Math.floor(uptimeSeconds / 86400);
-    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
-    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
-    
-    let uptimeStr = '';
-    if (days > 0) uptimeStr += `${days}g `;
-    if (hours > 0) uptimeStr += `${hours}s `;
-    uptimeStr += `${minutes}d`;
+    // Kurucu bilgilerini al
+    let founderData = null;
+    try {
+      const founder = await client.users.fetch(OWNER_ID);
+      
+      // Kurucunun durumunu al (presence)
+      let founderStatus = 'offline';
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          const member = await guild.members.fetch(OWNER_ID);
+          if (member.presence) {
+            founderStatus = member.presence.status;
+            break;
+          }
+        } catch (err) {
+          // Bu sunucuda üye değil, devam et
+        }
+      }
+      
+      founderData = {
+        username: founder.username,
+        tag: founder.tag,
+        id: founder.id,
+        avatar: founder.displayAvatarURL({ dynamic: true, size: 128 }),
+        status: founderStatus
+      };
+    } catch (error) {
+      console.error('Kurucu bilgisi alınamadı:', error);
+    }
 
     res.json({
       status: 'online',
       servers: client.guilds.cache.size,
-      users: totalUsers,
-      channels: totalChannels,
-      uptime: uptimeStr,
       bot: {
         username: client.user.username,
         tag: client.user.tag,
         id: client.user.id,
         avatar: client.user.displayAvatarURL({ dynamic: true, size: 256 })
-      }
+      },
+      founder: founderData
     });
   } catch (error) {
     console.error('Bot stats API hatası:', error);
@@ -723,8 +342,8 @@ app.get('/api/bot-stats', (req, res) => {
   }
 });
 
-// Web sunucusunu başlat
 app.listen(PORT, () => {
   console.log(`🌐 Web sunucusu ${PORT} portunda çalışıyor`);
-  console.log(`📊 İstatistikler: http://localhost:${PORT}`);
 });
+
+client.login(process.env.DISCORD_TOKEN);

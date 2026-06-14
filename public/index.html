@@ -103,7 +103,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: 1fr;
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -185,6 +185,10 @@
             .bot-name {
                 font-size: 1.5em;
             }
+            
+            .founder-id {
+                font-size: 1.2em;
+            }
         }
     </style>
 </head>
@@ -204,23 +208,16 @@
                 <div class="stat-value" id="serverCount">-</div>
                 <div class="stat-label">🖥️ Sunucu</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="userCount">-</div>
-                <div class="stat-label">👥 Kullanıcı</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="channelCount">-</div>
-                <div class="stat-label">📺 Kanal</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="uptime">-</div>
-                <div class="stat-label">⏰ Çalışma Süresi</div>
-            </div>
         </div>
 
         <div class="founder-card">
+            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Kurucu Avatar" class="bot-avatar" id="founderAvatar" style="width: 80px; height: 80px; margin-bottom: 15px;">
             <div class="founder-title">👑 Kurucu</div>
-            <div class="founder-id">1403495996138323989</div>
+            <div class="founder-id" id="founderName">Yükleniyor...</div>
+            <div class="bot-status status-offline" id="founderStatus" style="margin-top: 15px; display: inline-flex;">
+                <span class="status-dot"></span>
+                <span>Yükleniyor...</span>
+            </div>
         </div>
 
         <div class="footer">
@@ -255,9 +252,31 @@
 
                 // İstatistikler
                 document.getElementById('serverCount').textContent = data.servers || '-';
-                document.getElementById('userCount').textContent = data.users ? data.users.toLocaleString('tr-TR') : '-';
-                document.getElementById('channelCount').textContent = data.channels || '-';
-                document.getElementById('uptime').textContent = data.uptime || '-';
+
+                // Kurucu bilgileri
+                if (data.founder) {
+                    document.getElementById('founderName').textContent = data.founder.username || 'Yükleniyor...';
+                    if (data.founder.avatar) {
+                        document.getElementById('founderAvatar').src = data.founder.avatar;
+                    }
+                    
+                    // Kurucu durumu
+                    const founderStatusElement = document.getElementById('founderStatus');
+                    if (data.founder.status === 'online') {
+                        founderStatusElement.className = 'bot-status status-online';
+                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🟢 Çevrimiçi</span>';
+                    } else if (data.founder.status === 'idle') {
+                        founderStatusElement.className = 'bot-status status-online';
+                        founderStatusElement.style.background = '#f39c12';
+                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🟡 Boşta</span>';
+                    } else if (data.founder.status === 'dnd') {
+                        founderStatusElement.className = 'bot-status status-offline';
+                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🔴 Rahatsız Etmeyin</span>';
+                    } else {
+                        founderStatusElement.className = 'bot-status status-offline';
+                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>⚫ Çevrimdışı</span>';
+                    }
+                }
 
             } catch (error) {
                 console.error('İstatistik yükleme hatası:', error);

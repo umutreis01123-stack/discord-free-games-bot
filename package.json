@@ -1,15 +1,13 @@
 {
-  "name": "discord-bot",
-  "version": "2.0.0",
-  "description": "Discord Bot - Ticket, Log, Rating, Ship System",
+  "name": "discord-bot-logger",
+  "version": "3.0.0",
+  "description": "Discord Bot - Advanced Logging System",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "@discordjs/rest": "^2.0.0",
-    "discord-api-types": "^0.37.120",
     "dotenv": "^16.3.1",
     "express": "^4.18.2"
   }
