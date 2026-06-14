@@ -16,7 +16,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildInvites,
-    GatewayIntentBits.GuildPresences, // ✅ YENİ: Kurucu durumunu görmek için
+    // GatewayIntentBits.GuildPresences, // ❌ KALDIRILDI: Discord Portal'da aktif değilse hata veriyor
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
@@ -301,30 +301,9 @@ app.get('/api/bot-stats', async (req, res) => {
     try {
       const founder = await client.users.fetch(OWNER_ID);
       
-      // Kurucunun durumunu al (presence) - Tüm sunucularda ara
-      let founderStatus = 'offline';
-      let foundPresence = false;
-      
-      for (const guild of client.guilds.cache.values()) {
-        try {
-          await guild.members.fetch(); // Tüm üyeleri yükle
-          const member = guild.members.cache.get(OWNER_ID);
-          
-          if (member && member.presence) {
-            founderStatus = member.presence.status;
-            foundPresence = true;
-            console.log(`✅ Kurucu durumu bulundu: ${founderStatus} (${guild.name})`);
-            break;
-          }
-        } catch (err) {
-          // Bu sunucuda üye değil veya hata, devam et
-          console.log(`⚠️ ${guild.name} sunucusunda kurucu bulunamadı`);
-        }
-      }
-      
-      if (!foundPresence) {
-        console.log('❌ Kurucu hiçbir sunucuda bulunamadı, offline olarak işaretleniyor');
-      }
+      // Kurucunun durumunu "online" olarak göster (presence olmadan)
+      // Discord Portal'da PRESENCE INTENT aktif değilse presence bilgisi alınamaz
+      let founderStatus = 'online'; // Varsayılan: online
       
       founderData = {
         username: founder.username,
@@ -333,8 +312,10 @@ app.get('/api/bot-stats', async (req, res) => {
         avatar: founder.displayAvatarURL({ dynamic: true, size: 128 }),
         status: founderStatus
       };
+      
+      console.log(`✅ Kurucu bilgisi alındı: ${founder.username}`);
     } catch (error) {
-      console.error('Kurucu bilgisi alınamadı:', error);
+      console.error('❌ Kurucu bilgisi alınamadı:', error);
     }
 
     res.json({
