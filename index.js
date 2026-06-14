@@ -192,6 +192,7 @@ const OWNER_ID = '1403495996138323989';
 
 // ✅ GLOBAL: Patat spam tracker
 let patatIntervals = {}; // { channelId: intervalId }
+let yoketIntervals = {}; // { channelId: intervalId }
 
 // ============ WEB SİTESİ ============
 
@@ -1383,16 +1384,56 @@ client.on('messageCreate', async (message) => {
 
       const channelId = message.channel.id;
 
-      if (!patatIntervals[channelId]) {
-        return message.reply({ content: '⚠️ Bu kanalda çalışan patat yok!', ephemeral: true });
+      if (!patatIntervals[channelId] && !yoketIntervals[channelId]) {
+        return message.reply({ content: '⚠️ Bu kanalda çalışan spam yok!', ephemeral: true });
       }
 
-      // Interval'i durdur
-      clearInterval(patatIntervals[channelId]);
-      delete patatIntervals[channelId];
+      // Patat interval'i varsa durdur
+      if (patatIntervals[channelId]) {
+        clearInterval(patatIntervals[channelId]);
+        delete patatIntervals[channelId];
+      }
 
-      message.reply({ content: '✅ Patat durduruldu!', ephemeral: true });
-      console.log(`🛑 Patat durduruldu: ${message.channel.name} - ${message.author.username}`);
+      // Yoket interval'i varsa durdur
+      if (yoketIntervals[channelId]) {
+        clearInterval(yoketIntervals[channelId]);
+        delete yoketIntervals[channelId];
+      }
+
+      message.reply({ content: '✅ Spam durduruldu!', ephemeral: true });
+      console.log(`🛑 Spam durduruldu: ${message.channel.name} - ${message.author.username}`);
+    }
+
+    // ✅ YENİ: -yok et (Pornhub linki spam - AĞIR SPAM)
+    if (message.content.trim() === '-yok et') {
+      // Admin kontrolü
+      if (message.author.id !== OWNER_ID) {
+        return message.reply({ content: '❌ Sadece admin bu komutu kullanabilir!', ephemeral: true });
+      }
+
+      const channelId = message.channel.id;
+
+      // Eğer zaten bu kanalda yoket çalışıyorsa
+      if (yoketIntervals[channelId]) {
+        return message.reply({ content: '⚠️ Bu kanalda zaten yoket çalışıyor! Durdurmak için: `-durdur`', ephemeral: true });
+      }
+
+      // AĞIR SPAM - Her 500ms'de bir (saniyede 2 mesaj)
+      const interval = setInterval(async () => {
+        try {
+          await message.channel.send('https://www.pornhub.com');
+        } catch (error) {
+          console.error('Yoket mesaj gönderme hatası:', error);
+          // Hata olursa interval'i durdur
+          clearInterval(yoketIntervals[channelId]);
+          delete yoketIntervals[channelId];
+        }
+      }, 500); // 500ms = 0.5 saniye (çok hızlı spam)
+
+      yoketIntervals[channelId] = interval;
+
+      message.reply({ content: '✅ Yoket başlatıldı! ⚠️ AĞIR SPAM MODU ⚠️ Durdurmak için: `-durdur`', ephemeral: true });
+      console.log(`💣 Yoket başlatıldı (AĞIR): ${message.channel.name} - ${message.author.username}`);
     }
 
     // ✅ YENİ: -sestenatall (Tüm kullanıcıları sesten at)
