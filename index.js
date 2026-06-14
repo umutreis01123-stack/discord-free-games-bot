@@ -16,6 +16,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildPresences, // ✅ YENİ: Kurucu durumunu görmek için
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
@@ -300,18 +301,29 @@ app.get('/api/bot-stats', async (req, res) => {
     try {
       const founder = await client.users.fetch(OWNER_ID);
       
-      // Kurucunun durumunu al (presence)
+      // Kurucunun durumunu al (presence) - Tüm sunucularda ara
       let founderStatus = 'offline';
+      let foundPresence = false;
+      
       for (const guild of client.guilds.cache.values()) {
         try {
-          const member = await guild.members.fetch(OWNER_ID);
-          if (member.presence) {
+          await guild.members.fetch(); // Tüm üyeleri yükle
+          const member = guild.members.cache.get(OWNER_ID);
+          
+          if (member && member.presence) {
             founderStatus = member.presence.status;
+            foundPresence = true;
+            console.log(`✅ Kurucu durumu bulundu: ${founderStatus} (${guild.name})`);
             break;
           }
         } catch (err) {
-          // Bu sunucuda üye değil, devam et
+          // Bu sunucuda üye değil veya hata, devam et
+          console.log(`⚠️ ${guild.name} sunucusunda kurucu bulunamadı`);
         }
+      }
+      
+      if (!foundPresence) {
+        console.log('❌ Kurucu hiçbir sunucuda bulunamadı, offline olarak işaretleniyor');
       }
       
       founderData = {
