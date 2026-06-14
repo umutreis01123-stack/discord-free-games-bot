@@ -3,6 +3,15 @@ const { Client, GatewayIntentBits, EmbedBuilder, PermissionFlagsBits, ChannelTyp
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const fs = require('fs');
+const express = require('express');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
 
 const client = new Client({
   intents: [
@@ -16,6 +25,7 @@ const client = new Client({
 });
 
 const OWNER_ID = '1403495996138323989';
+const botStartTime = Date.now();
 
 // Log sistemi için veri yapısı
 let logs = {
@@ -651,3 +661,70 @@ async function registerSlashCommands() {
 
 // Bot'u başlat
 client.login(process.env.DISCORD_TOKEN);
+
+// ============ WEB SERVER ============
+
+// Ana sayfa
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Bot istatistikleri API
+app.get('/api/bot-stats', (req, res) => {
+  try {
+    if (!client.user) {
+      return res.json({
+        status: 'offline',
+        servers: 0,
+        users: 0,
+        channels: 0,
+        uptime: '0s',
+        bot: null
+      });
+    }
+
+    // Toplam kullanıcı sayısı
+    let totalUsers = 0;
+    let totalChannels = 0;
+
+    client.guilds.cache.forEach(guild => {
+      totalUsers += guild.memberCount;
+      totalChannels += guild.channels.cache.size;
+    });
+
+    // Uptime hesapla
+    const uptimeMs = Date.now() - botStartTime;
+    const uptimeSeconds = Math.floor(uptimeMs / 1000);
+    const days = Math.floor(uptimeSeconds / 86400);
+    const hours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+    
+    let uptimeStr = '';
+    if (days > 0) uptimeStr += `${days}g `;
+    if (hours > 0) uptimeStr += `${hours}s `;
+    uptimeStr += `${minutes}d`;
+
+    res.json({
+      status: 'online',
+      servers: client.guilds.cache.size,
+      users: totalUsers,
+      channels: totalChannels,
+      uptime: uptimeStr,
+      bot: {
+        username: client.user.username,
+        tag: client.user.tag,
+        id: client.user.id,
+        avatar: client.user.displayAvatarURL({ dynamic: true, size: 256 })
+      }
+    });
+  } catch (error) {
+    console.error('Bot stats API hatası:', error);
+    res.status(500).json({ error: 'İstatistik alınamadı' });
+  }
+});
+
+// Web sunucusunu başlat
+app.listen(PORT, () => {
+  console.log(`🌐 Web sunucusu ${PORT} portunda çalışıyor`);
+  console.log(`📊 İstatistikler: http://localhost:${PORT}`);
+});
