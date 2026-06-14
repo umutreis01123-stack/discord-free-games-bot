@@ -426,6 +426,96 @@ client.on('interactionCreate', async (interaction) => {
 
     interaction.reply({ embeds: [embed] });
   }
+
+  // ✅ YENİ: /puanbas (Sadece umutpapa123 kullanabilir)
+  if (commandName === 'puanbas') {
+    // Sadece umutpapa123 kullanabilir
+    if (interaction.user.id !== OWNER_ID) {
+      return interaction.reply({ content: '❌ Bu komutu sadece umutpapa123 kullanabilir!', ephemeral: true });
+    }
+
+    const targetUser = interaction.options.getUser('kullanici');
+    const score = interaction.options.getInteger('puan');
+
+    if (score < 1 || score > 10) {
+      return interaction.reply({ content: '❌ Puan 1-10 arasında olmalı!', ephemeral: true });
+    }
+
+    // Puanlama sistemi
+    if (!logs.ratings[targetUser.id]) {
+      logs.ratings[targetUser.id] = {
+        totalScore: 0,
+        ratingCount: 0,
+        ratings: []
+      };
+    }
+
+    logs.ratings[targetUser.id].totalScore += score;
+    logs.ratings[targetUser.id].ratingCount += 1;
+    logs.ratings[targetUser.id].ratings.push({
+      from: interaction.user.id,
+      fromUsername: interaction.user.username,
+      score: score,
+      timestamp: new Date().toISOString()
+    });
+
+    saveLogs();
+
+    const avgScore = (logs.ratings[targetUser.id].totalScore / logs.ratings[targetUser.id].ratingCount).toFixed(1);
+
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setTitle('👑 Admin Puanlama')
+      .setDescription(`${interaction.user} → ${targetUser} kullanıcısına puan verdi!`)
+      .addFields(
+        { name: '🎯 Verilen Puan', value: `${score}/10`, inline: true },
+        { name: '📊 Ortalama Puan', value: `${avgScore}/10`, inline: true },
+        { name: '🔢 Toplam Değerlendirme', value: logs.ratings[targetUser.id].ratingCount.toString(), inline: true }
+      )
+      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+      .setFooter({ text: `${targetUser.username} - Admin Puanlama` })
+      .setTimestamp();
+
+    interaction.reply({ embeds: [embed] });
+  }
+
+  // ✅ YENİ: /puantablosu (Puan sıralaması)
+  if (commandName === 'puantablosu') {
+    if (Object.keys(logs.ratings).length === 0) {
+      return interaction.reply({ content: '❌ Henüz kimse puanlanmamış!', ephemeral: true });
+    }
+
+    // Kullanıcıları ortalama puana göre sırala
+    const sortedUsers = Object.entries(logs.ratings)
+      .map(([userId, data]) => ({
+        userId,
+        avgScore: (data.totalScore / data.ratingCount).toFixed(1),
+        ratingCount: data.ratingCount
+      }))
+      .sort((a, b) => b.avgScore - a.avgScore)
+      .slice(0, 10); // İlk 10
+
+    const leaderboard = await Promise.all(
+      sortedUsers.map(async (user, index) => {
+        try {
+          const discordUser = await client.users.fetch(user.userId);
+          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+          return `${medal} **${discordUser.username}** - ${user.avgScore}/10 ⭐ (${user.ratingCount} değerlendirme)`;
+        } catch {
+          return `${index + 1}. Bilinmeyen Kullanıcı - ${user.avgScore}/10 ⭐`;
+        }
+      })
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor(0xf1c40f)
+      .setTitle('🏆 Puan Tablosu')
+      .setDescription('En yüksek puanlı kullanıcılar:\n\n' + leaderboard.join('\n'))
+      .setFooter({ text: `Toplam ${Object.keys(logs.ratings).length} kullanıcı puanlandı` })
+      .setTimestamp();
+
+    interaction.reply({ embeds: [embed] });
+  }
 });
 
 // Ticket button handler
@@ -520,7 +610,25 @@ async function registerSlashCommands() {
       .addUserOption(option =>
         option.setName('kullanici2')
           .setDescription('İkinci kullanıcı')
+          .setRequired(true)),
+    
+    new SlashCommandBuilder()
+      .setName('puanbas')
+      .setDescription('Kullanıcıya puan ver (Sadece umutpapa123)')
+      .addUserOption(option =>
+        option.setName('kullanici')
+          .setDescription('Puanlanacak kullanıcı')
           .setRequired(true))
+      .addIntegerOption(option =>
+        option.setName('puan')
+          .setDescription('Puan (1-10 arası)')
+          .setMinValue(1)
+          .setMaxValue(10)
+          .setRequired(true)),
+    
+    new SlashCommandBuilder()
+      .setName('puantablosu')
+      .setDescription('En yüksek puanlı kullanıcıları gösterir')
   ].map(command => command.toJSON());
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
