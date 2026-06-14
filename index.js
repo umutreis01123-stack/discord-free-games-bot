@@ -56,7 +56,26 @@ client.once('ready', () => {
   
   loadLogChannels();
   
-  client.user.setActivity('Loglar izleniyor...', { type: 3 });
+  // Bot durumunu güncelle
+  updateBotStatus();
+});
+
+// Bot durumunu güncelle
+function updateBotStatus() {
+  const serverCount = client.guilds.cache.size;
+  client.user.setActivity(`${serverCount} sunucuda aktif`, { type: 3 }); // 3 = WATCHING
+}
+
+// Yeni sunucuya katıldığında durumu güncelle
+client.on('guildCreate', () => {
+  updateBotStatus();
+  console.log(`✅ Yeni sunucuya katıldı! Toplam: ${client.guilds.cache.size}`);
+});
+
+// Sunucudan atıldığında durumu güncelle
+client.on('guildDelete', () => {
+  updateBotStatus();
+  console.log(`❌ Sunucudan atıldı! Toplam: ${client.guilds.cache.size}`);
 });
 
 // Log kanalına mesaj gönder
