@@ -23,12 +23,11 @@ const client = new Client({
 
 const OWNER_ID = '1403495996138323989';
 
-// JSON dosyaları
+// JSON dosyalari
 const logsFile = './logs-config.json';
 const stockFile = './stock.json';
 const owoFile = './owo-users.json';
 
-// Dosyaları başlat
 function initFiles() {
   if (!fs.existsSync(logsFile)) fs.writeFileSync(logsFile, JSON.stringify({}));
   if (!fs.existsSync(stockFile)) fs.writeFileSync(stockFile, JSON.stringify({}));
@@ -61,90 +60,80 @@ function saveOWOUsers(data) {
 
 initFiles();
 
-// Bot hazır
+// Bot ready
 client.once('ready', () => {
-  console.log(`✅ Bot giriş yaptı: ${client.user.tag}`);
-  console.log(`🎮 ${client.guilds.cache.size} sunucuda aktif`);
+  console.log('Bot logged in: ' + client.user.tag);
+  console.log('Active in ' + client.guilds.cache.size + ' servers');
   updateBotStatus();
 });
 
-// Bot durumunu güncelle
 function updateBotStatus() {
   const serverCount = client.guilds.cache.size;
-  client.user.setActivity(`${serverCount} sunucuda aktif`, { type: 3 });
+  client.user.setActivity(serverCount + ' sunucuda aktif', { type: 3 });
 }
 
-// Yeni sunucuya katıldığında
 client.on('guildCreate', () => {
   updateBotStatus();
-  console.log(`✅ Yeni sunucuya katıldı! Toplam: ${client.guilds.cache.size}`);
+  console.log('New guild joined! Total: ' + client.guilds.cache.size);
 });
 
-// Sunucudan atıldığında
 client.on('guildDelete', () => {
   updateBotStatus();
-  console.log(`❌ Sunucudan atıldı! Toplam: ${client.guilds.cache.size}`);
+  console.log('Guild removed. Total: ' + client.guilds.cache.size);
 });
 
-// SLASH KOMUTLARI KAYIT ET
+// KOMUTLAR - TEMIZ VE BASIT
 client.on('ready', async () => {
   try {
-    console.log('🧹 Discord komut cache'i temizleniyor...');
+    console.log('Komutlar temizleniyor ve yenileniyor...');
 
-    // ÖNCE TÜM GLOBAL KOMUTLARI SİL
     const allGlobalCommands = await client.application.commands.fetch();
-    console.log(`🗑️ ${allGlobalCommands.size} adet global komut siliniyor...`);
+    console.log('Siliniyor: ' + allGlobalCommands.size + ' komut');
     
     for (const command of allGlobalCommands.values()) {
       try {
         await command.delete();
-        console.log(`   ❌ Global komut silindi: ${command.name}`);
+        console.log('Silindi: ' + command.name);
       } catch (error) {
-        console.error(`   Silme hatası (${command.name}):`, error);
+        console.error('Hata: ' + command.name);
       }
     }
 
-    // TÜM SUNUCULARDAKI KOMUTLARI TEMIZLE
-    console.log(`🗑️ ${client.guilds.cache.size} sunucudaki komutlar temizleniyor...`);
+    console.log('Sunucu komutlari temizleniyor...');
     for (const guild of client.guilds.cache.values()) {
       try {
         const guildCommands = await guild.commands.fetch();
-        console.log(`   📍 ${guild.name}: ${guildCommands.size} komut siliniyor...`);
-        
         for (const cmd of guildCommands.values()) {
           try {
             await cmd.delete();
-            console.log(`      ❌ Silindi: ${cmd.name}`);
           } catch (error) {
-            console.error(`      Silme hatası: ${error}`);
+            // skip
           }
         }
       } catch (error) {
-        console.error(`Komut temizleme hatası (${guild.name}):`, error);
+        // skip
       }
     }
 
-    // SONRA SADECE YENİ KOMUTLARI EKLE (GLOBAL OLARAK)
-    console.log('✨ Yeni komutlar ekleniyor...');
     const commands = [
       new SlashCommandBuilder()
         .setName('sunucudurumu')
-        .setDescription('Sunucu bilgilerini gösterir'),
+        .setDescription('Sunucu bilgileri'),
       
       new SlashCommandBuilder()
         .setName('logkur')
-        .setDescription('Log kanalını kurar ve loglamaya başlar'),
+        .setDescription('Log kanalini olustur'),
       
       new SlashCommandBuilder()
-        .setName('owoileöde')
-        .setDescription('OWO sistemi ile hesap gönder'),
+        .setName('owoileode')
+        .setDescription('OWO gonder'),
     ];
 
     await client.application.commands.set(commands);
-    console.log('✅ 3 adet yeni global komut eklendi!');
+    console.log('Yeni komutlar eklendi: 3');
     
   } catch (error) {
-    console.error('❌ Komut işlemi hatası:', error);
+    console.error('Komut hatasi:', error);
   }
 });
 
@@ -161,17 +150,16 @@ client.on('interactionCreate', async (interaction) => {
 
       const embed = new EmbedBuilder()
         .setColor('#667eea')
-        .setTitle(`📊 ${guild.name} - Sunucu Durumu`)
+        .setTitle('Sunucu Durumu: ' + guild.name)
         .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
         .addFields(
-          { name: '🏷️ Sunucu Adı', value: guild.name, inline: true },
-          { name: '🔢 Sunucu ID', value: guild.id, inline: true },
-          { name: '👥 Üye Sayısı', value: `${guild.memberCount}`, inline: true },
-          { name: '🎮 Kanal Sayısı', value: `${guild.channels.cache.size}`, inline: true },
-          { name: '📅 Oluşturulma Tarihi', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`, inline: true },
-          { name: '👑 Sunucu Sahibi', value: `${owner.user.tag}`, inline: true }
+          { name: 'Adi', value: guild.name, inline: true },
+          { name: 'ID', value: guild.id, inline: true },
+          { name: 'Uyeler', value: guild.memberCount.toString(), inline: true },
+          { name: 'Kanallar', value: guild.channels.cache.size.toString(), inline: true },
+          { name: 'Sahibi', value: owner.user.tag, inline: true }
         )
-        .setFooter({ text: `Sunucu Durumu • ${new Date().toLocaleString('tr-TR')}` });
+        .setFooter({ text: 'Sunucu Durumu' });
 
       await interaction.reply({ embeds: [embed] });
     }
@@ -182,14 +170,14 @@ client.on('interactionCreate', async (interaction) => {
 
       if (logs[guild.id]) {
         return await interaction.reply({ 
-          content: '❌ Bu sunucuda zaten log kanalı kurulu!', 
+          content: 'Bu sunucuda zaten log kanalı var!', 
           ephemeral: true 
         });
       }
 
       try {
         const logChannel = await guild.channels.create({
-          name: '📋-loglar',
+          name: 'loglar',
           type: ChannelType.GuildText,
           permissionOverwrites: [
             {
@@ -204,63 +192,43 @@ client.on('interactionCreate', async (interaction) => {
 
         const embed = new EmbedBuilder()
           .setColor('#2ecc71')
-          .setTitle('✅ Log Sistemi Kuruldu')
-          .setDescription(`Log kanalı: ${logChannel}`)
-          .addFields(
-            { name: '📝 Loglanacak Olaylar', value: `
-✅ Mesaj gönderme/silme/düzenleme
-✅ Ses kanalı giriş/çıkış
-✅ Davet oluşturma/silme
-✅ Moderasyon işlemleri
-            ` }
-          );
+          .setTitle('Log Sistemi Baslatildi')
+          .setDescription('Log kanali: ' + logChannel);
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
       } catch (error) {
-        console.error('Log kanalı oluşturma hatası:', error);
-        await interaction.reply({ content: '❌ Log kanalı oluşturulamadı', ephemeral: true });
+        console.error('Log kanali hatasi:', error);
+        await interaction.reply({ content: 'Hata olustu', ephemeral: true });
       }
     }
 
-    else if (commandName === 'owoileöde') {
+    else if (commandName === 'owoileode') {
       const user = interaction.user;
       const owoUsers = getOWOUsers();
+      const stockData = getStock();
 
       if (!owoUsers[user.id]) {
         owoUsers[user.id] = { credits: 0, received: [] };
       }
 
-      const userOWOs = owoUsers[user.id];
-      const stockData = getStock();
-
-      // OWO kredisi göster
-      const owoList = Object.keys(stockData)
-        .slice(0, 5)
-        .map((key, idx) => `${idx + 1}. ${stockData[key].name} (${stockData[key].credits || 0} kredisi)`)
-        .join('\n') || 'Stokta ürün yok';
-
       const embed = new EmbedBuilder()
         .setColor('#f093fb')
-        .setTitle('🎁 OWO Sistemi')
-        .setDescription(`Mevcut Kredileriniz: **${userOWOs.credits}** OWO`)
-        .addFields(
-          { name: '📦 Stok Ürünleri', value: owoList || 'Boş' }
-        )
-        .setFooter({ text: 'OWO gönder: owo send' });
+        .setTitle('OWO Sistemi')
+        .setDescription('Kredileriniz: ' + owoUsers[user.id].credits)
+        .setFooter({ text: 'owo send ile gonder' });
 
       await interaction.reply({ embeds: [embed], ephemeral: true });
     }
   } catch (error) {
-    console.error('Komut hatası:', error);
-    await interaction.reply({ content: '❌ Komut çalıştırılırken hata oluştu', ephemeral: true });
+    console.error('Komut hatasi:', error);
+    await interaction.reply({ content: 'Hata olustu', ephemeral: true });
   }
 });
 
-// MESAJ EVENT - OWO TESPİTİ
+// MESAJ EVENT - OWO TESPITI
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // Log sistemi
   const logs = getLogs();
   const logChannelId = logs[message.guildId];
 
@@ -269,11 +237,11 @@ client.on('messageCreate', async (message) => {
     if (logChannel) {
       const logEmbed = new EmbedBuilder()
         .setColor('#3498db')
-        .setTitle('📝 Mesaj Gönderildi')
+        .setTitle('Mesaj Gonderildi')
         .addFields(
-          { name: 'Yazar', value: `${message.author.tag}`, inline: true },
-          { name: 'Kanal', value: `${message.channel}`, inline: true },
-          { name: 'İçerik', value: `${message.content.substring(0, 100)}...` || '(boş)' }
+          { name: 'Yazar', value: message.author.tag, inline: true },
+          { name: 'Kanal', value: message.channel.toString(), inline: true },
+          { name: 'Icerik', value: message.content.substring(0, 100) || '(bos)' }
         )
         .setTimestamp();
       
@@ -281,24 +249,23 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // OWO SEND TESPİTİ
+  // OWO SEND TESPITI
   if (message.content.toLowerCase().includes('owo send')) {
     const sender = message.author;
     const owoUsers = getOWOUsers();
     const stockData = getStock();
 
     if (!owoUsers[sender.id]) {
-      return await message.reply('❌ Sizin OWO kredisi yok!');
+      return await message.reply('OWO kredisi yok!');
     }
 
     if (owoUsers[sender.id].credits <= 0) {
-      return await message.reply('❌ Kredileriniz yetersiz!');
+      return await message.reply('Kredileriniz yetersiz!');
     }
 
-    // Random ürün seç
     const stockKeys = Object.keys(stockData);
     if (stockKeys.length === 0) {
-      return await message.reply('❌ Stokta ürün yok!');
+      return await message.reply('Stokta urun yok!');
     }
 
     const randomProduct = stockData[stockKeys[Math.floor(Math.random() * stockKeys.length)]];
@@ -307,14 +274,14 @@ client.on('messageCreate', async (message) => {
       const owner = await client.users.fetch(OWNER_ID);
       const dmEmbed = new EmbedBuilder()
         .setColor('#f5576c')
-        .setTitle('🎁 OWO Hediyesi Aldınız!')
-        .setDescription(`${sender.tag} tarafından OWO gönderildi`)
+        .setTitle('OWO Hediyesi')
+        .setDescription(sender.tag + ' tarafindan gonderildi')
         .addFields(
-          { name: '📦 Ürün', value: randomProduct.name },
-          { name: '👤 Hesap Adı', value: randomProduct.username || 'Belirtilmemiş' },
-          { name: '🔑 Şifre', value: randomProduct.password || 'Belirtilmemiş' },
-          { name: '🔗 Bağlantı', value: randomProduct.link || 'Bağlantı yok' },
-          { name: '📝 Açıklama', value: randomProduct.description || 'Açıklama yok' }
+          { name: 'Urun', value: randomProduct.name },
+          { name: 'Hesap Adi', value: randomProduct.username || 'Belirtilmemis' },
+          { name: 'Sifre', value: randomProduct.password || 'Belirtilmemis' },
+          { name: 'Baglanti', value: randomProduct.link || 'Baglanfi yok' },
+          { name: 'Aciklama', value: randomProduct.description || 'Aciklama yok' }
         )
         .setTimestamp();
 
@@ -323,15 +290,15 @@ client.on('messageCreate', async (message) => {
       owoUsers[sender.id].credits--;
       saveOWOUsers(owoUsers);
 
-      await message.reply(`✅ OWO gönderildi! Kalan Kredileriniz: ${owoUsers[sender.id].credits}`);
+      await message.reply('OWO gonderildi! Kalan: ' + owoUsers[sender.id].credits);
     } catch (error) {
-      console.error('OWO gönderme hatası:', error);
-      await message.reply('❌ OWO gönderilemedi');
+      console.error('OWO hatasi:', error);
+      await message.reply('OWO gonderilenemedi');
     }
   }
 });
 
-// MESAJ SİLME LOGLAMA
+// MESAJ SILME LOGLAMA
 client.on('messageDelete', async (message) => {
   if (!message.guild) return;
 
@@ -343,11 +310,11 @@ client.on('messageDelete', async (message) => {
     if (logChannel) {
       const embed = new EmbedBuilder()
         .setColor('#e74c3c')
-        .setTitle('🗑️ Mesaj Silindi')
+        .setTitle('Mesaj Silindi')
         .addFields(
-          { name: 'Yazar', value: `${message.author?.tag || 'Bilinmiyor'}`, inline: true },
-          { name: 'Kanal', value: `${message.channel}`, inline: true },
-          { name: 'İçerik', value: `${message.content.substring(0, 100) || '(boş)'}` }
+          { name: 'Yazar', value: message.author?.tag || 'Bilinmiyor', inline: true },
+          { name: 'Kanal', value: message.channel.toString(), inline: true },
+          { name: 'Icerik', value: message.content.substring(0, 100) || '(bos)' }
         )
         .setTimestamp();
 
@@ -356,7 +323,7 @@ client.on('messageDelete', async (message) => {
   }
 });
 
-// MESAJ DÜZENLEME LOGLAMA
+// MESAJ DUZENLE LOGLAMA
 client.on('messageUpdate', async (oldMessage, newMessage) => {
   if (!newMessage.guild || oldMessage.content === newMessage.content) return;
 
@@ -368,12 +335,12 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (logChannel) {
       const embed = new EmbedBuilder()
         .setColor('#f39c12')
-        .setTitle('✏️ Mesaj Düzenlendi')
+        .setTitle('Mesaj Duzenlendi')
         .addFields(
-          { name: 'Yazar', value: `${newMessage.author?.tag}`, inline: true },
-          { name: 'Kanal', value: `${newMessage.channel}`, inline: true },
-          { name: 'Eski İçerik', value: oldMessage.content.substring(0, 100) || '(boş)' },
-          { name: 'Yeni İçerik', value: newMessage.content.substring(0, 100) || '(boş)' }
+          { name: 'Yazar', value: newMessage.author?.tag, inline: true },
+          { name: 'Kanal', value: newMessage.channel.toString(), inline: true },
+          { name: 'Eski', value: oldMessage.content.substring(0, 100) || '(bos)' },
+          { name: 'Yeni', value: newMessage.content.substring(0, 100) || '(bos)' }
         )
         .setTimestamp();
 
@@ -382,8 +349,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   }
 });
 
-// ========== WEB SERVER & API ==========
-
+// WEB SERVER
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -410,7 +376,7 @@ app.get('/api/bot-stats', async (req, res) => {
         status: 'online'
       };
     } catch (error) {
-      console.error('Kurucu bilgisi hatası:', error);
+      console.error('Kurucu bilgisi hatasi:', error);
     }
 
     res.json({
@@ -425,12 +391,11 @@ app.get('/api/bot-stats', async (req, res) => {
       founder: founderData
     });
   } catch (error) {
-    console.error('Bot stats API hatası:', error);
-    res.status(500).json({ error: 'İstatistik alınamadı' });
+    console.error('Bot stats API hatasi:', error);
+    res.status(500).json({ error: 'Hata' });
   }
 });
 
-// STOK YÖNETİMİ API
 app.post('/api/stock/add', express.json(), (req, res) => {
   const { id, name, link, image, credits, type, description, username, password } = req.body;
 
@@ -451,7 +416,7 @@ app.post('/api/stock/add', express.json(), (req, res) => {
   };
   saveStock(stock);
 
-  res.json({ success: true, message: type === 'product' ? 'Ürün eklendi' : 'Stok eklendi' });
+  res.json({ success: true, message: 'Eklendi' });
 });
 
 app.get('/api/stock', (req, res) => {
@@ -460,7 +425,7 @@ app.get('/api/stock', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🌐 Web sunucusu ${PORT} portunda çalışıyor`);
+  console.log('Web server port ' + PORT);
 });
 
 client.login(process.env.DISCORD_TOKEN);
