@@ -283,8 +283,10 @@ client.on('messageCreate', async (message) => {
         .setDescription(`${sender.tag} tarafından OWO gönderildi`)
         .addFields(
           { name: '📦 Ürün', value: randomProduct.name },
+          { name: '👤 Hesap Adı', value: randomProduct.username || 'Belirtilmemiş' },
+          { name: '🔑 Şifre', value: randomProduct.password || 'Belirtilmemiş' },
           { name: '🔗 Bağlantı', value: randomProduct.link || 'Bağlantı yok' },
-          { name: '🖼️ Görsel', value: randomProduct.image || 'Görsel yok' }
+          { name: '📝 Açıklama', value: randomProduct.description || 'Açıklama yok' }
         )
         .setTimestamp();
 
@@ -402,7 +404,7 @@ app.get('/api/bot-stats', async (req, res) => {
 
 // STOK YÖNETİMİ API
 app.post('/api/stock/add', express.json(), (req, res) => {
-  const { id, name, link, image, credits, type, description } = req.body;
+  const { id, name, link, image, credits, type, description, username, password } = req.body;
 
   if (!id || !name) {
     return res.status(400).json({ error: 'ID ve isim gerekli' });
@@ -415,7 +417,9 @@ app.post('/api/stock/add', express.json(), (req, res) => {
     image, 
     credits: credits || 0, 
     type: type || 'stock',
-    description: description || ''
+    description: description || '',
+    username: username || '',
+    password: password || ''
   };
   saveStock(stock);
 

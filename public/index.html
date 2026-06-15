@@ -274,6 +274,16 @@
                 </div>
                 
                 <div class="form-group">
+                    <label>Hesap Adı *</label>
+                    <input type="text" id="productUsername" placeholder="örn: user@example.com">
+                </div>
+                
+                <div class="form-group">
+                    <label>Şifre *</label>
+                    <input type="text" id="productPassword" placeholder="örn: Password123">
+                </div>
+                
+                <div class="form-group">
                     <label>Ürün Bağlantısı</label>
                     <input type="text" id="productLink" placeholder="https://example.com/product">
                 </div>
@@ -332,11 +342,13 @@
         // Ürün ekle
         async function addProduct() {
             const name = document.getElementById('productName').value;
+            const username = document.getElementById('productUsername').value;
+            const password = document.getElementById('productPassword').value;
             const link = document.getElementById('productLink').value;
             const description = document.getElementById('productDescription').value;
 
-            if (!name) {
-                showMessage('productErrorMessage', '❌ Ürün adı gerekli!');
+            if (!name || !username || !password) {
+                showMessage('productErrorMessage', '❌ Ürün adı, hesap adı ve şifre gerekli!');
                 return;
             }
 
@@ -345,13 +357,15 @@
                 const response = await fetch('/api/stock/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, name, link, description, type: 'product' })
+                    body: JSON.stringify({ id, name, username, password, link, description, type: 'product' })
                 });
 
                 const result = await response.json();
                 if (result.success) {
                     showMessage('productSuccessMessage', '✅ Ürün eklendi!');
                     document.getElementById('productName').value = '';
+                    document.getElementById('productUsername').value = '';
+                    document.getElementById('productPassword').value = '';
                     document.getElementById('productLink').value = '';
                     document.getElementById('productDescription').value = '';
                     loadProducts();
@@ -406,6 +420,8 @@
                 productList.innerHTML = products.map(([id, product]) => `
                     <div class="list-item">
                         <div class="list-item-name">${product.name}</div>
+                        ${product.username ? `<div class="list-item-detail">👤 ${product.username}</div>` : ''}
+                        ${product.password ? `<div class="list-item-detail">🔑 ${product.password}</div>` : ''}
                         ${product.link ? `<div class="list-item-detail">🔗 ${product.link}</div>` : ''}
                         ${product.description ? `<div class="list-item-detail">📝 ${product.description}</div>` : ''}
                     </div>
