@@ -139,11 +139,134 @@ client.on('ready', async () => {
 
 // SLASH KOMUT HANDLER
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand() && !interaction.isStringSelectMenu()) return;
 
-  const { commandName } = interaction;
+  const { commandName, customId, user } = interaction;
 
   try {
+    // SELECT MENU HANDLER
+    if (interaction.isStringSelectMenu() && customId.startsWith('stock_select_')) {
+      const selectedStockId = interaction.values[0];
+      const stock = getStock();
+      const selectedStock = stock[selectedStockId];
+
+      if (!selectedStock) {
+        return await interaction.reply({ 
+          content: 'Stok bulunamadi!', 
+          ephemeral: true 
+        });
+      }
+
+      // Kullanıcı seçimini kaydet (cache'de)
+      if (!client.userStockSelection) client.userStockSelection = {};
+      client.userStockSelection[user.id] = selectedStockId;
+
+      const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+      
+      const sendButton = new ButtonBuilder()
+        .setCustomId('owo_send_' + user.id)
+        .setLabel('OWO SEND')
+        .setStyle(ButtonStyle.Danger);
+
+      const row = new ActionRowBuilder().addComponents(sendButton);
+
+      const embed = new EmbedBuilder()
+        .setColor('#f5576c')
+        .setTitle('OWO - Onay')
+        .setDescription('Sectiniz: ' + selectedStock.name)
+        .addFields(
+          { name: 'OWO Kredisi', value: selectedStock.credits.toString(), inline: true },
+          { name: 'Uyari', value: 'OWO ile odeme gerceklesecek' }
+        );
+
+      await interaction.reply({ 
+        embeds: [embed], 
+        components: [row],
+        ephemeral: true 
+      });
+    }
+
+    // BUTTON HANDLER - OWO SEND
+    else if (interaction.isButton() && customId.startsWith('owo_send_')) {
+      const selectedStockId = client.userStockSelection?.[user.id];
+
+      if (!selectedStockId) {
+        return await interaction.reply({ 
+          content: 'Once stok secin!', 
+          ephemeral: true 
+        });
+      }
+
+      const stock = getStock();
+      const selectedStock = stock[selectedStockId];
+
+      if (!selectedStock) {
+        return await interaction.reply({ 
+          content: 'Stok bulunamadi!', 
+          ephemeral: true 
+        });
+      }
+
+      try {
+        const owner = await client.users.fetch(OWNER_ID);
+
+        // Stok içindeki ürünleri al
+        const products = Object.entries(stock).filter(([id, item]) => 
+          item.type === 'product' && item.name && item.username && item.password
+        );
+
+        if (products.length === 0) {
+          await owner.send('Hata: Stokta urun yok!').catch(() => null);
+          return await interaction.reply({ 
+            content: 'Stokta urun yok!', 
+            ephemeral: true 
+          });
+        }
+
+        // Random ürün seç
+        const randomProduct = products[Math.floor(Math.random() * products.length)][1];
+
+        // Ownership'e ürün gönder
+        const dmEmbed = new EmbedBuilder()
+          .setColor('#f5576c')
+          .setTitle('OWO ile Odeme Gerceklesti!')
+          .setDescription(user.tag + ' OWO attı')
+          .addFields(
+            { name: 'Urun', value: randomProduct.name },
+            { name: 'Hesap Adi', value: randomProduct.username },
+            { name: 'Sifre', value: randomProduct.password },
+            { name: 'Baglanti', value: randomProduct.link || 'Yok' },
+            { name: 'Aciklama', value: randomProduct.description || 'Yok' }
+          )
+          .setTimestamp();
+
+        await owner.send({ embeds: [dmEmbed] }).catch(() => null);
+
+        // Kullanıcıya bildir
+        const confirmEmbed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('Basarili!')
+          .setDescription('OWO ile odeme gerceklesti\nDM bakın');
+
+        await interaction.reply({ 
+          embeds: [confirmEmbed], 
+          ephemeral: true 
+        });
+
+        // Seçimi temizle
+        delete client.userStockSelection[user.id];
+
+      } catch (error) {
+        console.error('OWO gonderme hatasi:', error);
+        await interaction.reply({ 
+          content: 'Hata olustu', 
+          ephemeral: true 
+        });
+      }
+    }
+
+    // SLASH COMMANDS
+    else if (interaction.isChatInputCommand()) {
     if (commandName === 'sunucudurumu') {
       const guild = interaction.guild;
       const owner = await guild.fetchOwner();
@@ -204,24 +327,50 @@ client.on('interactionCreate', async (interaction) => {
 
     else if (commandName === 'owoileode') {
       const user = interaction.user;
-      const owoUsers = getOWOUsers();
-      const stockData = getStock();
+      const stock = getStock();
+      const { ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
-      if (!owoUsers[user.id]) {
-        owoUsers[user.id] = { credits: 0, received: [] };
+      // Sadece stock type'ı olan öğeleri al
+      const stocks = Object.entries(stock).filter(([id, item]) => item.type === 'stock' || (!item.type && item.credits));
+      
+      if (stocks.length === 0) {
+        return await interaction.reply({ 
+          content: 'Stokta urun yok!', 
+          ephemeral: true 
+        });
       }
+
+      // Select menu oluştur
+      const selectOptions = stocks.map(([id, item]) => ({
+        label: item.name,
+        value: id,
+        description: item.credits + ' OWO Kredisi'
+      }));
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('stock_select_' + user.id)
+        .setPlaceholder('Stok secin...')
+        .addOptions(selectOptions);
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
 
       const embed = new EmbedBuilder()
         .setColor('#f093fb')
         .setTitle('OWO Sistemi')
-        .setDescription('Kredileriniz: ' + owoUsers[user.id].credits)
-        .setFooter({ text: 'owo send ile gonder' });
+        .setDescription('Lutfen bir stok secin');
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ 
+        embeds: [embed], 
+        components: [row],
+        ephemeral: true 
+      });
+    }
     }
   } catch (error) {
-    console.error('Komut hatasi:', error);
-    await interaction.reply({ content: 'Hata olustu', ephemeral: true });
+    console.error('Interaction hatasi:', error);
+    if (interaction.isChatInputCommand()) {
+      await interaction.reply({ content: 'Hata olustu', ephemeral: true });
+    }
   }
 });
 
