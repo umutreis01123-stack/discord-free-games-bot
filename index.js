@@ -88,52 +88,63 @@ client.on('guildDelete', () => {
 
 // SLASH KOMUTLARI KAYIT ET
 client.on('ready', async () => {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName('sunucudurumu')
-      .setDescription('Sunucu bilgilerini gösterir'),
-    
-    new SlashCommandBuilder()
-      .setName('logkur')
-      .setDescription('Log kanalını kurar ve loglamaya başlar'),
-    
-    new SlashCommandBuilder()
-      .setName('owoileöde')
-      .setDescription('OWO sistemi ile hesap gönder'),
-  ];
-
   try {
+    console.log('🧹 Discord komut cache'i temizleniyor...');
+
     // ÖNCE TÜM GLOBAL KOMUTLARI SİL
-    const allCommands = await client.application.commands.fetch();
-    console.log(`🗑️ ${allCommands.size} adet eski global komut siliniyor...`);
+    const allGlobalCommands = await client.application.commands.fetch();
+    console.log(`🗑️ ${allGlobalCommands.size} adet global komut siliniyor...`);
     
-    for (const command of allCommands.values()) {
+    for (const command of allGlobalCommands.values()) {
       try {
         await command.delete();
-        console.log(`   ❌ Silindi: ${command.name}`);
+        console.log(`   ❌ Global komut silindi: ${command.name}`);
       } catch (error) {
         console.error(`   Silme hatası (${command.name}):`, error);
       }
     }
 
-    // SONRA YENİ KOMUTLARI EKLE
-    await client.application.commands.set(commands);
-    console.log('✅ Yeni slash komutları kaydedildi');
-    
-    // TÜM SUNUCULARDAKI KOMUTLARı TEMIZLE
+    // TÜM SUNUCULARDAKI KOMUTLARI TEMIZLE
+    console.log(`🗑️ ${client.guilds.cache.size} sunucudaki komutlar temizleniyor...`);
     for (const guild of client.guilds.cache.values()) {
       try {
         const guildCommands = await guild.commands.fetch();
+        console.log(`   📍 ${guild.name}: ${guildCommands.size} komut siliniyor...`);
+        
         for (const cmd of guildCommands.values()) {
-          await cmd.delete();
+          try {
+            await cmd.delete();
+            console.log(`      ❌ Silindi: ${cmd.name}`);
+          } catch (error) {
+            console.error(`      Silme hatası: ${error}`);
+          }
         }
-        console.log(`✅ ${guild.name} sunucusundaki komutlar temizlendi`);
       } catch (error) {
         console.error(`Komut temizleme hatası (${guild.name}):`, error);
       }
     }
+
+    // SONRA SADECE YENİ KOMUTLARI EKLE (GLOBAL OLARAK)
+    console.log('✨ Yeni komutlar ekleniyor...');
+    const commands = [
+      new SlashCommandBuilder()
+        .setName('sunucudurumu')
+        .setDescription('Sunucu bilgilerini gösterir'),
+      
+      new SlashCommandBuilder()
+        .setName('logkur')
+        .setDescription('Log kanalını kurar ve loglamaya başlar'),
+      
+      new SlashCommandBuilder()
+        .setName('owoileöde')
+        .setDescription('OWO sistemi ile hesap gönder'),
+    ];
+
+    await client.application.commands.set(commands);
+    console.log('✅ 3 adet yeni global komut eklendi!');
+    
   } catch (error) {
-    console.error('❌ Komut kaydı hatası:', error);
+    console.error('❌ Komut işlemi hatası:', error);
   }
 });
 
