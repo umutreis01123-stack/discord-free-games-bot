@@ -103,20 +103,37 @@ client.on('ready', async () => {
   ];
 
   try {
+    // ÖNCE TÜM GLOBAL KOMUTLARI SİL
+    const allCommands = await client.application.commands.fetch();
+    console.log(`🗑️ ${allCommands.size} adet eski global komut siliniyor...`);
+    
+    for (const command of allCommands.values()) {
+      try {
+        await command.delete();
+        console.log(`   ❌ Silindi: ${command.name}`);
+      } catch (error) {
+        console.error(`   Silme hatası (${command.name}):`, error);
+      }
+    }
+
+    // SONRA YENİ KOMUTLARI EKLE
     await client.application.commands.set(commands);
-    console.log('✅ Slash komutları kaydedildi');
+    console.log('✅ Yeni slash komutları kaydedildi');
+    
+    // TÜM SUNUCULARDAKI KOMUTLARı TEMIZLE
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const guildCommands = await guild.commands.fetch();
+        for (const cmd of guildCommands.values()) {
+          await cmd.delete();
+        }
+        console.log(`✅ ${guild.name} sunucusundaki komutlar temizlendi`);
+      } catch (error) {
+        console.error(`Komut temizleme hatası (${guild.name}):`, error);
+      }
+    }
   } catch (error) {
     console.error('❌ Komut kaydı hatası:', error);
-  }
-});
-
-// Sunucuya özel komutları sil
-client.on('guildCreate', async (guild) => {
-  try {
-    await guild.commands.set([]);
-    console.log(`✅ ${guild.name} sunucusundaki eski komutlar temizlendi`);
-  } catch (error) {
-    console.error('Komut temizleme hatası:', error);
   }
 });
 
