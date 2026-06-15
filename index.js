@@ -51,22 +51,7 @@ client.on('guildDelete', () => {
   console.log(`❌ Sunucudan atıldı! Toplam: ${client.guilds.cache.size}`);
 });
 
-// ========== MESAJ KOMUTLARI ==========
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  
-  // Buraya yeni komutlar eklenecek
-});
-
-// ========== BUTTON KOMUTLARI ==========
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isButton()) return;
-  
-  // Buraya yeni button komutları eklenecek
-});
-
-// ========== SLASH KOMUTLARI ==========
-// Buraya yeni slash komutları eklenecek
+// ========== KOMUTLAR BURAYA EKLENECEK ==========
 
 // ========== WEB SERVER ==========
 
