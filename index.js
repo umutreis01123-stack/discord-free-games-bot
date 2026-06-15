@@ -110,6 +110,16 @@ client.on('ready', async () => {
   }
 });
 
+// Sunucuya özel komutları sil
+client.on('guildCreate', async (guild) => {
+  try {
+    await guild.commands.set([]);
+    console.log(`✅ ${guild.name} sunucusundaki eski komutlar temizlendi`);
+  } catch (error) {
+    console.error('Komut temizleme hatası:', error);
+  }
+});
+
 // SLASH KOMUT HANDLER
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
@@ -135,7 +145,7 @@ client.on('interactionCreate', async (interaction) => {
         )
         .setFooter({ text: `Sunucu Durumu • ${new Date().toLocaleString('tr-TR')}` });
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed] });
     }
 
     else if (commandName === 'logkur') {
@@ -392,17 +402,24 @@ app.get('/api/bot-stats', async (req, res) => {
 
 // STOK YÖNETİMİ API
 app.post('/api/stock/add', express.json(), (req, res) => {
-  const { id, name, link, image, credits } = req.body;
+  const { id, name, link, image, credits, type, description } = req.body;
 
   if (!id || !name) {
     return res.status(400).json({ error: 'ID ve isim gerekli' });
   }
 
   const stock = getStock();
-  stock[id] = { name, link, image, credits: credits || 0 };
+  stock[id] = { 
+    name, 
+    link, 
+    image, 
+    credits: credits || 0, 
+    type: type || 'stock',
+    description: description || ''
+  };
   saveStock(stock);
 
-  res.json({ success: true, message: 'Ürün eklendi' });
+  res.json({ success: true, message: type === 'product' ? 'Ürün eklendi' : 'Stok eklendi' });
 });
 
 app.get('/api/stock', (req, res) => {
