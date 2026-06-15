@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord Bot - İstatistikler</title>
+    <title>Discord Bot - Panel</title>
     <style>
         * {
             margin: 0;
@@ -15,213 +15,384 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
             padding: 20px;
         }
 
         .container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            padding: 40px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            animation: slideIn 0.5s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            max-width: 1200px;
+            margin: 0 auto;
         }
 
         .header {
-            text-align: center;
-            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
         }
 
         .bot-avatar {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            border: 5px solid #667eea;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            border: 4px solid #667eea;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
         }
 
-        .bot-name {
-            font-size: 2em;
-            font-weight: bold;
+        .header-info h1 {
             color: #333;
-            margin-bottom: 10px;
+            font-size: 1.8em;
+            margin-bottom: 5px;
         }
 
-        .bot-status {
+        .header-status {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
-            padding: 8px 20px;
+            gap: 8px;
+            padding: 6px 15px;
             border-radius: 50px;
-            font-weight: 600;
-            font-size: 1.1em;
-            margin-top: 10px;
-        }
-
-        .status-online {
             background: #2ecc71;
             color: white;
+            font-weight: 600;
+            font-size: 0.9em;
         }
 
-        .status-offline {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
+        .header-status .dot {
+            width: 8px;
+            height: 8px;
             background: white;
+            border-radius: 50%;
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
-        .stats-grid {
+        .server-count {
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            min-width: 150px;
+        }
+
+        .server-count .number {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .server-count .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .content {
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
             margin-bottom: 30px;
         }
 
-        .stat-card {
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.5em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 0.95em;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-            transition: transform 0.3s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .stat-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-
-        .stat-label {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
             font-size: 1em;
-            opacity: 0.9;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .founder-card {
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .stock-list {
+            display: grid;
+            gap: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .stock-item {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             color: white;
-            padding: 25px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 10px 25px rgba(240, 147, 251, 0.3);
+            padding: 20px;
+            border-radius: 12px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            box-shadow: 0 5px 15px rgba(245, 87, 108, 0.3);
         }
 
-        .founder-title {
-            font-size: 1.3em;
-            font-weight: bold;
-            margin-bottom: 15px;
+        .stock-item-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .stock-item-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .stock-item-info {
+            flex: 1;
+        }
+
+        .stock-item-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .stock-item-credits {
+            font-size: 0.9em;
             opacity: 0.9;
+        }
+
+        .stock-item-link {
+            font-size: 0.85em;
+            opacity: 0.8;
+            word-break: break-all;
+        }
+
+        .founder-info {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .founder-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .founder-name {
+            font-weight: 600;
+            font-size: 1.2em;
+            margin-bottom: 5px;
         }
 
         .founder-id {
-            font-size: 1.5em;
-            font-weight: bold;
             font-family: 'Courier New', monospace;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 10px 20px;
+            font-size: 0.9em;
+            opacity: 0.9;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .success-message {
+            background: #2ecc71;
+            color: white;
+            padding: 12px;
             border-radius: 10px;
-            display: inline-block;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .error-message {
+            background: #e74c3c;
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-left {
+                flex-direction: column;
+            }
+
+            .card h2 {
+                font-size: 1.3em;
+            }
         }
 
         .loading {
             text-align: center;
             color: #667eea;
-            font-size: 1.2em;
             padding: 20px;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        @media (max-width: 600px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .container {
-                padding: 30px 20px;
-            }
-
-            .bot-name {
-                font-size: 1.5em;
-            }
-            
-            .founder-id {
-                font-size: 1.2em;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar" class="bot-avatar" id="botAvatar">
-            <div class="bot-name" id="botName">Discord Bot</div>
-            <div class="bot-status status-offline" id="botStatus">
-                <span class="status-dot"></span>
-                <span>Yükleniyor...</span>
+            <div class="header-left">
+                <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot" class="bot-avatar" id="botAvatar">
+                <div class="header-info">
+                    <h1 id="botName">Discord Bot</h1>
+                    <div class="header-status">
+                        <span class="dot"></span>
+                        <span id="statusText">Yükleniyor...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="server-count">
+                <div class="number" id="serverCount">-</div>
+                <div class="label">Sunucu</div>
             </div>
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="serverCount">-</div>
-                <div class="stat-label">🖥️ Sunucu</div>
-            </div>
-        </div>
+        <div class="content">
+            <!-- STOK YÖNETİMİ -->
+            <div class="card">
+                <h2>📦 Stok Yönetimi</h2>
+                <div class="success-message" id="successMessage"></div>
+                <div class="error-message" id="errorMessage"></div>
+                
+                <div class="form-group">
+                    <label>Ürün ID</label>
+                    <input type="text" id="productId" placeholder="örn: product-1">
+                </div>
+                
+                <div class="form-group">
+                    <label>Ürün Adı</label>
+                    <input type="text" id="productName" placeholder="örn: Valorant Hesabı">
+                </div>
+                
+                <div class="form-group">
+                    <label>Görsel Bağlantısı</label>
+                    <input type="text" id="productImage" placeholder="https://example.com/image.png">
+                </div>
+                
+                <div class="form-group">
+                    <label>Ürün Bağlantısı</label>
+                    <input type="text" id="productLink" placeholder="https://example.com/product">
+                </div>
+                
+                <div class="form-group">
+                    <label>OWO Kredisi</label>
+                    <input type="number" id="productCredits" placeholder="10" value="10">
+                </div>
+                
+                <button class="btn" onclick="addProduct()">➕ Ürün Ekle</button>
 
-        <div class="founder-card">
-            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Kurucu Avatar" class="bot-avatar" id="founderAvatar" style="width: 80px; height: 80px; margin-bottom: 15px;">
-            <div class="founder-title">👑 Kurucu</div>
-            <div class="founder-id" id="founderName">Yükleniyor...</div>
-            <div class="bot-status status-offline" id="founderStatus" style="margin-top: 15px; display: inline-flex;">
-                <span class="status-dot"></span>
-                <span>Yükleniyor...</span>
+                <h2 style="margin-top: 30px;">📋 Stok Listesi</h2>
+                <div class="stock-list" id="stockList">
+                    <div class="loading">Yükleniyor...</div>
+                </div>
             </div>
-        </div>
 
-        <div class="footer">
-            © 2026 Discord Bot - Tüm hakları saklıdır
+            <!-- KURUCU & BOT BİLGİSİ -->
+            <div class="card">
+                <h2>👑 Kurucu Bilgisi</h2>
+                <div class="founder-info" id="founderCard">
+                    <div class="loading">Yükleniyor...</div>
+                </div>
+
+                <h2 style="margin-top: 30px;">📊 Bot İstatistikleri</h2>
+                <div style="background: rgba(102, 126, 234, 0.1); padding: 20px; border-radius: 12px; margin-top: 15px;">
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #667eea;">Bot Adı:</strong>
+                        <p style="color: #555; margin-top: 5px;" id="botNameStat">Yükleniyor...</p>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #667eea;">Bot ID:</strong>
+                        <p style="color: #555; margin-top: 5px; font-family: 'Courier New';" id="botIdStat">Yükleniyor...</p>
+                    </div>
+                    <div>
+                        <strong style="color: #667eea;">Durum:</strong>
+                        <p style="color: #555; margin-top: 5px;" id="botStatusStat">Yükleniyor...</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -235,60 +406,118 @@
                 // Bot bilgileri
                 if (data.bot) {
                     document.getElementById('botName').textContent = data.bot.username;
-                    if (data.bot.avatar) {
-                        document.getElementById('botAvatar').src = data.bot.avatar;
-                    }
+                    document.getElementById('botAvatar').src = data.bot.avatar;
+                    document.getElementById('botNameStat').textContent = data.bot.tag;
+                    document.getElementById('botIdStat').textContent = data.bot.id;
                 }
 
                 // Durum
-                const statusElement = document.getElementById('botStatus');
-                if (data.status === 'online') {
-                    statusElement.className = 'bot-status status-online';
-                    statusElement.innerHTML = '<span class="status-dot"></span><span>🟢 Çevrimiçi</span>';
-                } else {
-                    statusElement.className = 'bot-status status-offline';
-                    statusElement.innerHTML = '<span class="status-dot"></span><span>🔴 Çevrimdışı</span>';
-                }
+                document.getElementById('statusText').textContent = data.status === 'online' ? '🟢 Çevrimiçi' : '🔴 Çevrimdışı';
+                document.getElementById('botStatusStat').textContent = data.status === 'online' ? '✅ Aktif' : '❌ İnaktif';
 
-                // İstatistikler
+                // Sunucu sayısı
                 document.getElementById('serverCount').textContent = data.servers || '-';
 
                 // Kurucu bilgileri
                 if (data.founder) {
-                    document.getElementById('founderName').textContent = data.founder.username || 'Yükleniyor...';
-                    if (data.founder.avatar) {
-                        document.getElementById('founderAvatar').src = data.founder.avatar;
-                    }
-                    
-                    // Kurucu durumu
-                    const founderStatusElement = document.getElementById('founderStatus');
-                    if (data.founder.status === 'online') {
-                        founderStatusElement.className = 'bot-status status-online';
-                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🟢 Çevrimiçi</span>';
-                    } else if (data.founder.status === 'idle') {
-                        founderStatusElement.className = 'bot-status status-online';
-                        founderStatusElement.style.background = '#f39c12';
-                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🟡 Boşta</span>';
-                    } else if (data.founder.status === 'dnd') {
-                        founderStatusElement.className = 'bot-status status-offline';
-                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>🔴 Rahatsız Etmeyin</span>';
-                    } else {
-                        founderStatusElement.className = 'bot-status status-offline';
-                        founderStatusElement.innerHTML = '<span class="status-dot"></span><span>⚫ Çevrimdışı</span>';
-                    }
+                    const founderCard = document.getElementById('founderCard');
+                    founderCard.innerHTML = `
+                        <img src="${data.founder.avatar}" alt="Kurucu" class="founder-avatar">
+                        <div class="founder-name">👑 ${data.founder.username}</div>
+                        <div class="founder-id">${data.founder.id}</div>
+                    `;
+                }
+            } catch (error) {
+                console.error('İstatistik hatası:', error);
+            }
+        }
+
+        // Stok listesini yükle
+        async function loadStock() {
+            try {
+                const response = await fetch('/api/stock');
+                const stock = await response.json();
+                const stockList = document.getElementById('stockList');
+
+                if (Object.keys(stock).length === 0) {
+                    stockList.innerHTML = '<p style="text-align: center; color: #999;">Stokta ürün yok</p>';
+                    return;
                 }
 
+                stockList.innerHTML = Object.entries(stock).map(([id, product]) => `
+                    <div class="stock-item">
+                        ${product.image ? `<div class="stock-item-image"><img src="${product.image}" alt="${product.name}"></div>` : ''}
+                        <div class="stock-item-info">
+                            <div class="stock-item-name">${product.name}</div>
+                            <div class="stock-item-credits">💰 ${product.credits || 0} OWO Kredisi</div>
+                            ${product.link ? `<div class="stock-item-link">🔗 ${product.link}</div>` : ''}
+                        </div>
+                    </div>
+                `).join('');
             } catch (error) {
-                console.error('İstatistik yükleme hatası:', error);
-                document.getElementById('botStatus').innerHTML = '<span class="status-dot"></span><span>❌ Bağlantı Hatası</span>';
+                console.error('Stok yükleme hatası:', error);
             }
+        }
+
+        // Ürün ekle
+        async function addProduct() {
+            const id = document.getElementById('productId').value;
+            const name = document.getElementById('productName').value;
+            const image = document.getElementById('productImage').value;
+            const link = document.getElementById('productLink').value;
+            const credits = parseInt(document.getElementById('productCredits').value) || 0;
+
+            if (!id || !name) {
+                showError('ID ve isim gerekli!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/stock/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, name, link, image, credits })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showSuccess('✅ Ürün eklendi!');
+                    document.getElementById('productId').value = '';
+                    document.getElementById('productName').value = '';
+                    document.getElementById('productImage').value = '';
+                    document.getElementById('productLink').value = '';
+                    document.getElementById('productCredits').value = '10';
+                    loadStock();
+                } else {
+                    showError(result.error || 'Hata oluştu');
+                }
+            } catch (error) {
+                console.error('Ürün ekleme hatası:', error);
+                showError('Ürün eklenemedi');
+            }
+        }
+
+        function showSuccess(message) {
+            const msg = document.getElementById('successMessage');
+            msg.textContent = message;
+            msg.classList.add('show');
+            setTimeout(() => msg.classList.remove('show'), 3000);
+        }
+
+        function showError(message) {
+            const msg = document.getElementById('errorMessage');
+            msg.textContent = message;
+            msg.classList.add('show');
+            setTimeout(() => msg.classList.remove('show'), 3000);
         }
 
         // İlk yükleme
         fetchBotStats();
+        loadStock();
 
-        // Her 10 saniyede bir güncelle
+        // Her 10 saniyede güncelle
         setInterval(fetchBotStats, 10000);
+        setInterval(loadStock, 15000);
     </script>
 </body>
 </html>
