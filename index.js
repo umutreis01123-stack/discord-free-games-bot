@@ -285,10 +285,13 @@ client.on('interactionCreate', async (interaction) => {
         const isConfirm = customId.startsWith('owo_confirm_');
         const paymentId = customId.split('_')[2];
         
+        console.log(`[OWO] Ödeme ${isConfirm ? 'onaylandı' : 'reddedildi'}: ${paymentId}`);
+        
         const pendingPayments = getPendingPayments();
         const payment = pendingPayments[paymentId];
 
         if (!payment) {
+          console.log(`[OWO] Ödeme bulunamadı: ${paymentId}`);
           return await interaction.reply({ 
             content: 'Ödeme bulunamadı!', 
             ephemeral: true 
@@ -297,10 +300,21 @@ client.on('interactionCreate', async (interaction) => {
 
         if (isConfirm) {
           // Ödeme onaylandı - ürün gönder
+          console.log(`[OWO] Ürün gönderiliyor...`);
+          
           const stock = getStock();
           const selectedStock = stock[payment.stockId];
 
-          if (!selectedStock || !selectedStock.products || selectedStock.products.length === 0) {
+          if (!selectedStock) {
+            console.log(`[OWO] Stok bulunamadı: ${payment.stockId}`);
+            return await interaction.reply({ 
+              content: 'Stok bulunamadı!', 
+              ephemeral: true 
+            });
+          }
+
+          if (!selectedStock.products || selectedStock.products.length === 0) {
+            console.log(`[OWO] Stokta ürün yok`);
             return await interaction.reply({ 
               content: 'Stokta ürün yok!', 
               ephemeral: true 
@@ -309,52 +323,82 @@ client.on('interactionCreate', async (interaction) => {
 
           const randomProduct = selectedStock.products[Math.floor(Math.random() * selectedStock.products.length)];
           
+          console.log(`[OWO] Seçilen ürün: ${randomProduct.name}`);
+          
           try {
             const buyer = await client.users.fetch(payment.userId);
             
             const productEmbed = new EmbedBuilder()
               .setColor('#2ecc71')
-              .setTitle('Satın Alma Başarılı!')
-              .setDescription('OWO ile ödemeniz onaylandı')
+              .setTitle('✅ Satın Alma Başarılı!')
+              .setDescription('OWO ile ödemeniz onaylandı ve hesap bilgileri aşağıdadır')
               .addFields(
-                { name: 'Ürün', value: randomProduct.name || 'Bilinmiyor', inline: true },
-                { name: 'Kullanıcı Adı', value: randomProduct.username || 'Yok', inline: true },
-                { name: 'Şifre', value: randomProduct.password || 'Yok', inline: true }
+                { name: '📦 Ürün Adı', value: randomProduct.name || 'Bilinmiyor', inline: false },
+                { name: '👤 Hesap Kullanıcı Adı', value: randomProduct.username || 'Yok', inline: true },
+                { name: '🔑 Hesap Şifresi', value: randomProduct.password || 'Yok', inline: true }
               );
 
             if (randomProduct.link) {
-              productEmbed.addFields({ name: 'Bağlantı', value: randomProduct.link });
+              productEmbed.addFields({ name: '🔗 Bağlantı', value: randomProduct.link, inline: false });
+            }
+            if (randomProduct.description) {
+              productEmbed.addFields({ name: '📝 Açıklama', value: randomProduct.description, inline: false });
             }
 
             await buyer.send({ embeds: [productEmbed] });
+            console.log(`[OWO] Ürün DM ile gönderildi: ${buyer.tag}`);
 
             // Ürünü stoktan çıkar
             const productIndex = selectedStock.products.indexOf(randomProduct);
-            selectedStock.products.splice(productIndex, 1);
-            saveStock(stock);
+            if (productIndex > -1) {
+              selectedStock.products.splice(productIndex, 1);
+              saveStock(stock);
+              console.log(`[OWO] Ürün stoktan çıkarıldı`);
+            }
 
             const successEmbed = new EmbedBuilder()
               .setColor('#2ecc71')
-              .setTitle('Ödeme Onaylandı')
-              .setDescription('Ürün kullanıcıya DM ile gönderildi');
+              .setTitle('✅ Ödeme Onaylandı')
+              .setDescription(`Ürün başarıyla ${buyer.tag} adlı kullanıcıya DM ile gönderildi`)
+              .addFields(
+                { name: 'Ürün', value: randomProduct.name, inline: true },
+                { name: 'Kullanıcı', value: buyer.tag, inline: true },
+                { name: 'İşlem Zamanı', value: new Date().toLocaleString('tr-TR'), inline: false }
+              )
+              .setTimestamp();
 
             await interaction.update({ embeds: [successEmbed], components: [] });
 
           } catch (error) {
-            console.error('DM gönderme hatası:', error);
+            console.error('[OWO] DM gönderme hatası:', error);
             await interaction.reply({ 
-              content: 'Kullanıcıya DM gönderilemedi!', 
+              content: `❌ Hata: ${error.message}`, 
               ephemeral: true 
             });
           }
         } else {
           // Ödeme reddedildi
+          console.log(`[OWO] Ödeme reddedildi`);
+          
           const rejectEmbed = new EmbedBuilder()
             .setColor('#e74c3c')
-            .setTitle('Ödeme Reddedildi')
-            .setDescription('OWO göndermedin - İptal edildi');
+            .setTitle('❌ Ödeme Reddedildi')
+            .setDescription('OWO göndermediniz - İşlem iptal edildi');
 
           await interaction.update({ embeds: [rejectEmbed], components: [] });
+
+          // Kullanıcıya bildir
+          try {
+            const buyer = await client.users.fetch(payment.userId);
+            const notifyEmbed = new EmbedBuilder()
+              .setColor('#e74c3c')
+              .setTitle('❌ Ödemeniz Reddedildi')
+              .setDescription('Gönderdiğiniz OWO kabul edilmedi. Lütfen tekrar deneyin.');
+            
+            await buyer.send({ embeds: [notifyEmbed] });
+          } catch (error) {
+            console.log('[OWO] Kullanıcıya bilgilendirme gönderilemedi');
+          }
         }
 
         // Pending payment'ı sil
@@ -774,74 +818,127 @@ client.on('interactionCreate', async (interaction) => {
 
 // MESAJ EVENT - OWO TESPİTİ
 client.on('messageCreate', async (message) => {
+  // Sadece DM'lerde çalış
+  if (!message.isDMChannel()) return;
+  
+  // Bot mesajlarını yoksay
   if (message.author.bot) return;
 
-  // OWO mesajı tespiti - sadece özel mesajlarda ve owner'a gönderilenlerde
-  if (message.content.toLowerCase().includes('sent') && 
-      message.content.includes('cowoncy') && 
-      message.author.id !== OWNER_ID) {
-    
-    try {
-      // OWO mesajında mention edilen kullanıcıyı bul
-      const mentionedUser = message.mentions.users.first();
-      if (!mentionedUser || mentionedUser.id !== OWNER_ID) return;
+  console.log(`[OWO] Mesaj alındı: ${message.author.tag} - ${message.content.substring(0, 50)}`);
 
-      // OWO miktarını tespit et
-      const owoMatch = message.content.match(/(\d+)\s*cowoncy/i);
-      if (!owoMatch) return;
+  // Pending payments var mı kontrol et
+  const pendingPayments = getPendingPayments();
+  if (Object.keys(pendingPayments).length === 0) {
+    console.log('[OWO] Bekleyen ödeme yok');
+    return;
+  }
 
-      const sentAmount = parseInt(owoMatch[1]);
-      
-      // Pending payments'ı kontrol et
-      const pendingPayments = getPendingPayments();
-      let matchingPayment = null;
-      let paymentId = null;
+  // OWO botundan gelen mesaj olup olmadığını kontrol et
+  // OWO bot ID: 408785106942164992
+  // Mesaj embed içinde olabilir
+  
+  let owoAmount = null;
+  let hasOWOTransfer = false;
 
-      for (const [id, payment] of Object.entries(pendingPayments)) {
-        if (payment.userId === message.author.id && payment.credits === sentAmount) {
-          matchingPayment = payment;
-          paymentId = id;
-          break;
+  // Embeds içinde kontrol et
+  if (message.embeds && message.embeds.length > 0) {
+    for (const embed of message.embeds) {
+      const description = embed.description || '';
+      const title = embed.title || '';
+      const content = `${title} ${description}`.toLowerCase();
+
+      console.log(`[OWO] Embed kontrol: ${content.substring(0, 100)}`);
+
+      // OWO transferi tespiti
+      if (content.includes('sent') || content.includes('gönderdi')) {
+        hasOWOTransfer = true;
+        
+        // Miktar bulma
+        const amounts = content.match(/\d+/g);
+        if (amounts && amounts.length > 0) {
+          owoAmount = parseInt(amounts[amounts.length - 1]);
+          console.log(`[OWO] Tespit edilen miktar: ${owoAmount}`);
         }
       }
-
-      if (!matchingPayment) return;
-
-      // Owner'a onay mesajı gönder
-      const owner = await client.users.fetch(OWNER_ID);
-      
-      const confirmButton = new ButtonBuilder()
-        .setCustomId(`owo_confirm_${paymentId}`)
-        .setLabel('Onayla')
-        .setStyle(ButtonStyle.Success);
-
-      const rejectButton = new ButtonBuilder()
-        .setCustomId(`owo_reject_${paymentId}`)
-        .setLabel('Reddet')
-        .setStyle(ButtonStyle.Danger);
-
-      const row = new ActionRowBuilder().addComponents(confirmButton, rejectButton);
-
-      const stock = getStock();
-      const selectedStock = stock[matchingPayment.stockId];
-
-      const confirmEmbed = new EmbedBuilder()
-        .setColor('#f5576c')
-        .setTitle('OWO Ödeme Tespiti!')
-        .setDescription('Bir kullanıcı OWO gönderdi')
-        .addFields(
-          { name: 'Kullanıcı', value: message.author.tag, inline: true },
-          { name: 'Miktar', value: `${sentAmount} OWO`, inline: true },
-          { name: 'Ürün', value: selectedStock?.name || 'Bilinmiyor', inline: true },
-          { name: 'Mesaj', value: message.content.substring(0, 100) + '...' }
-        )
-        .setTimestamp();
-
-      await owner.send({ embeds: [confirmEmbed], components: [row] });
-
-    } catch (error) {
-      console.error('OWO tespit hatası:', error);
     }
+  }
+
+  // Mesaj içeriğinde de kontrol et
+  const contentLower = message.content.toLowerCase();
+  if (contentLower.includes('sent') && (contentLower.includes('owo') || contentLower.includes('cowoncy'))) {
+    hasOWOTransfer = true;
+    
+    const amounts = message.content.match(/\d+/g);
+    if (amounts && amounts.length > 0) {
+      owoAmount = parseInt(amounts[amounts.length - 1]);
+      console.log(`[OWO] Mesaj içeriğinden miktar: ${owoAmount}`);
+    }
+  }
+
+  if (!hasOWOTransfer) {
+    console.log('[OWO] OWO transferi bulunamadı');
+    return;
+  }
+
+  console.log(`[OWO] Transfer tespit edildi - Miktar: ${owoAmount}, Kullanıcı: ${message.author.tag}`);
+
+  // Ödeme eşleştir
+  let matchingPayment = null;
+  let paymentId = null;
+
+  for (const [id, payment] of Object.entries(pendingPayments)) {
+    console.log(`[OWO] Kontrol - Payment ID: ${id}, userId: ${payment.userId}, credits: ${payment.credits}`);
+    
+    if (payment.userId === message.author.id && payment.credits === owoAmount) {
+      matchingPayment = payment;
+      paymentId = id;
+      console.log(`[OWO] Ödeme eşleşti! Payment ID: ${paymentId}`);
+      break;
+    }
+  }
+
+  if (!matchingPayment) {
+    console.log(`[OWO] Eşleşen ödeme bulunamadı. Miktar: ${owoAmount}, Kullanıcı ID: ${message.author.id}`);
+    return;
+  }
+
+  try {
+    // Owner'a onay mesajı gönder
+    const owner = await client.users.fetch(OWNER_ID);
+    
+    const confirmButton = new ButtonBuilder()
+      .setCustomId(`owo_confirm_${paymentId}`)
+      .setLabel('✅ Onayla')
+      .setStyle(ButtonStyle.Success);
+
+    const rejectButton = new ButtonBuilder()
+      .setCustomId(`owo_reject_${paymentId}`)
+      .setLabel('❌ Reddet')
+      .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, rejectButton);
+
+    const stock = getStock();
+    const selectedStock = stock[matchingPayment.stockId];
+
+    const confirmEmbed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('✅ OWO ÖDEME TESPİT EDİLDİ!')
+      .setDescription('Bir kullanıcı OWO gönderdi - Lütfen onaylayın veya reddedin')
+      .addFields(
+        { name: '👤 Kullanıcı', value: `${message.author.tag} (${message.author.id})`, inline: false },
+        { name: '💰 Miktar', value: `${owoAmount} OWO`, inline: true },
+        { name: '📦 Stok', value: selectedStock?.name || 'Bilinmiyor', inline: true },
+        { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: false }
+      )
+      .setTimestamp()
+      .setFooter({ text: `Payment ID: ${paymentId}` });
+
+    await owner.send({ embeds: [confirmEmbed], components: [row] });
+    console.log(`[OWO] Owner'a onay mesajı gönderildi`);
+
+  } catch (error) {
+    console.error('[OWO] Tespit hatası:', error);
   }
 });
 
