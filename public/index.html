@@ -231,8 +231,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📦 Stok & Ürün Yönetimi</h1>
-            <p>OWO Sistemi için stok ve ürün ekleyin</p>
+            <h1>📦 OWO Stok & Ürün Yönetimi</h1>
+            <p>Bot için stok ve ürün ekleyin - Kullanıcılar OWO ile satın alabilir</p>
         </div>
 
         <div class="content">
@@ -248,8 +248,18 @@
                 </div>
                 
                 <div class="form-group">
-                    <label>OWO Kredisi *</label>
-                    <input type="number" id="stockCredits" placeholder="10" value="10">
+                    <label>OWO Kredisi (Fiyat) *</label>
+                    <input type="number" id="stockCredits" placeholder="100" value="100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Görsel Link</label>
+                    <input type="text" id="stockImage" placeholder="https://example.com/image.png">
+                </div>
+                
+                <div class="form-group">
+                    <label>Açıklama</label>
+                    <textarea id="stockDescription" rows="3" placeholder="Stok hakkında detaylı bilgi..."></textarea>
                 </div>
                 
                 <button class="btn" onclick="addStock()">➕ Stok Ekle</button>
@@ -269,34 +279,43 @@
                 <div class="message error" id="productErrorMessage"></div>
                 
                 <div class="form-group">
-                    <label>Ürün Adı *</label>
-                    <input type="text" id="productName" placeholder="örn: Valorant Premium Account">
+                    <label>Stok Seç *</label>
+                    <select id="productStock">
+                        <option value="">Stok seçin...</option>
+                    </select>
                 </div>
                 
-                <div class="form-group">
-                    <label>Hesap Adı *</label>
-                    <input type="text" id="productUsername" placeholder="örn: user@example.com">
+                <div class="product-group" id="productGroup" style="display: none;">
+                    <div class="form-group">
+                        <label>Ürün Adı *</label>
+                        <input type="text" id="productName" placeholder="örn: Valorant Premium Account">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Hesap Kullanıcı Adı *</label>
+                        <input type="text" id="productUsername" placeholder="örn: user@example.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Hesap Şifresi *</label>
+                        <input type="text" id="productPassword" placeholder="örn: Password123">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Ürün Bağlantısı</label>
+                        <input type="text" id="productLink" placeholder="https://store.riotgames.com/account">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Ürün Açıklaması</label>
+                        <textarea id="productDescription" rows="3" placeholder="Ürün hakkında ek bilgiler..."></textarea>
+                    </div>
+                    
+                    <button class="btn" onclick="addProduct()">➕ Ürünü Stoka Ekle</button>
                 </div>
-                
-                <div class="form-group">
-                    <label>Şifre *</label>
-                    <input type="text" id="productPassword" placeholder="örn: Password123">
-                </div>
-                
-                <div class="form-group">
-                    <label>Ürün Bağlantısı</label>
-                    <input type="text" id="productLink" placeholder="https://example.com/product">
-                </div>
-                
-                <div class="form-group">
-                    <label>Açıklama</label>
-                    <textarea id="productDescription" rows="3" placeholder="Ürün hakkında detaylı bilgi..."></textarea>
-                </div>
-                
-                <button class="btn" onclick="addProduct()">➕ Ürün Ekle</button>
 
                 <div class="list-section">
-                    <h3>📋 Ürün Listesi</h3>
+                    <h3>📋 Tüm Ürünler</h3>
                     <div class="list-items" id="productList">
                         <div class="loading">Yükleniyor...</div>
                     </div>
@@ -306,13 +325,22 @@
     </div>
 
     <script>
+        let currentStocks = {};
+
         // Stok ekle
         async function addStock() {
             const name = document.getElementById('stockName').value;
             const credits = parseInt(document.getElementById('stockCredits').value) || 0;
+            const image = document.getElementById('stockImage').value;
+            const description = document.getElementById('stockDescription').value;
 
             if (!name) {
                 showMessage('stockErrorMessage', '❌ Stok adı gerekli!');
+                return;
+            }
+
+            if (credits <= 0) {
+                showMessage('stockErrorMessage', '❌ OWO kredisi 0\'dan büyük olmalı!');
                 return;
             }
 
@@ -321,15 +349,25 @@
                 const response = await fetch('/api/stock/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, name, credits, type: 'stock' })
+                    body: JSON.stringify({ 
+                        id, 
+                        name, 
+                        credits, 
+                        image, 
+                        description, 
+                        type: 'stock',
+                        products: []
+                    })
                 });
 
                 const result = await response.json();
                 if (result.success) {
                     showMessage('stockSuccessMessage', '✅ Stok eklendi!');
                     document.getElementById('stockName').value = '';
-                    document.getElementById('stockCredits').value = '10';
-                    loadStock();
+                    document.getElementById('stockCredits').value = '100';
+                    document.getElementById('stockImage').value = '';
+                    document.getElementById('stockDescription').value = '';
+                    loadData();
                 } else {
                     showMessage('stockErrorMessage', result.error || 'Hata oluştu');
                 }
@@ -341,34 +379,46 @@
 
         // Ürün ekle
         async function addProduct() {
+            const stockId = document.getElementById('productStock').value;
             const name = document.getElementById('productName').value;
             const username = document.getElementById('productUsername').value;
             const password = document.getElementById('productPassword').value;
             const link = document.getElementById('productLink').value;
             const description = document.getElementById('productDescription').value;
 
+            if (!stockId) {
+                showMessage('productErrorMessage', '❌ Stok seçin!');
+                return;
+            }
+
             if (!name || !username || !password) {
-                showMessage('productErrorMessage', '❌ Ürün adı, hesap adı ve şifre gerekli!');
+                showMessage('productErrorMessage', '❌ Ürün adı, kullanıcı adı ve şifre gerekli!');
                 return;
             }
 
             try {
-                const id = 'product-' + Date.now();
-                const response = await fetch('/api/stock/add', {
+                const response = await fetch('/api/stock/add-product', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, name, username, password, link, description, type: 'product' })
+                    body: JSON.stringify({ 
+                        stockId, 
+                        name, 
+                        username, 
+                        password, 
+                        link, 
+                        description 
+                    })
                 });
 
                 const result = await response.json();
                 if (result.success) {
-                    showMessage('productSuccessMessage', '✅ Ürün eklendi!');
+                    showMessage('productSuccessMessage', '✅ Ürün stoka eklendi!');
                     document.getElementById('productName').value = '';
                     document.getElementById('productUsername').value = '';
                     document.getElementById('productPassword').value = '';
                     document.getElementById('productLink').value = '';
                     document.getElementById('productDescription').value = '';
-                    loadProducts();
+                    loadData();
                 } else {
                     showMessage('productErrorMessage', result.error || 'Hata oluştu');
                 }
@@ -378,58 +428,95 @@
             }
         }
 
-        // Stok listesini yükle
-        async function loadStock() {
+        // Tüm verileri yükle
+        async function loadData() {
             try {
                 const response = await fetch('/api/stock');
                 const data = await response.json();
-                const stockList = document.getElementById('stockList');
-
-                const stocks = Object.entries(data).filter(([id, item]) => item.type === 'stock' || !item.type);
+                currentStocks = data;
                 
-                if (stocks.length === 0) {
-                    stockList.innerHTML = '<p class="loading">Stokta ürün yok</p>';
-                    return;
-                }
-
-                stockList.innerHTML = stocks.map(([id, stock]) => `
-                    <div class="list-item">
-                        <div class="list-item-name">${stock.name}</div>
-                        <div class="list-item-detail">💰 ${stock.credits || 0} OWO Kredisi</div>
-                    </div>
-                `).join('');
+                loadStockList();
+                loadStockSelect();
+                loadProductList();
             } catch (error) {
-                console.error('Stok yükleme hatası:', error);
+                console.error('Veri yükleme hatası:', error);
             }
+        }
+
+        // Stok listesini yükle
+        function loadStockList() {
+            const stockList = document.getElementById('stockList');
+            const stocks = Object.entries(currentStocks).filter(([id, item]) => item.type === 'stock');
+            
+            if (stocks.length === 0) {
+                stockList.innerHTML = '<p class="loading">Henüz stok yok</p>';
+                return;
+            }
+
+            stockList.innerHTML = stocks.map(([id, stock]) => `
+                <div class="list-item">
+                    <div class="list-item-name">${stock.name}</div>
+                    <div class="list-item-detail">💰 ${stock.credits || 0} OWO</div>
+                    <div class="list-item-detail">📦 ${stock.products ? stock.products.length : 0} ürün</div>
+                    ${stock.description ? `<div class="list-item-detail">📝 ${stock.description}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Stok seçim listesini güncelle
+        function loadStockSelect() {
+            const select = document.getElementById('productStock');
+            const stocks = Object.entries(currentStocks).filter(([id, item]) => item.type === 'stock');
+            
+            select.innerHTML = '<option value="">Stok seçin...</option>';
+            stocks.forEach(([id, stock]) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = `${stock.name} (${stock.products ? stock.products.length : 0} ürün)`;
+                select.appendChild(option);
+            });
         }
 
         // Ürün listesini yükle
-        async function loadProducts() {
-            try {
-                const response = await fetch('/api/stock');
-                const data = await response.json();
-                const productList = document.getElementById('productList');
-
-                const products = Object.entries(data).filter(([id, item]) => item.type === 'product');
-                
-                if (products.length === 0) {
-                    productList.innerHTML = '<p class="loading">Ürün yok</p>';
-                    return;
+        function loadProductList() {
+            const productList = document.getElementById('productList');
+            const stocks = Object.entries(currentStocks).filter(([id, item]) => item.type === 'stock');
+            
+            let allProducts = [];
+            stocks.forEach(([stockId, stock]) => {
+                if (stock.products && stock.products.length > 0) {
+                    stock.products.forEach(product => {
+                        allProducts.push({ ...product, stockName: stock.name });
+                    });
                 }
-
-                productList.innerHTML = products.map(([id, product]) => `
-                    <div class="list-item">
-                        <div class="list-item-name">${product.name}</div>
-                        ${product.username ? `<div class="list-item-detail">👤 ${product.username}</div>` : ''}
-                        ${product.password ? `<div class="list-item-detail">🔑 ${product.password}</div>` : ''}
-                        ${product.link ? `<div class="list-item-detail">🔗 ${product.link}</div>` : ''}
-                        ${product.description ? `<div class="list-item-detail">📝 ${product.description}</div>` : ''}
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Ürün yükleme hatası:', error);
+            });
+            
+            if (allProducts.length === 0) {
+                productList.innerHTML = '<p class="loading">Henüz ürün yok</p>';
+                return;
             }
+
+            productList.innerHTML = allProducts.map(product => `
+                <div class="list-item">
+                    <div class="list-item-name">${product.name}</div>
+                    <div class="list-item-detail">📦 Stok: ${product.stockName}</div>
+                    <div class="list-item-detail">👤 ${product.username}</div>
+                    <div class="list-item-detail">🔑 ${product.password}</div>
+                    ${product.link ? `<div class="list-item-detail">🔗 ${product.link}</div>` : ''}
+                    ${product.description ? `<div class="list-item-detail">📝 ${product.description}</div>` : ''}
+                </div>
+            `).join('');
         }
+
+        // Stok seçildiğinde ürün formunu göster
+        document.getElementById('productStock').addEventListener('change', function() {
+            const productGroup = document.getElementById('productGroup');
+            if (this.value) {
+                productGroup.style.display = 'block';
+            } else {
+                productGroup.style.display = 'none';
+            }
+        });
 
         function showMessage(id, message) {
             const msg = document.getElementById(id);
@@ -439,12 +526,10 @@
         }
 
         // İlk yükleme
-        loadStock();
-        loadProducts();
+        loadData();
 
         // Otomatik güncelleme
-        setInterval(loadStock, 15000);
-        setInterval(loadProducts, 15000);
+        setInterval(loadData, 10000);
     </script>
 </body>
 </html>
