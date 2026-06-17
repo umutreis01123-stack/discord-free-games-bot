@@ -213,17 +213,12 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton()) {
       // Ticket kapatma
       if (customId === 'close_ticket') {
-        if (!isOwner(user.id)) {
-          return await interaction.reply({ 
-            content: 'Bu işlemi sadece bot sahibi yapabilir!', 
-            ephemeral: true 
-          });
-        }
-
         try {
           const channel = interaction.channel;
           const tickets = getTickets();
           
+          console.log(`[TICKET] Kapatılıyor: ${channel.name}`);
+
           // Ticket verilerini güncelle
           Object.keys(tickets).forEach(guildId => {
             if (tickets[guildId] && tickets[guildId][channel.id]) {
@@ -232,45 +227,92 @@ client.on('interactionCreate', async (interaction) => {
           });
           saveTickets(tickets);
 
-          await interaction.reply({ content: 'Ticket kapatılıyor...', ephemeral: true });
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Ticket Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
           
           setTimeout(async () => {
             try {
               await channel.delete();
+              console.log(`[TICKET] Kanal silindi: ${channel.name}`);
             } catch (error) {
-              console.error('Kanal silme hatası:', error);
+              console.error('[TICKET] Kanal silme hatası:', error);
             }
-          }, 3000);
+          }, 5000);
 
         } catch (error) {
-          console.error('Ticket kapatma hatası:', error);
-          await interaction.reply({ content: 'Hata oluştu!', ephemeral: true });
+          console.error('[TICKET] Kapatma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // Destek kapatma
+      else if (customId.startsWith('close_support_')) {
+        try {
+          const channel = interaction.channel;
+          const supportChannels = getSupportChannels();
+          
+          console.log(`[DESTEK] Kapatılıyor: ${channel.name}`);
+
+          // Destek verilerini güncelle
+          Object.keys(supportChannels).forEach(guildId => {
+            if (supportChannels[guildId] && supportChannels[guildId][channel.id]) {
+              delete supportChannels[guildId][channel.id];
+            }
+          });
+          saveSupportChannels(supportChannels);
+
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Destek Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
+          
+          setTimeout(async () => {
+            try {
+              await channel.delete();
+              console.log(`[DESTEK] Kanal silindi: ${channel.name}`);
+            } catch (error) {
+              console.error('[DESTEK] Kanal silme hatası:', error);
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('[DESTEK] Kapatma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
       }
 
       // Destek talebi üstlenme
       else if (customId.startsWith('claim_support_')) {
-        if (!isOwner(user.id)) {
-          return await interaction.reply({ 
-            content: 'Bu işlemi sadece bot sahibi yapabilir!', 
-            ephemeral: true 
-          });
+        try {
+          const userId = customId.split('_')[2];
+          const claimedUser = await client.users.fetch(userId);
+          const channel = interaction.channel;
+
+          console.log(`[DESTEK] Üstlenildi: ${user.tag} tarafından - Talep: ${claimedUser.tag}`);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Destek Talebi Üstlenildi')
+            .setDescription(`${user.tag} tarafından üstlenildi`)
+            .addFields(
+              { name: '👤 Talep Eden', value: claimedUser.tag, inline: true },
+              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ embeds: [embed], components: [] });
+
+        } catch (error) {
+          console.error('[DESTEK] Üstlenme hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
-
-        const userId = customId.split('_')[2];
-        const claimedUser = await client.users.fetch(userId);
-
-        const embed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle('Destek Talebi Üstlenildi')
-          .setDescription(`<@${user.id}> tarafından üstlenildi`)
-          .addFields(
-            { name: 'Talep Eden', value: claimedUser.tag, inline: true },
-            { name: 'Üstlenen', value: user.tag, inline: true }
-          )
-          .setTimestamp();
-
-        await interaction.update({ embeds: [embed], components: [] });
       }
 
       // OWO ödeme confirm/reject
@@ -413,38 +455,45 @@ client.on('interactionCreate', async (interaction) => {
       const stock = getStock();
       const selectedStock = stock[selectedStockId];
 
+      console.log(`[OWO] Stok seçildi: ${selectedStockId}`);
+
       if (!selectedStock) {
         return await interaction.reply({ 
-          content: 'Stok bulunamadı!', 
+          content: '❌ Stok bulunamadı!', 
           ephemeral: true 
         });
       }
 
       // Payment ID oluştur ve kaydet
-      const paymentId = Date.now().toString();
+      const paymentId = Date.now().toString() + '_' + user.id;
       const pendingPayments = getPendingPayments();
       pendingPayments[paymentId] = {
         userId: user.id,
         stockId: selectedStockId,
         credits: selectedStock.credits,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        userName: user.tag
       };
       savePendingPayments(pendingPayments);
 
+      console.log(`[OWO] Payment oluşturuldu - ID: ${paymentId}, Miktar: ${selectedStock.credits}`);
+
       const embed = new EmbedBuilder()
         .setColor('#f5576c')
-        .setTitle('OWO Ödeme Talimatı')
-        .setDescription(`**${selectedStock.name}** için ödeme yapın`)
+        .setTitle('💳 OWO Ödeme Talimatı')
+        .setDescription(`**${selectedStock.name}** için aşağıdaki komutu tam olarak yazın`)
         .addFields(
-          { name: 'Gerekli OWO', value: selectedStock.credits.toString(), inline: true },
-          { name: 'Komut', value: `owo send ${OWNER_ID} ${selectedStock.credits}`, inline: false },
-          { name: 'Uyarı', value: 'Tam olarak bu komutu kullanın!' }
+          { name: '📋 Ürün', value: selectedStock.name, inline: true },
+          { name: '💰 Gerekli OWO', value: `**${selectedStock.credits} OWO**`, inline: true },
+          { name: '✍️ Komut', value: `\`owo send 1403495996138323989 ${selectedStock.credits}\``, inline: false },
+          { name: '⚠️ ÖNEMLİ', value: 'Yukardaki komutu **tam olarak** yazmalısınız!\nBoşluk, yazım hatası olmamalı!', inline: false }
         )
-        .setFooter({ text: 'OWO gönderdiğinizde otomatik tespit edilecek' });
+        .setFooter({ text: `Payment ID: ${paymentId}` })
+        .setTimestamp();
 
-      await interaction.reply({ 
+      await interaction.update({ 
         embeds: [embed], 
-        ephemeral: true 
+        components: []
       });
     }
 
@@ -453,13 +502,6 @@ client.on('interactionCreate', async (interaction) => {
       
       // TICKET KOMUTU
       if (commandName === 'ticket') {
-        if (!isOwner(user.id)) {
-          return await interaction.reply({ 
-            content: 'Bu komutu sadece bot sahibi kullanabilir!', 
-            ephemeral: true 
-          });
-        }
-
         const guild = interaction.guild;
         const tickets = getTickets();
         
@@ -477,6 +519,10 @@ client.on('interactionCreate', async (interaction) => {
               {
                 id: user.id,
                 allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
               }
             ],
           });
@@ -489,27 +535,28 @@ client.on('interactionCreate', async (interaction) => {
 
           const closeButton = new ButtonBuilder()
             .setCustomId('close_ticket')
-            .setLabel('Ticket Kapat')
+            .setLabel('🔒 Ticket Kapat')
             .setStyle(ButtonStyle.Danger);
 
           const row = new ActionRowBuilder().addComponents(closeButton);
 
           const embed = new EmbedBuilder()
             .setColor('#667eea')
-            .setTitle('Ticket Oluşturuldu')
-            .setDescription(`Merhaba <@${user.id}>! Sorununuzu açıklayın.`)
+            .setTitle('🎫 Ticket Oluşturuldu')
+            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın. Umut Papa ticket'ı görecek.`)
+            .setFooter({ text: 'Ticket kapamak için aşağıdaki buton kullanın' })
             .setTimestamp();
 
           await ticketChannel.send({ embeds: [embed], components: [row] });
           
           await interaction.reply({ 
-            content: `Ticket kanalı oluşturuldu: ${ticketChannel}`, 
+            content: `✅ Ticket kanalı oluşturuldu: ${ticketChannel}`, 
             ephemeral: true 
           });
 
         } catch (error) {
           console.error('Ticket oluşturma hatası:', error);
-          await interaction.reply({ content: 'Hata oluştu!', ephemeral: true });
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
       }
 
@@ -532,6 +579,10 @@ client.on('interactionCreate', async (interaction) => {
               {
                 id: user.id,
                 allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
               }
             ],
           });
@@ -544,31 +595,37 @@ client.on('interactionCreate', async (interaction) => {
 
           const claimButton = new ButtonBuilder()
             .setCustomId(`claim_support_${user.id}`)
-            .setLabel('Talebi Üstlen')
+            .setLabel('👤 Talebi Üstlen')
             .setStyle(ButtonStyle.Primary);
 
-          const row = new ActionRowBuilder().addComponents(claimButton);
+          const closeButton = new ButtonBuilder()
+            .setCustomId(`close_support_${user.id}`)
+            .setLabel('🔒 Destek Kapat')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
 
           const embed = new EmbedBuilder()
             .setColor('#3498db')
-            .setTitle('Destek Talebi')
-            .setDescription(`<@${user.id}> destek talep ediyor`)
+            .setTitle('📞 Destek Talebi Oluşturuldu')
+            .setDescription(`${user.username} destek talep ediyor`)
             .addFields(
-              { name: 'Kullanıcı', value: user.tag, inline: true },
-              { name: 'Kanal', value: supportChannel.toString(), inline: true }
+              { name: '👤 Talep Eden', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
             )
+            .setFooter({ text: 'Umut Papa destek talebinizi görecek' })
             .setTimestamp();
 
           await supportChannel.send({ embeds: [embed], components: [row] });
           
           await interaction.reply({ 
-            content: `Destek kanalı oluşturuldu: ${supportChannel}`, 
+            content: `✅ Destek kanalı oluşturuldu: ${supportChannel}`, 
             ephemeral: true 
           });
 
         } catch (error) {
           console.error('Destek kanalı oluşturma hatası:', error);
-          await interaction.reply({ content: 'Hata oluştu!', ephemeral: true });
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
       }
 
@@ -770,18 +827,20 @@ client.on('interactionCreate', async (interaction) => {
           item.type === 'stock' && item.credits > 0 && item.products && item.products.length > 0
         );
         
+        console.log(`[OWO] Komut çalıştı - Stok sayısı: ${stocks.length}`);
+        
         if (stocks.length === 0) {
           return await interaction.reply({ 
-            content: 'Stokta ürün yok!', 
+            content: '❌ Stokta ürün yok!', 
             ephemeral: true 
           });
         }
 
         // Select menu oluştur
-        const selectOptions = stocks.map(([id, item]) => ({
-          label: item.name,
+        const selectOptions = stocks.slice(0, 25).map(([id, item]) => ({
+          label: item.name.substring(0, 100),
           value: id,
-          description: `${item.credits} OWO Kredisi - ${item.products?.length || 0} ürün`
+          description: `${item.credits} OWO - ${item.products?.length || 0} ürün`.substring(0, 100)
         }));
 
         const selectMenu = new StringSelectMenuBuilder()
@@ -793,11 +852,13 @@ client.on('interactionCreate', async (interaction) => {
 
         const embed = new EmbedBuilder()
           .setColor('#f093fb')
-          .setTitle('OWO Ödeme Sistemi')
-          .setDescription('Lütfen bir stok seçin')
+          .setTitle('💰 OWO Ödeme Sistemi')
+          .setDescription('Lütfen bir stok seçin ve OWO gönderin')
           .addFields(
-            { name: 'Uyarı', value: 'Seçim yaptıktan sonra OWO göndermeniz gerekir' }
-          );
+            { name: '📋 Stok Sayısı', value: stocks.length.toString(), inline: true },
+            { name: '⚠️ Uyarı', value: 'Seçim yaptıktan sonra tam olarak belirtilen OWO miktarını gönderiniz', inline: false }
+          )
+          .setTimestamp();
 
         await interaction.reply({ 
           embeds: [embed], 
