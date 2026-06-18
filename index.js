@@ -1494,8 +1494,24 @@ app.get('/api/bot-stats', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// Server error handling
+const server = app.listen(PORT, () => {
   console.log('🌐 Web server çalışıyor: port ' + PORT);
 });
 
-client.login(process.env.DISCORD_TOKEN);
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} zaten kullanımda! Alternatif port kullanılıyor...`);
+    const server2 = app.listen(0, () => {
+      const addr = server2.address();
+      console.log(`🌐 Web server port ${addr.port} üzerinde başlatıldı`);
+    });
+  } else {
+    console.error('Server hatası:', err);
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+  console.error('❌ Bot login hatası:', err);
+  process.exit(1);
+});
