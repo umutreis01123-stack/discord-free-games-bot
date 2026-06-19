@@ -4,6 +4,36 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
+/*
+=================================================================
+ZWOZ BOT v3.0 - TICKET & DESTEK SİSTEMİ
+=================================================================
+
+SLASH KOMUTLAR (/):
+- /ticket        → Ticket kanalı aç (Kullanıcılar)
+- /destek        → Destek kanalı aç (Kullanıcılar)
+- /sunucubilgisi → Sunucu bilgilerini göster (Tüm)
+- /rolver @user @role  → Rol ver (SADECE UMUT PAPA)
+- /rolal @user @role   → Rol al (SADECE UMUT PAPA)
+
+PREFIX KOMUTLARI (-):
+- -kanal kilitle  → Kanalı yazılmaya kapalı yap (Kanal Yönetimi yetkisi gerekli)
+- -kanal aç       → Kanalı yazılmaya açık yap (Kanal Yönetimi yetkisi gerekli)
+- -kanal resetle  → Kanal mesajlarını toplu sil (Mesaj Yönetimi yetkisi gerekli)
+
+YARDıM KOMUTLARI:
+- z!yardım       → Tüm komutları göster
+- -i veya -invite → Davet ettiklerinizi göster
+
+TICKET/DESTEK AKIŞI:
+1. /ticket veya /destek komutu → Buton göster
+2. Butona tıkla → Kanal oluştur
+3. Talebi Üstlen → Tarafından üstlenildi göster
+4. Kapat → Kanali 5 sn sonra sil
+
+=================================================================
+*/
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -116,15 +146,6 @@ client.once('ready', async () => {
         .setDescription('➖ Kullanıcıdan rol al')
         .addUserOption(option => option.setName('kullanici').setDescription('Rol alınacak kullanıcı').setRequired(true))
         .addRoleOption(option => option.setName('rol').setDescription('Alınacak rol').setRequired(true)),
-      
-      new SlashCommandBuilder()
-        .setName('gerisayim')
-        .setDescription('⏱️ Geri sayım yapma')
-        .addIntegerOption(option => option.setName('saniye').setDescription('Kaç saniye geri sayacak?').setRequired(true)),
-      
-      new SlashCommandBuilder()
-        .setName('owoileode')
-        .setDescription('💳 OWO ile ödeme sistemi'),
     ];
 
     await client.application.commands.set(commands);
@@ -163,6 +184,8 @@ client.on('interactionCreate', async (interaction) => {
   const { commandName, customId, user } = interaction;
 
   try {
+    // Timeout yok - Defer etme (respond hızlı olmalı)
+    
     // BUTTON HANDLER
     if (interaction.isButton()) {
       // Ticket oluştur
@@ -563,136 +586,10 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // GERİ SAYIM KOMUTU (Sadece Umut Papa)
-      else if (commandName === 'gerisayim') {
-        if (!isOwner(interaction.user.id)) {
-          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
-        }
 
-        try {
-          let saniye = interaction.options.getInteger('saniye');
-          
-          if (saniye < 1 || saniye > 3600) {
-            return await interaction.reply({ content: '❌ 1 ile 3600 saniye arasında bir değer girin!', ephemeral: true });
-          }
-
-          const embed = new EmbedBuilder()
-            .setColor('#e74c3c')
-            .setTitle('⏱️ Geri Sayım')
-            .setDescription(`${saniye} saniye geri saymaya başladı...`)
-            .setTimestamp();
-
-          const message = await interaction.reply({ embeds: [embed], fetchReply: true });
-
-          const interval = setInterval(async () => {
-            saniye--;
-            const newEmbed = new EmbedBuilder()
-              .setColor(saniye > 10 ? '#e74c3c' : '#f39c12')
-              .setTitle('⏱️ Geri Sayım')
-              .setDescription(`${saniye} saniye kaldı...`)
-              .setTimestamp();
-
-            await message.edit({ embeds: [newEmbed] });
-
-            if (saniye === 0) {
-              clearInterval(interval);
-              const finishEmbed = new EmbedBuilder()
-                .setColor('#2ecc71')
-                .setTitle('✅ Geri Sayım Bitti!')
-                .setDescription('Zaman doldu!')
-                .setTimestamp();
-
-              await message.edit({ embeds: [finishEmbed] });
-            }
-          }, 1000);
-
-        } catch (error) {
-          console.error('Geri sayım hatası:', error);
-          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
-        }
-      }
-
-      // OWO İLE ÖDE KOMUTU (Sadece Umut Papa)
-      else if (commandName === 'owoileode') {
-        if (!isOwner(interaction.user.id)) {
-          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
-        }
-
-        try {
-          const stock = getStock();
-          
-          if (Object.keys(stock).length === 0) {
-            return await interaction.reply({ content: '❌ Henüz stok oluşturulmadı! Lütfen stok ekleyin.', ephemeral: true });
-          }
-
-          // Stok seçim dropdown'u oluştur
-          const options = [];
-          for (const [stockId, stockData] of Object.entries(stock)) {
-            options.push(
-              new StringSelectMenuOptionBuilder()
-                .setLabel(stockData.name)
-                .setDescription(`${stockData.items.length} ürün | Gerekli OWO: ${stockData.requiredOwo}`)
-                .setValue(stockId)
-                .setEmoji('📦')
-            );
-          }
-
-          const selectMenu = new StringSelectMenuBuilder()
-            .setCustomId('select_owo_stock')
-            .setPlaceholder('Stok seçiniz...')
-            .addOptions(options);
-
-          const row = new ActionRowBuilder().addComponents(selectMenu);
-
-          const embed = new EmbedBuilder()
-            .setColor('#667eea')
-            .setTitle('💳 OWO ile Ödeme Sistemi')
-            .setDescription('Lütfen bir stok seçiniz')
-            .setFooter({ text: 'Stok Seçimi' })
-            .setTimestamp();
-
-          await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-
-        } catch (error) {
-          console.error('OWO ödeme hatası:', error);
-          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
-        }
-      }
     }
 
-    // SELECT MENU HANDLER
-    else if (interaction.isStringSelectMenu()) {
-      if (customId === 'select_owo_stock') {
-        try {
-          const stockId = interaction.values[0];
-          const stock = getStock();
 
-          if (!stock[stockId]) {
-            return await interaction.reply({ content: '❌ Stok bulunamadı!', ephemeral: true });
-          }
-
-          const stockData = stock[stockId];
-
-          const embed = new EmbedBuilder()
-            .setColor('#667eea')
-            .setTitle(`📦 ${stockData.name}`)
-            .setThumbnail(stockData.image || '')
-            .setDescription(`**Gerekli OWO:** ${stockData.requiredOwo}`)
-            .addFields(
-              { name: '📊 Ürün Sayısı', value: stockData.items.length.toString(), inline: true },
-              { name: '🔗 Bağlantı', value: stockData.link || 'Belirtilmedi', inline: true }
-            )
-            .setFooter({ text: `Stok ID: ${stockId}` })
-            .setTimestamp();
-
-          await interaction.reply({ embeds: [embed], ephemeral: true });
-
-        } catch (error) {
-          console.error('Stok seçimi hatası:', error);
-          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
-        }
-      }
-    }
 
     
   } catch (error) {
@@ -719,10 +616,11 @@ client.on('messageCreate', async (message) => {
       .setDescription('Botun tüm komutları')
       .addFields(
         { name: '🎫 Slash Komutlar (/)', value: '`/ticket` - Ticket kanalı aç\n`/destek` - Destek talebinde bulun\n`/sunucubilgisi` - Sunucu bilgilerini göster', inline: false },
-        { name: '� Sadece Umut Papa (/)', value: '`/rolver @user @role` - Rol ver\n`/rolal @user @role` - Rol al\n`/gerisayim <saniye>` - Geri sayım\n`/owoileode` - OWO ile ödeme sistemi', inline: false },
-        { name: '❓ Yardım', value: '`z!yardım` - Bu mesajı göster', inline: false }
+        { name: '👑 Sadece Umut Papa (/)', value: '`/rolver @user @role` - Rol ver\n`/rolal @user @role` - Rol al', inline: false },
+        { name: '🔧 Kanal Komutları (-)', value: '`-kanal kilitle` - Kanalı yazılmaya kapalı yap\n`-kanal aç` - Kanalı yazılmaya açık yap\n`-kanal resetle` - Kanal mesajlarını sil', inline: false },
+        { name: '❓ Diğer', value: '`-i` veya `-invite` - Davet ettiklerinizi göster', inline: false }
       )
-      .setFooter({ text: 'ZWOZ Bot | v2.0' })
+      .setFooter({ text: 'ZWOZ Bot | v3.0' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
@@ -772,7 +670,98 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // Başka bir - komutunuz buraya gelir
+  // KANAL KİLİT KOMUTU
+  if (command === 'kanal' && args[0] === 'kilitle') {
+    try {
+      if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+        return await message.reply('❌ Kanal yönetme yetkisine sahip değilsiniz!');
+      }
+
+      const channel = message.channel;
+      await channel.permissionOverwrites.edit(channel.guild.id, {
+        SendMessages: false,
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('🔒 Kanal Kilitlendi')
+        .setDescription(`${channel.name} kanalı yazılmaya kapalı hale getirildi`)
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Kanal kilitleme hatası:', error);
+      await message.reply('❌ Kanal kilitlenirken hata oluştu!');
+    }
+  }
+
+  // KANAL AÇ KOMUTU
+  else if (command === 'kanal' && args[0] === 'aç') {
+    try {
+      if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
+        return await message.reply('❌ Kanal yönetme yetkisine sahip değilsiniz!');
+      }
+
+      const channel = message.channel;
+      await channel.permissionOverwrites.edit(channel.guild.id, {
+        SendMessages: true,
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🔓 Kanal Açıldı')
+        .setDescription(`${channel.name} kanalı yazılmaya açık hale getirildi`)
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Kanal açma hatası:', error);
+      await message.reply('❌ Kanal açılırken hata oluştu!');
+    }
+  }
+
+  // KANAL RESETLE KOMUTU (Mesajları sil)
+  else if (command === 'kanal' && args[0] === 'resetle') {
+    try {
+      if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
+        return await message.reply('❌ Mesaj yönetme yetkisine sahip değilsiniz!');
+      }
+
+      const loadingMsg = await message.reply('⏳ Kanal resetleniyor...');
+      
+      const channel = message.channel;
+      let totalDeleted = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const messages = await channel.messages.fetch({ limit: 100 });
+        
+        if (messages.size === 0) {
+          hasMore = false;
+          break;
+        }
+
+        try {
+          await channel.bulkDelete(messages, true);
+          totalDeleted += messages.size;
+        } catch (error) {
+          hasMore = false;
+          break;
+        }
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor('#3498db')
+        .setTitle('✅ Kanal Resetlendi')
+        .setDescription(`${totalDeleted} mesaj silindi`)
+        .setTimestamp();
+
+      await loadingMsg.edit({ content: '', embeds: [embed] });
+    } catch (error) {
+      console.error('Kanal resetleme hatası:', error);
+      await message.reply('❌ Kanal resetlenirken hata oluştu!');
+    }
+  }
 });
 
 
