@@ -23,7 +23,7 @@ const client = new Client({
 
 const OWNER_ID = '1403495996138323989';
 
-// JSON dosyalari
+// JSON dosyalariet
 const ticketsFile = './tickets.json';
 const supportsFile = './supports.json';
 
@@ -124,102 +124,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // BUTTON HANDLER
     if (interaction.isButton()) {
-      // Ticket kapatma
-      if (customId === 'close_ticket') {
-        try {
-          const channel = interaction.channel;
-          const tickets = getTickets();
-          
-          Object.keys(tickets).forEach(guildId => {
-            if (tickets[guildId] && tickets[guildId][channel.id]) {
-              delete tickets[guildId][channel.id];
-            }
-          });
-          saveTickets(tickets);
-
-          const closeEmbed = new EmbedBuilder()
-            .setColor('#e74c3c')
-            .setTitle('🔒 Ticket Kapatılıyor')
-            .setDescription('Bu kanal 5 saniye sonra silinecek');
-
-          await interaction.update({ embeds: [closeEmbed], components: [] });
-          
-          setTimeout(async () => {
-            try {
-              await channel.delete();
-            } catch (error) {
-              console.error('Kanal silme hatası:', error);
-            }
-          }, 5000);
-
-        } catch (error) {
-          console.error('Ticket kapatma hatası:', error);
-        }
-      }
-
-      // Destek kapatma
-      else if (customId.startsWith('close_support_')) {
-        try {
-          const channel = interaction.channel;
-          const supports = getSupports();
-          
-          Object.keys(supports).forEach(guildId => {
-            if (supports[guildId] && supports[guildId][channel.id]) {
-              delete supports[guildId][channel.id];
-            }
-          });
-          saveSupports(supports);
-
-          const closeEmbed = new EmbedBuilder()
-            .setColor('#e74c3c')
-            .setTitle('🔒 Destek Kapatılıyor')
-            .setDescription('Bu kanal 5 saniye sonra silinecek');
-
-          await interaction.update({ embeds: [closeEmbed], components: [] });
-          
-          setTimeout(async () => {
-            try {
-              await channel.delete();
-            } catch (error) {
-              console.error('Kanal silme hatası:', error);
-            }
-          }, 5000);
-
-        } catch (error) {
-          console.error('Destek kapatma hatası:', error);
-        }
-      }
-
-      // Destek talebi üstlenme
-      else if (customId.startsWith('claim_support_')) {
-        try {
-          const userId = customId.split('_')[2];
-          const claimedUser = await client.users.fetch(userId);
-
-          const embed = new EmbedBuilder()
-            .setColor('#2ecc71')
-            .setTitle('✅ Destek Talebi Üstlenildi')
-            .setDescription(`${user.tag} tarafından üstlenildi`)
-            .addFields(
-              { name: '👤 Talep Eden', value: claimedUser.tag, inline: true },
-              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
-              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
-            )
-            .setTimestamp();
-
-          await interaction.update({ embeds: [embed], components: [] });
-
-        } catch (error) {
-          console.error('Destek üstlenme hatası:', error);
-        }
-      }
-    }
-
-    // SLASH COMMANDS
-    else if (interaction.isChatInputCommand()) {
-      
-      // TICKET KOMUTU
-      if (commandName === 'ticket') {
+      // Ticket oluştur
+      if (customId === 'create_ticket') {
         const guild = interaction.guild;
         const tickets = getTickets();
         
@@ -256,13 +162,22 @@ client.on('interactionCreate', async (interaction) => {
             .setLabel('🔒 Ticket Kapat')
             .setStyle(ButtonStyle.Danger);
 
-          const row = new ActionRowBuilder().addComponents(closeButton);
+          const claimButton = new ButtonBuilder()
+            .setCustomId(`claim_ticket_${user.id}`)
+            .setLabel('👤 Talebi Üstlen')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
 
           const embed = new EmbedBuilder()
             .setColor('#667eea')
             .setTitle('🎫 Ticket Oluşturuldu')
-            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın.`)
-            .setFooter({ text: 'Ticket kapamak için aşağıdaki buton kullanın' })
+            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın. Umut Papa yakında yanıt verecek.`)
+            .addFields(
+              { name: 'Ticket ID', value: ticketChannel.id, inline: true },
+              { name: 'Oluşturulma', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setFooter({ text: 'Ticket kapamak için Kapat butonuna basın' })
             .setTimestamp();
 
           await ticketChannel.send({ embeds: [embed], components: [row] });
@@ -278,8 +193,8 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // DESTEK KOMUTU
-      else if (commandName === 'destek') {
+      // Destek oluştur
+      else if (customId === 'create_support') {
         const guild = interaction.guild;
         const supports = getSupports();
         
@@ -317,7 +232,7 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(ButtonStyle.Primary);
 
           const closeButton = new ButtonBuilder()
-            .setCustomId(`close_support_${user.id}`)
+            .setCustomId('close_support')
             .setLabel('🔒 Destek Kapat')
             .setStyle(ButtonStyle.Danger);
 
@@ -325,13 +240,13 @@ client.on('interactionCreate', async (interaction) => {
 
           const embed = new EmbedBuilder()
             .setColor('#3498db')
-            .setTitle('📞 Destek Talebi')
-            .setDescription(`${user.username} destek talep ediyor`)
+            .setTitle('📞 Destek Talebi Açıldı')
+            .setDescription(`${user.username} destek talep ediyor. Umut Papa size yardımcı olmaya çalışacak.`)
             .addFields(
               { name: '👤 Talep Eden', value: user.tag, inline: true },
               { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
             )
-            .setFooter({ text: 'Umut Papa talebinizi görecek' })
+            .setFooter({ text: 'Destek Sistemi' })
             .setTimestamp();
 
           await supportChannel.send({ embeds: [embed], components: [row] });
@@ -343,6 +258,190 @@ client.on('interactionCreate', async (interaction) => {
 
         } catch (error) {
           console.error('Destek kanalı oluşturma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // Ticket kapatma
+      else if (customId === 'close_ticket') {
+        try {
+          const channel = interaction.channel;
+          const tickets = getTickets();
+          
+          Object.keys(tickets).forEach(guildId => {
+            if (tickets[guildId] && tickets[guildId][channel.id]) {
+              delete tickets[guildId][channel.id];
+            }
+          });
+          saveTickets(tickets);
+
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Ticket Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
+          
+          setTimeout(async () => {
+            try {
+              await channel.delete();
+            } catch (error) {
+              console.error('Kanal silme hatası:', error);
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('Ticket kapatma hatası:', error);
+        }
+      }
+
+      // Destek kapatma
+      else if (customId === 'close_support') {
+        try {
+          const channel = interaction.channel;
+          const supports = getSupports();
+          
+          Object.keys(supports).forEach(guildId => {
+            if (supports[guildId] && supports[guildId][channel.id]) {
+              delete supports[guildId][channel.id];
+            }
+          });
+          saveSupports(supports);
+
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Destek Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
+          
+          setTimeout(async () => {
+            try {
+              await channel.delete();
+            } catch (error) {
+              console.error('Kanal silme hatası:', error);
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('Destek kapatma hatası:', error);
+        }
+      }
+
+      // Ticket talebi üstlenme
+      else if (customId.startsWith('claim_ticket_')) {
+        try {
+          const userId = customId.split('_')[2];
+          const claimedUser = await client.users.fetch(userId);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Ticket Üstlenildi')
+            .setDescription(`${user.tag} tarafından üstlenildi`)
+            .addFields(
+              { name: '👤 Ticket Açan', value: claimedUser.tag, inline: true },
+              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ embeds: [embed], components: [] });
+
+        } catch (error) {
+          console.error('Ticket üstlenme hatası:', error);
+        }
+      }
+
+      // Destek talebi üstlenme
+      else if (customId.startsWith('claim_support_')) {
+        try {
+          const userId = customId.split('_')[2];
+          const claimedUser = await client.users.fetch(userId);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Destek Talebi Üstlenildi')
+            .setDescription(`${user.tag} tarafından üstlenildi`)
+            .addFields(
+              { name: '👤 Talep Eden', value: claimedUser.tag, inline: true },
+              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ embeds: [embed], components: [] });
+
+        } catch (error) {
+          console.error('Destek üstlenme hatası:', error);
+        }
+      }
+    }
+
+    // SLASH COMMANDS
+    else if (interaction.isChatInputCommand()) {
+      
+      // TICKET KOMUTU
+      if (commandName === 'ticket') {
+        try {
+          const ticketButton = new ButtonBuilder()
+            .setCustomId('create_ticket')
+            .setLabel('🎫 Ticket Aç')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(ticketButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('🎫 Ticket Sistemi')
+            .setDescription('Aşağıdaki buton ile ticket kanalı açabilirsiniz')
+            .addFields(
+              { name: 'Ticket Nedir?', value: 'Özel bir kanal açıp Umut Papa ile direkt iletişim kurabilirsiniz.' },
+              { name: 'Not', value: 'Her ticket 5 dakika içinde kapatılabilir.' }
+            )
+            .setFooter({ text: 'Ticket Sistemi' })
+            .setTimestamp();
+
+          await interaction.reply({ 
+            embeds: [embed], 
+            components: [row],
+            ephemeral: false
+          });
+
+        } catch (error) {
+          console.error('Ticket komutu hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // DESTEK KOMUTU
+      else if (commandName === 'destek') {
+        try {
+          const supportButton = new ButtonBuilder()
+            .setCustomId('create_support')
+            .setLabel('📞 Destek Aç')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(supportButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#3498db')
+            .setTitle('📞 Destek Sistemi')
+            .setDescription('Aşağıdaki buton ile destek kanalı açabilirsiniz')
+            .addFields(
+              { name: 'Destek Nedir?', value: 'Probleminiz hakkında Umut Papa ile direkt konuşabilirsiniz.' },
+              { name: 'Not', value: 'Her destek talebi 5 dakika içinde kapatılabilir.' }
+            )
+            .setFooter({ text: 'Destek Sistemi' })
+            .setTimestamp();
+
+          await interaction.reply({ 
+            embeds: [embed], 
+            components: [row],
+            ephemeral: false
+          });
+
+        } catch (error) {
+          console.error('Destek komutu hatası:', error);
           await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
       }
@@ -397,10 +496,10 @@ client.on('messageCreate', async (message) => {
       .setDescription('Botun tüm komutları')
       .addFields(
         { name: '🎫 Slash Komutlar (/)', value: '`/ticket` - Ticket kanalı aç\n`/destek` - Destek talebinde bulun\n`/sunucubilgisi` - Sunucu bilgilerini göster', inline: false },
-        { name: '📌 Prefix Komutlar (-)', value: '`-invite` - Bot davet et\n`-kanal kilitle` - Kanalı kilitler\n`-kanal aç` - Kanalı açar\n`-kanal sıfırla` - İzinleri sıfırlar\n`-rolver @user @role` - Rol ver (Umut Papa)\n`-rolal @user @role` - Rol al (Umut Papa)', inline: false },
+        { name: '📌 Prefix Komutlar (-)', value: '`-invite` - Davet ettiklerinizi göster\n`-botdavet` - Bot davet linki gönder\n`-kanal kilitle` - Kanalı kilitler\n`-kanal aç` - Kanalı açar\n`-kanal sıfırla` - İzinleri sıfırlar\n`-rolver @user @role` - Rol ver (Umut Papa)\n`-rolal @user @role` - Rol al (Umut Papa)', inline: false },
         { name: '❓ Yardım', value: '`z!yardım` - Bu mesajı göster', inline: false }
       )
-      .setFooter({ text: 'Umut Papa Bot | v2.0' })
+      .setFooter({ text: 'ZWOZ Bot | v2.0' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
@@ -413,14 +512,46 @@ client.on('messageCreate', async (message) => {
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // INVITE KOMUTU
+  // INVITE KOMUTU - Davet ettiklerinizi göster
   if (command === 'invite') {
+    const invites = await message.guild.invites.fetch();
+    const userInvites = invites.filter(inv => inv.inviter?.id === message.author.id);
+
+    if (userInvites.size === 0) {
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('📋 Davetleriniz')
+        .setDescription('❌ Henüz davet ettiğiniz biri yok');
+      
+      return await message.reply({ embeds: [embed] });
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('📋 Davetleriniz')
+      .setDescription(`Toplam ${userInvites.size} kişi davet ettiniz`)
+      .addFields(
+        userInvites.map(inv => ({
+          name: `${inv.inviter.tag} tarafından oluşturuldu`,
+          value: `**Kullanım:** ${inv.uses} | **Link:** ${inv.url}`,
+          inline: false
+        })).slice(0, 25)
+      )
+      .setFooter({ text: 'Davetleriniz' })
+      .setTimestamp();
+    
+    await message.reply({ embeds: [embed] });
+    return;
+  }
+
+  // BOT DAVET KOMUTU
+  if (command === 'botdavet') {
     const inviteLink = `https://discord.com/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot`;
     
     const embed = new EmbedBuilder()
       .setColor('#3498db')
       .setTitle('🔗 Bot Davet Et')
-      .setDescription(`[Botu Sunucuya Davet Et](${inviteLink})`);
+      .setDescription(`[ZWOZ Bot'u Sunucuya Davet Et](${inviteLink})`);
     
     await message.reply({ embeds: [embed] });
     return;
