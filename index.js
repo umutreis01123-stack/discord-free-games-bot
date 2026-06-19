@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ChannelType, PermissionFlagsBits, SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -23,13 +23,17 @@ const client = new Client({
 
 const OWNER_ID = '1403495996138323989';
 
-// JSON dosyalariet
+// JSON FILES
 const ticketsFile = './tickets.json';
 const supportsFile = './supports.json';
+const stockFile = './stock.json';
+const owoUsersFile = './owo-users.json';
 
 function initFiles() {
   if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
   if (!fs.existsSync(supportsFile)) fs.writeFileSync(supportsFile, JSON.stringify({}));
+  if (!fs.existsSync(stockFile)) fs.writeFileSync(stockFile, JSON.stringify({}));
+  if (!fs.existsSync(owoUsersFile)) fs.writeFileSync(owoUsersFile, JSON.stringify({}));
 }
 
 function getTickets() {
@@ -48,6 +52,22 @@ function saveSupports(data) {
   fs.writeFileSync(supportsFile, JSON.stringify(data, null, 2));
 }
 
+function getStock() {
+  return JSON.parse(fs.readFileSync(stockFile, 'utf8'));
+}
+
+function saveStock(data) {
+  fs.writeFileSync(stockFile, JSON.stringify(data, null, 2));
+}
+
+function getOwoUsers() {
+  return JSON.parse(fs.readFileSync(owoUsersFile, 'utf8'));
+}
+
+function saveOwoUsers(data) {
+  fs.writeFileSync(owoUsersFile, JSON.stringify(data, null, 2));
+}
+
 initFiles();
 
 // Bot ready
@@ -56,7 +76,7 @@ client.once('ready', async () => {
   console.log('📊 Toplam Sunucu: ' + client.guilds.cache.size);
   updateBotStatus();
 
-  // Slash komutları kur
+  // Register slash commands
   try {
     console.log('⚙️ Slash komutları kurgulanıyor...');
 
@@ -84,6 +104,27 @@ client.once('ready', async () => {
       new SlashCommandBuilder()
         .setName('sunucubilgisi')
         .setDescription('ℹ️ Sunucu hakkında bilgi göster'),
+      
+      new SlashCommandBuilder()
+        .setName('rolver')
+        .setDescription('➕ Kullanıcıya rol ver')
+        .addUserOption(option => option.setName('kullanici').setDescription('Rol verilecek kullanıcı').setRequired(true))
+        .addRoleOption(option => option.setName('rol').setDescription('Verilecek rol').setRequired(true)),
+      
+      new SlashCommandBuilder()
+        .setName('rolal')
+        .setDescription('➖ Kullanıcıdan rol al')
+        .addUserOption(option => option.setName('kullanici').setDescription('Rol alınacak kullanıcı').setRequired(true))
+        .addRoleOption(option => option.setName('rol').setDescription('Alınacak rol').setRequired(true)),
+      
+      new SlashCommandBuilder()
+        .setName('gerisayim')
+        .setDescription('⏱️ Geri sayım yapma')
+        .addIntegerOption(option => option.setName('saniye').setDescription('Kaç saniye geri sayacak?').setRequired(true)),
+      
+      new SlashCommandBuilder()
+        .setName('owoileode')
+        .setDescription('💳 OWO ile ödeme sistemi'),
     ];
 
     await client.application.commands.set(commands);
@@ -115,9 +156,9 @@ function isOwner(userId) {
 
 
 
-// SLASH KOMUT HANDLER
+// INTERACTION HANDLER - BUTTONS AND SLASH COMMANDS
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+  if (!interaction.isChatInputCommand() && !interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
   const { commandName, customId, user } = interaction;
 
@@ -157,22 +198,22 @@ client.on('interactionCreate', async (interaction) => {
           };
           saveTickets(tickets);
 
-          const closeButton = new ButtonBuilder()
-            .setCustomId('close_ticket')
-            .setLabel('🔒 Ticket Kapat')
-            .setStyle(ButtonStyle.Danger);
-
           const claimButton = new ButtonBuilder()
             .setCustomId(`claim_ticket_${user.id}`)
-            .setLabel('👤 Talebi Üstlen')
+            .setLabel('� Talebi Üstlen')
             .setStyle(ButtonStyle.Primary);
+
+          const closeButton = new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('� Ticket Kapat')
+            .setStyle(ButtonStyle.Danger);
 
           const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
 
           const embed = new EmbedBuilder()
             .setColor('#667eea')
             .setTitle('🎫 Ticket Oluşturuldu')
-            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın. Umut Papa yakında yanıt verecek.`)
+            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın.`)
             .addFields(
               { name: 'Ticket ID', value: ticketChannel.id, inline: true },
               { name: 'Oluşturulma', value: new Date().toLocaleString('tr-TR'), inline: true }
@@ -241,7 +282,7 @@ client.on('interactionCreate', async (interaction) => {
           const embed = new EmbedBuilder()
             .setColor('#3498db')
             .setTitle('📞 Destek Talebi Açıldı')
-            .setDescription(`${user.username} destek talep ediyor. Umut Papa size yardımcı olmaya çalışacak.`)
+            .setDescription(`${user.username} destek talep ediyor.`)
             .addFields(
               { name: '👤 Talep Eden', value: user.tag, inline: true },
               { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
@@ -261,7 +302,7 @@ client.on('interactionCreate', async (interaction) => {
           await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
       }
-
+      
       // Ticket kapatma
       else if (customId === 'close_ticket') {
         try {
@@ -396,7 +437,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription('Aşağıdaki buton ile ticket kanalı açabilirsiniz')
             .addFields(
               { name: 'Ticket Nedir?', value: 'Özel bir kanal açıp Umut Papa ile direkt iletişim kurabilirsiniz.' },
-              { name: 'Not', value: 'Her ticket 5 dakika içinde kapatılabilir.' }
+              { name: 'Not', value: 'Her ticket dilediğiniz zaman kapatılabilir.' }
             )
             .setFooter({ text: 'Ticket Sistemi' })
             .setTimestamp();
@@ -429,7 +470,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription('Aşağıdaki buton ile destek kanalı açabilirsiniz')
             .addFields(
               { name: 'Destek Nedir?', value: 'Probleminiz hakkında Umut Papa ile direkt konuşabilirsiniz.' },
-              { name: 'Not', value: 'Her destek talebi 5 dakika içinde kapatılabilir.' }
+              { name: 'Not', value: 'Her destek talebi dilediğiniz zaman kapatılabilir.' }
             )
             .setFooter({ text: 'Destek Sistemi' })
             .setTimestamp();
@@ -448,29 +489,211 @@ client.on('interactionCreate', async (interaction) => {
 
       // SUNUCU BİLGİSİ KOMUTU
       else if (commandName === 'sunucubilgisi') {
-        const guild = interaction.guild;
-        const owner = await guild.fetchOwner();
+        try {
+          const guild = interaction.guild;
+          const owner = await guild.fetchOwner();
 
-        const embed = new EmbedBuilder()
-          .setColor('#667eea')
-          .setTitle('ℹ️ Sunucu Bilgileri')
-          .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
-          .addFields(
-            { name: '📌 Sunucu Adı', value: guild.name, inline: true },
-            { name: '🆔 Sunucu ID', value: guild.id, inline: true },
-            { name: '👥 Üye Sayısı', value: guild.memberCount.toString(), inline: true },
-            { name: '#️⃣ Kanal Sayısı', value: guild.channels.cache.size.toString(), inline: true },
-            { name: '🏷️ Rol Sayısı', value: guild.roles.cache.size.toString(), inline: true },
-            { name: '👑 Sunucu Sahibi', value: owner.user.tag, inline: true },
-            { name: '📅 Oluşturulma', value: guild.createdAt.toLocaleDateString('tr-TR'), inline: true },
-            { name: '🔐 Doğrulama', value: guild.verificationLevel.toString(), inline: true }
-          )
-          .setFooter({ text: 'Sunucu Bilgileri' })
-          .setTimestamp();
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('ℹ️ Sunucu Bilgileri')
+            .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
+            .addFields(
+              { name: '📌 Sunucu Adı', value: guild.name, inline: true },
+              { name: '🆔 Sunucu ID', value: guild.id, inline: true },
+              { name: '👥 Üye Sayısı', value: guild.memberCount.toString(), inline: true },
+              { name: '#️⃣ Kanal Sayısı', value: guild.channels.cache.size.toString(), inline: true },
+              { name: '🏷️ Rol Sayısı', value: guild.roles.cache.size.toString(), inline: true },
+              { name: '👑 Sunucu Sahibi', value: owner.user.tag, inline: true },
+              { name: '📅 Oluşturulma', value: guild.createdAt.toLocaleDateString('tr-TR'), inline: true },
+              { name: '🔐 Doğrulama', value: guild.verificationLevel.toString(), inline: true }
+            )
+            .setFooter({ text: 'Sunucu Bilgileri' })
+            .setTimestamp();
 
-        await interaction.reply({ embeds: [embed] });
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Sunucu bilgisi hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // ROL VER (Sadece Umut Papa)
+      else if (commandName === 'rolver') {
+        if (!isOwner(interaction.user.id)) {
+          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
+        }
+
+        try {
+          const targetUser = interaction.options.getUser('kullanici');
+          const role = interaction.options.getRole('rol');
+          const member = await interaction.guild.members.fetch(targetUser.id);
+
+          if (member.roles.cache.has(role.id)) {
+            return await interaction.reply({ content: `❌ ${targetUser.tag} kullanıcısında zaten ${role.name} rolü var!`, ephemeral: true });
+          }
+
+          await member.roles.add(role);
+          await interaction.reply({ content: `✅ ${targetUser.tag} kullanıcısına ${role.name} rolü verildi!` });
+        } catch (error) {
+          console.error('Rol ver hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // ROL AL (Sadece Umut Papa)
+      else if (commandName === 'rolal') {
+        if (!isOwner(interaction.user.id)) {
+          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
+        }
+
+        try {
+          const targetUser = interaction.options.getUser('kullanici');
+          const role = interaction.options.getRole('rol');
+          const member = await interaction.guild.members.fetch(targetUser.id);
+
+          if (!member.roles.cache.has(role.id)) {
+            return await interaction.reply({ content: `❌ ${targetUser.tag} kullanıcısında ${role.name} rolü yok!`, ephemeral: true });
+          }
+
+          await member.roles.remove(role);
+          await interaction.reply({ content: `✅ ${targetUser.tag} kullanıcısından ${role.name} rolü alındı!` });
+        } catch (error) {
+          console.error('Rol al hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // GERİ SAYIM KOMUTU (Sadece Umut Papa)
+      else if (commandName === 'gerisayim') {
+        if (!isOwner(interaction.user.id)) {
+          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
+        }
+
+        try {
+          let saniye = interaction.options.getInteger('saniye');
+          
+          if (saniye < 1 || saniye > 3600) {
+            return await interaction.reply({ content: '❌ 1 ile 3600 saniye arasında bir değer girin!', ephemeral: true });
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('⏱️ Geri Sayım')
+            .setDescription(`${saniye} saniye geri saymaya başladı...`)
+            .setTimestamp();
+
+          const message = await interaction.reply({ embeds: [embed], fetchReply: true });
+
+          const interval = setInterval(async () => {
+            saniye--;
+            const newEmbed = new EmbedBuilder()
+              .setColor(saniye > 10 ? '#e74c3c' : '#f39c12')
+              .setTitle('⏱️ Geri Sayım')
+              .setDescription(`${saniye} saniye kaldı...`)
+              .setTimestamp();
+
+            await message.edit({ embeds: [newEmbed] });
+
+            if (saniye === 0) {
+              clearInterval(interval);
+              const finishEmbed = new EmbedBuilder()
+                .setColor('#2ecc71')
+                .setTitle('✅ Geri Sayım Bitti!')
+                .setDescription('Zaman doldu!')
+                .setTimestamp();
+
+              await message.edit({ embeds: [finishEmbed] });
+            }
+          }, 1000);
+
+        } catch (error) {
+          console.error('Geri sayım hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // OWO İLE ÖDE KOMUTU (Sadece Umut Papa)
+      else if (commandName === 'owoileode') {
+        if (!isOwner(interaction.user.id)) {
+          return await interaction.reply({ content: '❌ Bu komutu sadece Umut Papa kullanabilir!', ephemeral: true });
+        }
+
+        try {
+          const stock = getStock();
+          
+          if (Object.keys(stock).length === 0) {
+            return await interaction.reply({ content: '❌ Henüz stok oluşturulmadı! Lütfen stok ekleyin.', ephemeral: true });
+          }
+
+          // Stok seçim dropdown'u oluştur
+          const options = [];
+          for (const [stockId, stockData] of Object.entries(stock)) {
+            options.push(
+              new StringSelectMenuOptionBuilder()
+                .setLabel(stockData.name)
+                .setDescription(`${stockData.items.length} ürün | Gerekli OWO: ${stockData.requiredOwo}`)
+                .setValue(stockId)
+                .setEmoji('📦')
+            );
+          }
+
+          const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('select_owo_stock')
+            .setPlaceholder('Stok seçiniz...')
+            .addOptions(options);
+
+          const row = new ActionRowBuilder().addComponents(selectMenu);
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('💳 OWO ile Ödeme Sistemi')
+            .setDescription('Lütfen bir stok seçiniz')
+            .setFooter({ text: 'Stok Seçimi' })
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+
+        } catch (error) {
+          console.error('OWO ödeme hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
       }
     }
+
+    // SELECT MENU HANDLER
+    else if (interaction.isStringSelectMenu()) {
+      if (customId === 'select_owo_stock') {
+        try {
+          const stockId = interaction.values[0];
+          const stock = getStock();
+
+          if (!stock[stockId]) {
+            return await interaction.reply({ content: '❌ Stok bulunamadı!', ephemeral: true });
+          }
+
+          const stockData = stock[stockId];
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle(`📦 ${stockData.name}`)
+            .setThumbnail(stockData.image || '')
+            .setDescription(`**Gerekli OWO:** ${stockData.requiredOwo}`)
+            .addFields(
+              { name: '📊 Ürün Sayısı', value: stockData.items.length.toString(), inline: true },
+              { name: '🔗 Bağlantı', value: stockData.link || 'Belirtilmedi', inline: true }
+            )
+            .setFooter({ text: `Stok ID: ${stockId}` })
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+
+        } catch (error) {
+          console.error('Stok seçimi hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+    }
+
     
   } catch (error) {
     console.error('Interaction hatası:', error);
@@ -484,7 +707,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// PREFIX KOMUTLARI (- ve z!)
+// PREFIX KOMUTLARI - z! VE - İLE BAŞLAYAN KOMUTLAR
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
@@ -496,7 +719,7 @@ client.on('messageCreate', async (message) => {
       .setDescription('Botun tüm komutları')
       .addFields(
         { name: '🎫 Slash Komutlar (/)', value: '`/ticket` - Ticket kanalı aç\n`/destek` - Destek talebinde bulun\n`/sunucubilgisi` - Sunucu bilgilerini göster', inline: false },
-        { name: '📌 Prefix Komutlar (-)', value: '`-invite` - Davet ettiklerinizi göster\n`-botdavet` - Bot davet linki gönder\n`-kanal kilitle` - Kanalı kilitler\n`-kanal aç` - Kanalı açar\n`-kanal sıfırla` - İzinleri sıfırlar\n`-rolver @user @role` - Rol ver (Umut Papa)\n`-rolal @user @role` - Rol al (Umut Papa)', inline: false },
+        { name: '� Sadece Umut Papa (/)', value: '`/rolver @user @role` - Rol ver\n`/rolal @user @role` - Rol al\n`/gerisayim <saniye>` - Geri sayım\n`/owoileode` - OWO ile ödeme sistemi', inline: false },
         { name: '❓ Yardım', value: '`z!yardım` - Bu mesajı göster', inline: false }
       )
       .setFooter({ text: 'ZWOZ Bot | v2.0' })
@@ -506,154 +729,52 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // - PREFIX KOMUTLAR
+  // SAYFAYA İTİŞ KOMUTU (-i)
+  if (message.content === '-i' || message.content === '-invite') {
+    try {
+      const invites = await message.guild.invites.fetch();
+      const userInvites = invites.filter(inv => inv.inviter?.id === message.author.id);
+
+      if (userInvites.size === 0) {
+        const embed = new EmbedBuilder()
+          .setColor('#e74c3c')
+          .setTitle('📋 Davetleriniz')
+          .setDescription('❌ Henüz davet ettiğiniz biri yok');
+        
+        return await message.reply({ embeds: [embed] });
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('📋 Davetleriniz')
+        .setDescription(`Toplam ${userInvites.size} kişi davet ettiniz`)
+        .addFields(
+          userInvites.map(inv => ({
+            name: `Davet ${inv.uses}`,
+            value: `**Bağlantı:** ${inv.url}`,
+            inline: false
+          })).slice(0, 25)
+        )
+        .setFooter({ text: 'Davetleriniz' })
+        .setTimestamp();
+      
+      await message.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Invite hatası:', error);
+      await message.reply('❌ Davetleriniz getirilemedi!');
+    }
+    return;
+  }
+
+  // -  İLE BAŞLAYAN KOMUTLAR
   if (!message.content.startsWith('-')) return;
 
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // INVITE KOMUTU - Davet ettiklerinizi göster
-  if (command === 'invite') {
-    const invites = await message.guild.invites.fetch();
-    const userInvites = invites.filter(inv => inv.inviter?.id === message.author.id);
-
-    if (userInvites.size === 0) {
-      const embed = new EmbedBuilder()
-        .setColor('#e74c3c')
-        .setTitle('📋 Davetleriniz')
-        .setDescription('❌ Henüz davet ettiğiniz biri yok');
-      
-      return await message.reply({ embeds: [embed] });
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor('#2ecc71')
-      .setTitle('📋 Davetleriniz')
-      .setDescription(`Toplam ${userInvites.size} kişi davet ettiniz`)
-      .addFields(
-        userInvites.map(inv => ({
-          name: `${inv.inviter.tag} tarafından oluşturuldu`,
-          value: `**Kullanım:** ${inv.uses} | **Link:** ${inv.url}`,
-          inline: false
-        })).slice(0, 25)
-      )
-      .setFooter({ text: 'Davetleriniz' })
-      .setTimestamp();
-    
-    await message.reply({ embeds: [embed] });
-    return;
-  }
-
-  // BOT DAVET KOMUTU
-  if (command === 'botdavet') {
-    const inviteLink = `https://discord.com/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot`;
-    
-    const embed = new EmbedBuilder()
-      .setColor('#3498db')
-      .setTitle('🔗 Bot Davet Et')
-      .setDescription(`[ZWOZ Bot'u Sunucuya Davet Et](${inviteLink})`);
-    
-    await message.reply({ embeds: [embed] });
-    return;
-  }
-
-  // KANAL KOMUTLARI (Sadece Umut Papa)
-  if (command === 'kanal') {
-    if (!isOwner(message.author.id)) {
-      return await message.reply('❌ Bu komutu sadece Umut Papa kullanabilir!');
-    }
-
-    const action = args[0]?.toLowerCase();
-    const channel = message.channel;
-
-    if (action === 'kilitle') {
-      try {
-        await channel.permissionOverwrites.edit(message.guild.id, {
-          SendMessages: false,
-        });
-        await message.reply('🔒 Kanal kilitlendi!');
-      } catch (error) {
-        await message.reply('❌ Hata: ' + error.message);
-      }
-    }
-
-    else if (action === 'aç') {
-      try {
-        await channel.permissionOverwrites.edit(message.guild.id, {
-          SendMessages: null,
-        });
-        await message.reply('🔓 Kanal açıldı!');
-      } catch (error) {
-        await message.reply('❌ Hata: ' + error.message);
-      }
-    }
-
-    else if (action === 'sıfırla') {
-      try {
-        await channel.permissionOverwrites.delete(message.guild.id);
-        await message.reply('♻️ Kanal izinleri sıfırlandı!');
-      } catch (error) {
-        await message.reply('❌ Hata: ' + error.message);
-      }
-    }
-
-    else {
-      await message.reply('❌ Kullanım: `-kanal kilitle/aç/sıfırla`');
-    }
-  }
-
-  // ROL VER (Sadece Umut Papa)
-  else if (command === 'rolver') {
-    if (!isOwner(message.author.id)) {
-      return await message.reply('❌ Bu komutu sadece Umut Papa kullanabilir!');
-    }
-
-    const user = message.mentions.users.first();
-    const role = message.mentions.roles.first();
-
-    if (!user || !role) {
-      return await message.reply('❌ Kullanım: `-rolver @user @role`');
-    }
-
-    try {
-      const member = await message.guild.members.fetch(user.id);
-      if (member.roles.cache.has(role.id)) {
-        return await message.reply('❌ Kullanıcıda zaten bu rol var!');
-      }
-      
-      await member.roles.add(role);
-      await message.reply(`✅ ${user.tag} kullanıcısına ${role.name} rolü verildi!`);
-    } catch (error) {
-      await message.reply('❌ Hata: ' + error.message);
-    }
-  }
-
-  // ROL AL (Sadece Umut Papa)
-  else if (command === 'rolal') {
-    if (!isOwner(message.author.id)) {
-      return await message.reply('❌ Bu komutu sadece Umut Papa kullanabilir!');
-    }
-
-    const user = message.mentions.users.first();
-    const role = message.mentions.roles.first();
-
-    if (!user || !role) {
-      return await message.reply('❌ Kullanım: `-rolal @user @role`');
-    }
-
-    try {
-      const member = await message.guild.members.fetch(user.id);
-      if (!member.roles.cache.has(role.id)) {
-        return await message.reply('❌ Kullanıcıda bu rol yok!');
-      }
-      
-      await member.roles.remove(role);
-      await message.reply(`✅ ${user.tag} kullanıcısından ${role.name} rolü alındı!`);
-    } catch (error) {
-      await message.reply('❌ Hata: ' + error.message);
-    }
-  }
+  // Başka bir - komutunuz buraya gelir
 });
+
 
 // WEB SERVER
 app.get('/', (req, res) => {
