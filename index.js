@@ -199,36 +199,67 @@ function isOwner(userId) {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // DM'leri takip et
-  if (message.isDMChannel()) {
-    const dmHistory = getDMHistory();
-    const userId = message.author.id;
-    
-    if (!dmHistory[userId]) {
-      dmHistory[userId] = {
-        username: message.author.tag,
-        avatar: message.author.displayAvatarURL({ dynamic: true, size: 256 }),
-        messages: []
-      };
+  try {
+    // DM'leri takip et
+    if (message.isDM && message.isDM()) {
+      const dmHistory = getDMHistory();
+      const userId = message.author.id;
+      
+      if (!dmHistory[userId]) {
+        dmHistory[userId] = {
+          username: message.author.tag,
+          avatar: message.author.displayAvatarURL({ dynamic: true, size: 256 }),
+          messages: []
+        };
+      }
+
+      dmHistory[userId].messages.push({
+        author: 'user',
+        content: message.content,
+        timestamp: new Date().toISOString()
+      });
+
+      if (dmHistory[userId].messages.length > 100) {
+        dmHistory[userId].messages = dmHistory[userId].messages.slice(-100);
+      }
+
+      saveDMHistory(dmHistory);
+      return;
     }
+  } catch (error) {
+    // Eğer isDM() yoksa başka yol dene
+    if (!message.guild) {
+      const dmHistory = getDMHistory();
+      const userId = message.author.id;
+      
+      if (!dmHistory[userId]) {
+        dmHistory[userId] = {
+          username: message.author.tag,
+          avatar: message.author.displayAvatarURL({ dynamic: true, size: 256 }),
+          messages: []
+        };
+      }
 
-    dmHistory[userId].messages.push({
-      author: 'user',
-      content: message.content,
-      timestamp: new Date().toISOString()
-    });
+      dmHistory[userId].messages.push({
+        author: 'user',
+        content: message.content,
+        timestamp: new Date().toISOString()
+      });
 
-    if (dmHistory[userId].messages.length > 100) {
-      dmHistory[userId].messages = dmHistory[userId].messages.slice(-100);
+      if (dmHistory[userId].messages.length > 100) {
+        dmHistory[userId].messages = dmHistory[userId].messages.slice(-100);
+      }
+
+      saveDMHistory(dmHistory);
+      return;
     }
-
-    saveDMHistory(dmHistory);
-    return;
   }
 
   // Sunucu mesajlarını logla
+  if (!message.guild) return;
+
   const chatLog = getChatLog();
-  const guildId = message.guild?.id || 'DM';
+  const guildId = message.guild.id;
   
   if (!chatLog[guildId]) chatLog[guildId] = [];
   
