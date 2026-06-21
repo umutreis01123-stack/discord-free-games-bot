@@ -126,6 +126,10 @@
             min-height: 100px;
         }
 
+        select {
+            cursor: pointer;
+        }
+
         button {
             background: #667eea;
             color: white;
@@ -174,6 +178,7 @@
             background: #e8f8f5;
             border-radius: 5px;
             display: none;
+            border-left: 4px solid #2ecc71;
         }
 
         .error {
@@ -183,6 +188,13 @@
             background: #fadbd8;
             border-radius: 5px;
             display: none;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-weight: bold;
         }
 
         @media (max-width: 768px) {
@@ -229,8 +241,18 @@
             <h2>💬 Kullanıcıya DM Gönder</h2>
             <form onsubmit="sendDM(event)">
                 <div class="form-group">
-                    <label>Alıcı Kullanıcı ID:</label>
-                    <input type="text" id="dmUserId" placeholder="Discord User ID" required>
+                    <label>Sunucu Seç:</label>
+                    <select id="dmGuild" onchange="loadDMMembers()" required>
+                        <option value="">Sunucu seçin...</option>
+                    </select>
+                    <div class="loading" id="dmGuildLoading" style="display: none; margin-top: 10px;">Yükleniyor...</div>
+                </div>
+                <div class="form-group">
+                    <label>Kullanıcı Seç:</label>
+                    <select id="dmUser" required>
+                        <option value="">Önce sunucu seçin...</option>
+                    </select>
+                    <div class="loading" id="dmUserLoading" style="display: none; margin-top: 10px;">Yükleniyor...</div>
                 </div>
                 <div class="form-group">
                     <label>Mesaj:</label>
@@ -248,27 +270,30 @@
             <form onsubmit="manageRole(event)">
                 <div class="form-group">
                     <label>Sunucu Seç:</label>
-                    <select id="roleGuild" required>
+                    <select id="roleGuild" onchange="loadRoleMembers(); loadRoles();" required>
                         <option value="">Sunucu seçin...</option>
                     </select>
+                    <div class="loading" id="roleGuildLoading" style="display: none; margin-top: 10px;">Yükleniyor...</div>
                 </div>
                 <div class="form-group">
                     <label>Kullanıcı Seç:</label>
                     <select id="roleUser" required>
-                        <option value="">Kullanıcı seçin...</option>
+                        <option value="">Önce sunucu seçin...</option>
                     </select>
+                    <div class="loading" id="roleUserLoading" style="display: none; margin-top: 10px;">Yükleniyor...</div>
+                </div>
+                <div class="form-group">
+                    <label>Rol Seç:</label>
+                    <select id="roleSelect" required>
+                        <option value="">Önce sunucu seçin...</option>
+                    </select>
+                    <div class="loading" id="roleSelectLoading" style="display: none; margin-top: 10px;">Yükleniyor...</div>
                 </div>
                 <div class="form-group">
                     <label>İşlem:</label>
                     <select id="roleAction" required>
                         <option value="give">➕ Rol Ver</option>
                         <option value="remove">➖ Rol Al</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Rol Seç:</label>
-                    <select id="roleSelect" required>
-                        <option value="">Rol seçin...</option>
                     </select>
                 </div>
                 <button type="submit">🔄 Uygula</button>
@@ -307,7 +332,7 @@
         // TAB SWITCHING
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tabs')[0].querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
 
@@ -325,7 +350,7 @@
             event.target.classList.add('active');
         }
 
-        // BOT STATS
+        // BOT STATS VE SUNUCULAR YÜKLE
         async function loadStats() {
             try {
                 const response = await fetch('/api/bot-stats');
@@ -333,15 +358,99 @@
                 
                 document.getElementById('bot-status').textContent = data.status === 'online' ? '✅ Çalışıyor' : '❌ Offline';
                 document.getElementById('server-count').textContent = data.servers;
+
+                // Sunucuları yükle
+                const guildsRes = await fetch('/api/guilds');
+                const guilds = await guildsRes.json();
+
+                const dmGuildSelect = document.getElementById('dmGuild');
+                const roleGuildSelect = document.getElementById('roleGuild');
+
+                dmGuildSelect.innerHTML = '<option value="">Sunucu seçin...</option>';
+                roleGuildSelect.innerHTML = '<option value="">Sunucu seçin...</option>';
+
+                guilds.forEach(guild => {
+                    dmGuildSelect.innerHTML += `<option value="${guild.id}">${guild.name}</option>`;
+                    roleGuildSelect.innerHTML += `<option value="${guild.id}">${guild.name}</option>`;
+                });
             } catch (error) {
                 console.error('İstatistik yükleme hatası:', error);
+            }
+        }
+
+        // DM İÇİN KULLANICILAR YÜKLE
+        async function loadDMMembers() {
+            const guildId = document.getElementById('dmGuild').value;
+            if (!guildId) return;
+
+            document.getElementById('dmUserLoading').style.display = 'block';
+            try {
+                const response = await fetch(`/api/guilds/${guildId}/members`);
+                const members = await response.json();
+
+                const userSelect = document.getElementById('dmUser');
+                userSelect.innerHTML = '<option value="">Kullanıcı seçin...</option>';
+
+                members.forEach(member => {
+                    userSelect.innerHTML += `<option value="${member.id}">${member.tag}</option>`;
+                });
+            } catch (error) {
+                console.error('Kullanıcı yükleme hatası:', error);
+            } finally {
+                document.getElementById('dmUserLoading').style.display = 'none';
+            }
+        }
+
+        // ROL İÇİN KULLANICILAR YÜKLE
+        async function loadRoleMembers() {
+            const guildId = document.getElementById('roleGuild').value;
+            if (!guildId) return;
+
+            document.getElementById('roleUserLoading').style.display = 'block';
+            try {
+                const response = await fetch(`/api/guilds/${guildId}/members`);
+                const members = await response.json();
+
+                const userSelect = document.getElementById('roleUser');
+                userSelect.innerHTML = '<option value="">Kullanıcı seçin...</option>';
+
+                members.forEach(member => {
+                    userSelect.innerHTML += `<option value="${member.id}">${member.tag}</option>`;
+                });
+            } catch (error) {
+                console.error('Kullanıcı yükleme hatası:', error);
+            } finally {
+                document.getElementById('roleUserLoading').style.display = 'none';
+            }
+        }
+
+        // ROLLER YÜKLE
+        async function loadRoles() {
+            const guildId = document.getElementById('roleGuild').value;
+            if (!guildId) return;
+
+            document.getElementById('roleSelectLoading').style.display = 'block';
+            try {
+                const response = await fetch(`/api/guilds/${guildId}/roles`);
+                const roles = await response.json();
+
+                const roleSelect = document.getElementById('roleSelect');
+                roleSelect.innerHTML = '<option value="">Rol seçin...</option>';
+
+                roles.forEach(role => {
+                    roleSelect.innerHTML += `<option value="${role.id}">${role.name}</option>`;
+                });
+            } catch (error) {
+                console.error('Rol yükleme hatası:', error);
+            } finally {
+                document.getElementById('roleSelectLoading').style.display = 'none';
             }
         }
 
         // DM GÖNDER
         async function sendDM(event) {
             event.preventDefault();
-            const userId = document.getElementById('dmUserId').value;
+            const userId = document.getElementById('dmUser').value;
             const message = document.getElementById('dmMessage').value;
             
             try {

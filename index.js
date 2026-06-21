@@ -1028,6 +1028,75 @@ app.post('/api/manage-role', async (req, res) => {
   }
 });
 
+// SUNUCULAR API
+app.get('/api/guilds', (req, res) => {
+  try {
+    const guilds = client.guilds.cache.map(guild => ({
+      id: guild.id,
+      name: guild.name,
+      icon: guild.iconURL({ dynamic: true, size: 256 })
+    }));
+    res.json(guilds);
+  } catch (error) {
+    console.error('Sunucu listeleme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SUNUCUDAKI KULLANICILAR API
+app.get('/api/guilds/:guildId/members', async (req, res) => {
+  try {
+    const { guildId } = req.params;
+    const guild = client.guilds.cache.get(guildId);
+    
+    if (!guild) {
+      return res.status(404).json({ error: 'Sunucu bulunamadı' });
+    }
+
+    const members = await guild.members.fetch();
+    const memberList = members
+      .filter(m => !m.user.bot)
+      .map(m => ({
+        id: m.id,
+        username: m.user.username,
+        tag: m.user.tag,
+        avatar: m.user.displayAvatarURL({ dynamic: true, size: 256 })
+      }))
+      .sort((a, b) => a.username.localeCompare(b.username));
+
+    res.json(memberList);
+  } catch (error) {
+    console.error('Kullanıcı listeleme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SUNUCUDAKI ROLLER API
+app.get('/api/guilds/:guildId/roles', (req, res) => {
+  try {
+    const { guildId } = req.params;
+    const guild = client.guilds.cache.get(guildId);
+    
+    if (!guild) {
+      return res.status(404).json({ error: 'Sunucu bulunamadı' });
+    }
+
+    const roles = guild.roles.cache
+      .filter(role => role.id !== guild.id)
+      .map(role => ({
+        id: role.id,
+        name: role.name,
+        color: role.hexColor
+      }))
+      .sort((a, b) => b.name.localeCompare(a.name));
+
+    res.json(roles);
+  } catch (error) {
+    console.error('Rol listeleme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Server error handling
 const server = app.listen(PORT, () => {
   console.log('🌐 Web server çalışıyor: port ' + PORT);
