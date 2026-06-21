@@ -58,6 +58,9 @@ const client = new Client({
 
 const OWNER_ID = '1403495996138323989';
 
+// DM HISTORY IN-MEMORY
+let dmHistoryMemory = {};
+
 // JSON FILES
 const muteLogFile = './mute-log.json';
 const warnLogFile = './warn-log.json';
@@ -202,29 +205,27 @@ client.on('messageCreate', async (message) => {
   try {
     // DM'leri takip et - eğer guild yoksa DM'dir
     if (!message.guild) {
-      const dmHistory = getDMHistory();
       const userId = message.author.id;
       
-      if (!dmHistory[userId]) {
-        dmHistory[userId] = {
+      if (!dmHistoryMemory[userId]) {
+        dmHistoryMemory[userId] = {
           username: message.author.tag,
           avatar: message.author.displayAvatarURL({ dynamic: true, size: 256 }),
           messages: []
         };
       }
 
-      dmHistory[userId].messages.push({
+      dmHistoryMemory[userId].messages.push({
         author: 'user',
         content: message.content,
         timestamp: new Date().toISOString()
       });
 
-      if (dmHistory[userId].messages.length > 100) {
-        dmHistory[userId].messages = dmHistory[userId].messages.slice(-100);
+      if (dmHistoryMemory[userId].messages.length > 100) {
+        dmHistoryMemory[userId].messages = dmHistoryMemory[userId].messages.slice(-100);
       }
 
-      saveDMHistory(dmHistory);
-      console.log(`📨 DM alındı: ${message.author.tag}`);
+      console.log(`📨 DM alındı: ${message.author.tag} - "${message.content}"`);
       return;
     }
   } catch (error) {
@@ -1149,8 +1150,7 @@ app.get('/api/guilds/:guildId/roles', (req, res) => {
 // BOT'A YAZANLAR (DM KUTUSU)
 app.get('/api/dm-users', (req, res) => {
   try {
-    const dmHistory = getDMHistory();
-    const users = Object.entries(dmHistory).map(([userId, data]) => ({
+    const users = Object.entries(dmHistoryMemory).map(([userId, data]) => ({
       id: userId,
       username: data.username,
       avatar: data.avatar,
@@ -1160,6 +1160,7 @@ app.get('/api/dm-users', (req, res) => {
 
     // Son mesajlara göre sırala
     users.sort((a, b) => new Date(b.lastMessage) - new Date(a.lastMessage));
+    console.log('📊 DM kullanıcıları:', users.length);
     res.json(users);
   } catch (error) {
     console.error('DM kullanıcıları getirme hatası:', error);
@@ -1171,13 +1172,12 @@ app.get('/api/dm-users', (req, res) => {
 app.get('/api/dm-history/:userId', (req, res) => {
   try {
     const { userId } = req.params;
-    const dmHistory = getDMHistory();
 
-    if (!dmHistory[userId]) {
+    if (!dmHistoryMemory[userId]) {
       return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     }
 
-    res.json(dmHistory[userId]);
+    res.json(dmHistoryMemory[userId]);
   } catch (error) {
     console.error('DM geçmişi getirme hatası:', error);
     res.status(500).json({ error: error.message });
@@ -1201,22 +1201,20 @@ app.post('/api/send-dm-reply', async (req, res) => {
     await user.send(message);
 
     // DM history'ye kaydet
-    const dmHistory = getDMHistory();
-    if (!dmHistory[userId]) {
-      dmHistory[userId] = {
+    if (!dmHistoryMemory[userId]) {
+      dmHistoryMemory[userId] = {
         username: user.tag,
         avatar: user.displayAvatarURL({ dynamic: true, size: 256 }),
         messages: []
       };
     }
 
-    dmHistory[userId].messages.push({
+    dmHistoryMemory[userId].messages.push({
       author: 'bot',
       content: message,
       timestamp: new Date().toISOString()
     });
 
-    saveDMHistory(dmHistory);
     res.json({ success: true, message: 'Mesaj gönderildi' });
   } catch (error) {
     console.error('DM gönderme hatası:', error);
