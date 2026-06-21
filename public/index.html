@@ -616,13 +616,20 @@
 
         async function loadDMUsers() {
             try {
+                console.log('DM kullanıcıları yükleniyor...');
                 const response = await fetch('/api/dm-users');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
                 const users = await response.json();
+                console.log('DM kullanıcıları:', users);
 
                 const usersList = document.getElementById('dmUsersList');
                 usersList.innerHTML = '';
 
-                if (users.length === 0) {
+                if (!users || users.length === 0) {
                     usersList.innerHTML = '<p style="text-align: center; color: #999;">Mesaj yok</p>';
                     return;
                 }
@@ -653,6 +660,7 @@
                 });
             } catch (error) {
                 console.error('DM kullanıcıları yükleme hatası:', error);
+                document.getElementById('dmUsersList').innerHTML = `<p style="color: red;">Hata: ${error.message}</p>`;
             }
         }
 
