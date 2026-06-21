@@ -231,12 +231,41 @@
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('dm')">💬 DM Gönder</button>
+            <button class="tab-btn active" onclick="switchTab('dmbox')">📬 DM Kutusu</button>
+            <button class="tab-btn" onclick="switchTab('dm')">💬 DM Gönder</button>
             <button class="tab-btn" onclick="switchTab('roles')">🎖️ Rol Yönetimi</button>
             <button class="tab-btn" onclick="switchTab('logs')">📋 Loglar</button>
         </div>
 
-        <!-- DM TAB -->
+        <!-- DM KUTUSU TAB -->
+        <div id="dmbox" class="tab-content active">
+            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; min-height: 500px;">
+                <!-- KULLANICILAR LİSTESİ -->
+                <div style="background: #f5f5f5; border-radius: 10px; padding: 20px; overflow-y: auto;">
+                    <h3 style="margin-bottom: 15px; color: #333;">👥 Bota Yazanlar</h3>
+                    <div id="dmUsersList">
+                        <p style="text-align: center; color: #999;">Yükleniyor...</p>
+                    </div>
+                </div>
+
+                <!-- CHAT ALANI -->
+                <div style="display: flex; flex-direction: column;">
+                    <div style="background: white; border-radius: 10px; padding: 20px; flex: 1; overflow-y: auto; margin-bottom: 15px; border: 1px solid #ddd;">
+                        <div id="dmChatBox">
+                            <p style="text-align: center; color: #999;">Bir kullanıcı seçin</p>
+                        </div>
+                    </div>
+
+                    <!-- MESAJ YAZMA -->
+                    <div style="display: grid; grid-template-columns: 1fr 100px; gap: 10px;">
+                        <input type="text" id="dmReplyMessage" placeholder="Mesaj yazın..." style="padding: 15px;">
+                        <button onclick="sendDMReply()" style="padding: 15px;">Gönder</button>
+                    </div>
+                    <div class="success" id="dm-reply-success">✅ Mesaj gönderildi!</div>
+                    <div class="error" id="dm-reply-error"></div>
+                </div>
+            </div>
+        </div>
         <div id="dm" class="tab-content active">
             <h2>💬 Kullanıcıya DM Gönder</h2>
             <form onsubmit="sendDM(event)">
@@ -336,7 +365,9 @@
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
 
-            if (tabName === 'logs') {
+            if (tabName === 'dmbox') {
+                loadDMUsers();
+            } else if (tabName === 'logs') {
                 loadLogs();
             }
         }
@@ -579,6 +610,144 @@
         // BAŞLANGIÇ
         loadStats();
         setInterval(loadStats, 30000);
+
+        // DM KUTUSU FONKSIYONLARI
+        let currentDMUser = null;
+
+        async function loadDMUsers() {
+            try {
+                const response = await fetch('/api/dm-users');
+                const users = await response.json();
+
+                const usersList = document.getElementById('dmUsersList');
+                usersList.innerHTML = '';
+
+                if (users.length === 0) {
+                    usersList.innerHTML = '<p style="text-align: center; color: #999;">Mesaj yok</p>';
+                    return;
+                }
+
+                users.forEach(user => {
+                    const userDiv = document.createElement('div');
+                    userDiv.style.cssText = `
+                        padding: 10px;
+                        margin-bottom: 10px;
+                        background: white;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        border: 2px solid transparent;
+                        transition: all 0.3s;
+                    `;
+                    userDiv.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${user.avatar}" style="width: 40px; height: 40px; border-radius: 50%;" alt="${user.username}">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-weight: bold; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.username}</div>
+                                <div style="font-size: 0.85em; color: #999;">${user.messageCount} mesaj</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    userDiv.onclick = () => selectDMUser(user.id, user.username, userDiv);
+                    usersList.appendChild(userDiv);
+                });
+            } catch (error) {
+                console.error('DM kullanıcıları yükleme hatası:', error);
+            }
+        }
+
+        async function selectDMUser(userId, username, element) {
+            currentDMUser = userId;
+            
+            // Seçili kullanıcıyı vurgula
+            document.querySelectorAll('#dmUsersList > div').forEach(el => {
+                el.style.borderColor = 'transparent';
+                el.style.backgroundColor = 'white';
+            });
+            element.style.borderColor = '#667eea';
+            element.style.backgroundColor = '#f0f4ff';
+
+            // Chat geçmişini yükle
+            try {
+                const response = await fetch(`/api/dm-history/${userId}`);
+                const data = await response.json();
+
+                const chatBox = document.getElementById('dmChatBox');
+                chatBox.innerHTML = '';
+
+                data.messages.forEach(msg => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.style.cssText = `
+                        margin-bottom: 10px;
+                        padding: 10px;
+                        border-radius: 8px;
+                        max-width: 70%;
+                        ${msg.author === 'user' 
+                            ? 'background: #e3f2fd; margin-left: auto; text-align: right;' 
+                            : 'background: #f5f5f5; margin-right: auto;'
+                        }
+                    `;
+                    msgDiv.innerHTML = `
+                        <div style="font-size: 0.85em; color: #999; margin-bottom: 5px;">
+                            ${msg.author === 'user' ? username : 'Bot'}
+                        </div>
+                        <div>${msg.content}</div>
+                        <div style="font-size: 0.8em; color: #999; margin-top: 5px;">
+                            ${new Date(msg.timestamp).toLocaleString('tr-TR')}
+                        </div>
+                    `;
+                    chatBox.appendChild(msgDiv);
+                });
+
+                // En altta göster
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (error) {
+                console.error('DM geçmişi yükleme hatası:', error);
+            }
+        }
+
+        async function sendDMReply() {
+            if (!currentDMUser) {
+                alert('Lütfen bir kullanıcı seçin!');
+                return;
+            }
+
+            const message = document.getElementById('dmReplyMessage').value;
+            if (!message) {
+                alert('Lütfen bir mesaj yazın!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/send-dm-reply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentDMUser, message })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('dmReplyMessage').value = '';
+                    document.getElementById('dm-reply-success').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('dm-reply-success').style.display = 'none';
+                    }, 3000);
+                    
+                    // Chat'i yenile
+                    selectDMUser(currentDMUser, '');
+                    loadDMUsers();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                const errorDiv = document.getElementById('dm-reply-error');
+                errorDiv.textContent = '❌ Hata: ' + error.message;
+                errorDiv.style.display = 'block';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
     </script>
 </body>
 </html>

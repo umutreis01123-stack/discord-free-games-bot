@@ -64,6 +64,7 @@ const warnLogFile = './warn-log.json';
 const chatLogFile = './chat-log.json';
 const ticketsFile = './tickets.json';
 const supportsFile = './supports.json';
+const dmHistoryFile = './dm-history.json';
 
 function initFiles() {
   if (!fs.existsSync(muteLogFile)) fs.writeFileSync(muteLogFile, JSON.stringify({}));
@@ -71,6 +72,7 @@ function initFiles() {
   if (!fs.existsSync(chatLogFile)) fs.writeFileSync(chatLogFile, JSON.stringify({}));
   if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
   if (!fs.existsSync(supportsFile)) fs.writeFileSync(supportsFile, JSON.stringify({}));
+  if (!fs.existsSync(dmHistoryFile)) fs.writeFileSync(dmHistoryFile, JSON.stringify({}));
 }
 
 function getMuteLog() {
@@ -111,6 +113,14 @@ function getSupports() {
 
 function saveSupports(data) {
   fs.writeFileSync(supportsFile, JSON.stringify(data, null, 2));
+}
+
+function getDMHistory() {
+  return JSON.parse(fs.readFileSync(dmHistoryFile, 'utf8'));
+}
+
+function saveDMHistory(data) {
+  fs.writeFileSync(dmHistoryFile, JSON.stringify(data, null, 2));
 }
 
 initFiles();
@@ -189,6 +199,34 @@ function isOwner(userId) {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
+  // DM'leri takip et
+  if (message.isDMChannel()) {
+    const dmHistory = getDMHistory();
+    const userId = message.author.id;
+    
+    if (!dmHistory[userId]) {
+      dmHistory[userId] = {
+        username: message.author.tag,
+        avatar: message.author.displayAvatarURL({ dynamic: true, size: 256 }),
+        messages: []
+      };
+    }
+
+    dmHistory[userId].messages.push({
+      author: 'user',
+      content: message.content,
+      timestamp: new Date().toISOString()
+    });
+
+    if (dmHistory[userId].messages.length > 100) {
+      dmHistory[userId].messages = dmHistory[userId].messages.slice(-100);
+    }
+
+    saveDMHistory(dmHistory);
+    return;
+  }
+
+  // Sunucu mesajlarını logla
   const chatLog = getChatLog();
   const guildId = message.guild?.id || 'DM';
   
@@ -1094,6 +1132,84 @@ app.get('/api/guilds/:guildId/roles', (req, res) => {
   } catch (error) {
     console.error('Rol listeleme hatası:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// BOT'A YAZANLAR (DM KUTUSU)
+app.get('/api/dm-users', (req, res) => {
+  try {
+    const dmHistory = getDMHistory();
+    const users = Object.entries(dmHistory).map(([userId, data]) => ({
+      id: userId,
+      username: data.username,
+      avatar: data.avatar,
+      messageCount: data.messages.length,
+      lastMessage: data.messages.length > 0 ? data.messages[data.messages.length - 1].timestamp : null
+    }));
+
+    // Son mesajlara göre sırala
+    users.sort((a, b) => new Date(b.lastMessage) - new Date(a.lastMessage));
+    res.json(users);
+  } catch (error) {
+    console.error('DM kullanıcıları getirme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// BİR KULLANICIYLA CHAT GEÇMIŞI
+app.get('/api/dm-history/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const dmHistory = getDMHistory();
+
+    if (!dmHistory[userId]) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
+    }
+
+    res.json(dmHistory[userId]);
+  } catch (error) {
+    console.error('DM geçmişi getirme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DM YANIT GÖNDER
+app.post('/api/send-dm-reply', async (req, res) => {
+  try {
+    const { userId, message } = req.body;
+
+    if (!userId || !message) {
+      return res.status(400).json({ success: false, error: 'User ID ve mesaj gerekli' });
+    }
+
+    const user = await client.users.fetch(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Kullanıcı bulunamadı' });
+    }
+
+    await user.send(message);
+
+    // DM history'ye kaydet
+    const dmHistory = getDMHistory();
+    if (!dmHistory[userId]) {
+      dmHistory[userId] = {
+        username: user.tag,
+        avatar: user.displayAvatarURL({ dynamic: true, size: 256 }),
+        messages: []
+      };
+    }
+
+    dmHistory[userId].messages.push({
+      author: 'bot',
+      content: message,
+      timestamp: new Date().toISOString()
+    });
+
+    saveDMHistory(dmHistory);
+    res.json({ success: true, message: 'Mesaj gönderildi' });
+  } catch (error) {
+    console.error('DM gönderme hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
