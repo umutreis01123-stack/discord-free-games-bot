@@ -6,7 +6,7 @@ const fs = require('fs');
 
 /*
 =================================================================
-ZWOZ BOT v4.0 - MODERASYON & YÖNETİM SİSTEMİ
+ZWOZ BOT v4.0 - MODERASYON & YÖNETİM + TİCKET/DESTEK
 =================================================================
 
 PREFIX KOMUTLARI (-):
@@ -17,15 +17,24 @@ PREFIX KOMUTLARI (-):
 - -uyarı @user mesaj   → Uyarı ver (1-5 arası, 5=oto-mute)
 - -i                   → Davet ettiğin kişileri göster
 - -botdavet            → Bot davet linki
+- -yardım              → Tüm komutları göster
 
 SLASH KOMUTLARI (/):
-- /rolver @user @role  → Rol ver (Sadece Admin)
-- /rolal @user @role   → Rol al (Sadece Admin)
+- /ticket              → Ticket sistemi
+- /destek              → Destek sistemi
+- /rolver @user @role  → Rol ver (Admin gerekli)
+- /rolal @user @role   → Rol al (Admin gerekli)
+
+TİCKET/DESTEK AKIŞI:
+1. /ticket veya /destek komutu → Buton göster
+2. Butona tıkla → Kanal oluştur
+3. Talebi Üstlen → Tarafından üstlenildi göster
+4. Kapat → Kanali 5 sn sonra sil
 
 WEB PANELİ:
 - DM gönderme
 - Rol ver/al
-- Sohbet logları
+- Sohbet/Uyarı/Mute logları
 
 =================================================================
 */
@@ -53,11 +62,15 @@ const OWNER_ID = '1403495996138323989';
 const muteLogFile = './mute-log.json';
 const warnLogFile = './warn-log.json';
 const chatLogFile = './chat-log.json';
+const ticketsFile = './tickets.json';
+const supportsFile = './supports.json';
 
 function initFiles() {
   if (!fs.existsSync(muteLogFile)) fs.writeFileSync(muteLogFile, JSON.stringify({}));
   if (!fs.existsSync(warnLogFile)) fs.writeFileSync(warnLogFile, JSON.stringify({}));
   if (!fs.existsSync(chatLogFile)) fs.writeFileSync(chatLogFile, JSON.stringify({}));
+  if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
+  if (!fs.existsSync(supportsFile)) fs.writeFileSync(supportsFile, JSON.stringify({}));
 }
 
 function getMuteLog() {
@@ -84,6 +97,22 @@ function saveChatLog(data) {
   fs.writeFileSync(chatLogFile, JSON.stringify(data, null, 2));
 }
 
+function getTickets() {
+  return JSON.parse(fs.readFileSync(ticketsFile, 'utf8'));
+}
+
+function saveTickets(data) {
+  fs.writeFileSync(ticketsFile, JSON.stringify(data, null, 2));
+}
+
+function getSupports() {
+  return JSON.parse(fs.readFileSync(supportsFile, 'utf8'));
+}
+
+function saveSupports(data) {
+  fs.writeFileSync(supportsFile, JSON.stringify(data, null, 2));
+}
+
 initFiles();
 
 // Bot ready
@@ -108,6 +137,14 @@ client.once('ready', async () => {
     }
 
     const commands = [
+      new SlashCommandBuilder()
+        .setName('ticket')
+        .setDescription('🎫 Ticket kanalı aç'),
+      
+      new SlashCommandBuilder()
+        .setName('destek')
+        .setDescription('📞 Destek talebinde bulun'),
+
       new SlashCommandBuilder()
         .setName('rolver')
         .setDescription('➕ Kullanıcıya rol ver')
@@ -191,7 +228,7 @@ client.on('messageCreate', async (message) => {
           { name: '👥 Davet', value: '`-i` - Davet ettiklerin\n`-botdavet` - Bot linki', inline: false },
           { name: '👑 Admin (/)', value: '`/rolver @user @role` - Rol ver\n`/rolal @user @role` - Rol al', inline: false }
         )
-        .setFooter({ text: 'ZWOZ Bot | v4.0' })
+        .setFooter({ text: 'ZWOZ Bot | v2.0' })
         .setTimestamp();
 
       await message.reply({ embeds: [embed] });
@@ -456,76 +493,403 @@ client.on('messageCreate', async (message) => {
 
 // SLASH COMMANDS
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
   const { commandName, user } = interaction;
 
   try {
-    // ROL VER
-    if (commandName === 'rolver') {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-        return await interaction.reply({ content: '❌ Rol yönetme yetkisine sahip değilsiniz!', ephemeral: true });
+    // SLASH COMMANDS
+    if (interaction.isChatInputCommand()) {
+      
+      // TICKET KOMUTU
+      if (commandName === 'ticket') {
+        try {
+          const ticketButton = new ButtonBuilder()
+            .setCustomId('create_ticket')
+            .setLabel('🎫 Ticket Aç')
+            .setStyle(ButtonStyle.Primary);
+
+          const row = new ActionRowBuilder().addComponents(ticketButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('🎫 Ticket Sistemi')
+            .setDescription('Aşağıdaki buton ile ticket kanalı açabilirsiniz')
+            .addFields(
+              { name: 'Ticket Nedir?', value: 'Özel bir kanal açıp admin ile direkt iletişim kurabilirsiniz.' },
+              { name: 'Not', value: 'Her ticket dilediğiniz zaman kapatılabilir.' }
+            )
+            .setFooter({ text: 'Ticket Sistemi' })
+            .setTimestamp();
+
+          await interaction.reply({ 
+            embeds: [embed], 
+            components: [row],
+            ephemeral: false
+          });
+
+        } catch (error) {
+          console.error('Ticket komutu hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
       }
 
-      try {
-        const targetUser = interaction.options.getUser('kullanici');
-        const role = interaction.options.getRole('rol');
-        const member = await interaction.guild.members.fetch(targetUser.id);
+      // DESTEK KOMUTU
+      else if (commandName === 'destek') {
+        try {
+          const supportButton = new ButtonBuilder()
+            .setCustomId('create_support')
+            .setLabel('📞 Destek Aç')
+            .setStyle(ButtonStyle.Primary);
 
-        if (member.roles.cache.has(role.id)) {
-          return await interaction.reply({ content: `❌ ${targetUser.tag} zaten ${role.name} rolüne sahip!`, ephemeral: true });
+          const row = new ActionRowBuilder().addComponents(supportButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#3498db')
+            .setTitle('📞 Destek Sistemi')
+            .setDescription('Aşağıdaki buton ile destek kanalı açabilirsiniz')
+            .addFields(
+              { name: 'Destek Nedir?', value: 'Probleminiz hakkında admin ile direkt konuşabilirsiniz.' },
+              { name: 'Not', value: 'Her destek talebi dilediğiniz zaman kapatılabilir.' }
+            )
+            .setFooter({ text: 'Destek Sistemi' })
+            .setTimestamp();
+
+          await interaction.reply({ 
+            embeds: [embed], 
+            components: [row],
+            ephemeral: false
+          });
+
+        } catch (error) {
+          console.error('Destek komutu hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // ROL VER
+      else if (commandName === 'rolver') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+          return await interaction.reply({ content: '❌ Rol yönetme yetkisine sahip değilsiniz!', ephemeral: true });
         }
 
-        await member.roles.add(role);
-        
-        const embed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle('✅ Rol Verildi')
-          .setDescription(`${targetUser.tag} → ${role.name}`)
-          .addFields(
-            { name: 'Veren', value: user.tag, inline: true },
-            { name: 'Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
-          )
-          .setTimestamp();
+        try {
+          const targetUser = interaction.options.getUser('kullanici');
+          const role = interaction.options.getRole('rol');
+          const member = await interaction.guild.members.fetch(targetUser.id);
 
-        await interaction.reply({ embeds: [embed] });
-      } catch (error) {
-        console.error('Rol ver hatası:', error);
-        await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+          if (member.roles.cache.has(role.id)) {
+            return await interaction.reply({ content: `❌ ${targetUser.tag} zaten ${role.name} rolüne sahip!`, ephemeral: true });
+          }
+
+          await member.roles.add(role);
+          
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Rol Verildi')
+            .setDescription(`${targetUser.tag} → ${role.name}`)
+            .addFields(
+              { name: 'Veren', value: user.tag, inline: true },
+              { name: 'Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Rol ver hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // ROL AL
+      else if (commandName === 'rolal') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
+          return await interaction.reply({ content: '❌ Rol yönetme yetkisine sahip değilsiniz!', ephemeral: true });
+        }
+
+        try {
+          const targetUser = interaction.options.getUser('kullanici');
+          const role = interaction.options.getRole('rol');
+          const member = await interaction.guild.members.fetch(targetUser.id);
+
+          if (!member.roles.cache.has(role.id)) {
+            return await interaction.reply({ content: `❌ ${targetUser.tag} ${role.name} rolüne sahip değil!`, ephemeral: true });
+          }
+
+          await member.roles.remove(role);
+          
+          const embed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('✅ Rol Alındı')
+            .setDescription(`${targetUser.tag} ← ${role.name}`)
+            .addFields(
+              { name: 'Alan', value: user.tag, inline: true },
+              { name: 'Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          console.error('Rol al hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
       }
     }
 
-    // ROL AL
-    else if (commandName === 'rolal') {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-        return await interaction.reply({ content: '❌ Rol yönetme yetkisine sahip değilsiniz!', ephemeral: true });
+    // BUTTON HANDLER
+    else if (interaction.isButton()) {
+      const { customId } = interaction;
+
+      // Ticket oluştur
+      if (customId === 'create_ticket') {
+        const guild = interaction.guild;
+        const tickets = getTickets();
+        
+        if (!tickets[guild.id]) tickets[guild.id] = {};
+
+        try {
+          const ticketChannel = await guild.channels.create({
+            name: `🎫-ticket-${user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              {
+                id: user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              }
+            ],
+          });
+
+          tickets[guild.id][ticketChannel.id] = {
+            userId: user.id,
+            createdAt: Date.now()
+          };
+          saveTickets(tickets);
+
+          const claimButton = new ButtonBuilder()
+            .setCustomId(`claim_ticket_${user.id}`)
+            .setLabel('👤 Talebi Üstlen')
+            .setStyle(ButtonStyle.Primary);
+
+          const closeButton = new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('🔒 Ticket Kapat')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('🎫 Ticket Oluşturuldu')
+            .setDescription(`Merhaba ${user.username}! Sorununuzu açıklayın.`)
+            .addFields(
+              { name: 'Ticket ID', value: ticketChannel.id, inline: true },
+              { name: 'Oluşturulma', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setFooter({ text: 'Ticket kapamak için Kapat butonuna basın' })
+            .setTimestamp();
+
+          await ticketChannel.send({ embeds: [embed], components: [row] });
+          
+          await interaction.reply({ 
+            content: `✅ Ticket kanalı oluşturuldu: ${ticketChannel}`, 
+            ephemeral: true 
+          });
+
+        } catch (error) {
+          console.error('Ticket oluşturma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
       }
 
-      try {
-        const targetUser = interaction.options.getUser('kullanici');
-        const role = interaction.options.getRole('rol');
-        const member = await interaction.guild.members.fetch(targetUser.id);
-
-        if (!member.roles.cache.has(role.id)) {
-          return await interaction.reply({ content: `❌ ${targetUser.tag} ${role.name} rolüne sahip değil!`, ephemeral: true });
-        }
-
-        await member.roles.remove(role);
+      // Destek oluştur
+      else if (customId === 'create_support') {
+        const guild = interaction.guild;
+        const supports = getSupports();
         
-        const embed = new EmbedBuilder()
-          .setColor('#e74c3c')
-          .setTitle('✅ Rol Alındı')
-          .setDescription(`${targetUser.tag} ← ${role.name}`)
-          .addFields(
-            { name: 'Alan', value: user.tag, inline: true },
-            { name: 'Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
-          )
-          .setTimestamp();
+        if (!supports[guild.id]) supports[guild.id] = {};
 
-        await interaction.reply({ embeds: [embed] });
-      } catch (error) {
-        console.error('Rol al hatası:', error);
-        await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        try {
+          const supportChannel = await guild.channels.create({
+            name: `📞-destek-${user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              {
+                id: user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              }
+            ],
+          });
+
+          supports[guild.id][supportChannel.id] = {
+            userId: user.id,
+            createdAt: Date.now()
+          };
+          saveSupports(supports);
+
+          const claimButton = new ButtonBuilder()
+            .setCustomId(`claim_support_${user.id}`)
+            .setLabel('👤 Talebi Üstlen')
+            .setStyle(ButtonStyle.Primary);
+
+          const closeButton = new ButtonBuilder()
+            .setCustomId('close_support')
+            .setLabel('🔒 Destek Kapat')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(claimButton, closeButton);
+
+          const embed = new EmbedBuilder()
+            .setColor('#3498db')
+            .setTitle('📞 Destek Talebi Açıldı')
+            .setDescription(`${user.username} destek talep ediyor.`)
+            .addFields(
+              { name: '👤 Talep Eden', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setFooter({ text: 'Destek Sistemi' })
+            .setTimestamp();
+
+          await supportChannel.send({ embeds: [embed], components: [row] });
+          
+          await interaction.reply({ 
+            content: `✅ Destek kanalı oluşturuldu: ${supportChannel}`, 
+            ephemeral: true 
+          });
+
+        } catch (error) {
+          console.error('Destek kanalı oluşturma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
+        }
+      }
+
+      // Ticket kapatma
+      else if (customId === 'close_ticket') {
+        try {
+          const channel = interaction.channel;
+          const tickets = getTickets();
+          
+          Object.keys(tickets).forEach(guildId => {
+            if (tickets[guildId] && tickets[guildId][channel.id]) {
+              delete tickets[guildId][channel.id];
+            }
+          });
+          saveTickets(tickets);
+
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Ticket Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
+          
+          setTimeout(async () => {
+            try {
+              await channel.delete();
+            } catch (error) {
+              console.error('Kanal silme hatası:', error);
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('Ticket kapatma hatası:', error);
+        }
+      }
+
+      // Destek kapatma
+      else if (customId === 'close_support') {
+        try {
+          const channel = interaction.channel;
+          const supports = getSupports();
+          
+          Object.keys(supports).forEach(guildId => {
+            if (supports[guildId] && supports[guildId][channel.id]) {
+              delete supports[guildId][channel.id];
+            }
+          });
+          saveSupports(supports);
+
+          const closeEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('🔒 Destek Kapatılıyor')
+            .setDescription('Bu kanal 5 saniye sonra silinecek');
+
+          await interaction.update({ embeds: [closeEmbed], components: [] });
+          
+          setTimeout(async () => {
+            try {
+              await channel.delete();
+            } catch (error) {
+              console.error('Kanal silme hatası:', error);
+            }
+          }, 5000);
+
+        } catch (error) {
+          console.error('Destek kapatma hatası:', error);
+        }
+      }
+
+      // Ticket talebi üstlenme
+      else if (customId.startsWith('claim_ticket_')) {
+        try {
+          const userId = customId.split('_')[2];
+          const claimedUser = await client.users.fetch(userId);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Ticket Üstlenildi')
+            .setDescription(`${user.tag} tarafından üstlenildi`)
+            .addFields(
+              { name: '👤 Ticket Açan', value: claimedUser.tag, inline: true },
+              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ embeds: [embed], components: [] });
+
+        } catch (error) {
+          console.error('Ticket üstlenme hatası:', error);
+        }
+      }
+
+      // Destek talebi üstlenme
+      else if (customId.startsWith('claim_support_')) {
+        try {
+          const userId = customId.split('_')[2];
+          const claimedUser = await client.users.fetch(userId);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Destek Talebi Üstlenildi')
+            .setDescription(`${user.tag} tarafından üstlenildi`)
+            .addFields(
+              { name: '👤 Talep Eden', value: claimedUser.tag, inline: true },
+              { name: '👨‍💼 Üstlenen', value: user.tag, inline: true },
+              { name: '⏰ Zaman', value: new Date().toLocaleString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ embeds: [embed], components: [] });
+
+        } catch (error) {
+          console.error('Destek üstlenme hatası:', error);
+        }
       }
     }
 
