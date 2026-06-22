@@ -68,6 +68,7 @@ const chatLogFile = './chat-log.json';
 const ticketsFile = './tickets.json';
 const supportsFile = './supports.json';
 const dmHistoryFile = './dm-history.json';
+const permissionsFile = './permissions.json';
 
 function initFiles() {
   if (!fs.existsSync(muteLogFile)) fs.writeFileSync(muteLogFile, JSON.stringify({}));
@@ -76,6 +77,15 @@ function initFiles() {
   if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
   if (!fs.existsSync(supportsFile)) fs.writeFileSync(supportsFile, JSON.stringify({}));
   if (!fs.existsSync(dmHistoryFile)) fs.writeFileSync(dmHistoryFile, JSON.stringify({}));
+  if (!fs.existsSync(permissionsFile)) fs.writeFileSync(permissionsFile, JSON.stringify({}));
+}
+
+function getPermissions() {
+  return JSON.parse(fs.readFileSync(permissionsFile, 'utf8'));
+}
+
+function savePermissions(data) {
+  fs.writeFileSync(permissionsFile, JSON.stringify(data, null, 2));
 }
 
 function getMuteLog() {
@@ -439,7 +449,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // MUTE KOMUTU
-    else if (command === 'mute') {
+    if (command === 'mute') {
       if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
         return await message.reply('❌ Üye susturma yetkisine sahip değilsiniz!');
       }
@@ -491,7 +501,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // UYARI KOMUTU
-    else if (command === 'uyarı') {
+    if (command === 'uyarı') {
       if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
         return await message.reply('❌ Moderasyon yetkisine sahip değilsiniz!');
       }
@@ -543,7 +553,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // DAVETLİ KOMUTU
-    else if (command === 'i') {
+    if (command === 'i') {
       try {
         const invites = await message.guild.invites.fetch();
         const userInvites = invites.filter(inv => inv.inviter?.id === message.author.id);
@@ -579,7 +589,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // BOT DAVET LINKI
-    else if (command === 'botdavet') {
+    if (command === 'botdavet') {
       try {
         const botLink = `https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`;
         
@@ -1017,6 +1027,60 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // WEB SERVER
+
+// KOMUT İZİNLERİ API
+app.get('/api/permissions/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const permissions = getPermissions();
+    
+    if (!permissions[userId]) {
+      return res.json({ userId, commands: [] });
+    }
+    
+    res.json(permissions[userId]);
+  } catch (error) {
+    console.error('Komut izni getirme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// KOMUT İZNİ KAYDET
+app.post('/api/permissions/:userId', (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { commands } = req.body;
+
+    if (!commands || !Array.isArray(commands)) {
+      return res.status(400).json({ error: 'commands array gerekli' });
+    }
+
+    const permissions = getPermissions();
+    permissions[userId] = {
+      userId,
+      commands,
+      updatedAt: new Date().toISOString()
+    };
+
+    savePermissions(permissions);
+    res.json({ success: true, message: 'İzinler kaydedildi' });
+  } catch (error) {
+    console.error('Komut izni kaydetme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// TÜM İZİNLER
+app.get('/api/all-permissions', (req, res) => {
+  try {
+    const permissions = getPermissions();
+    res.json(permissions);
+  } catch (error) {
+    console.error('Tüm izinleri getirme hatası:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

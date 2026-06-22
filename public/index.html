@@ -232,9 +232,48 @@
 
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('dmbox')">📬 DM Kutusu</button>
+            <button class="tab-btn" onclick="switchTab('commands')">🎛️ Komut İzinleri</button>
             <button class="tab-btn" onclick="switchTab('dm')">💬 DM Gönder</button>
             <button class="tab-btn" onclick="switchTab('roles')">🎖️ Rol Yönetimi</button>
             <button class="tab-btn" onclick="switchTab('logs')">📋 Loglar</button>
+        </div>
+
+        <!-- KOMUT İZİNLERİ TAB -->
+        <div id="commands" class="tab-content">
+            <h2>🎛️ Komut İzinleri Yönetimi</h2>
+            <form onsubmit="saveCommandPermissions(event)">
+                <div class="form-group">
+                    <label>Discord Kullanıcı ID:</label>
+                    <input type="text" id="commandUserId" placeholder="1234567890" required>
+                </div>
+
+                <div class="form-group">
+                    <label>✅ Hangi Komutları Kullanabilsin?</label>
+                    <div style="background: #f5f5f5; padding: 15px; border-radius: 8px;">
+                        <label><input type="checkbox" name="commands" value="kanal-kilitle"> 🔒 -kanal kilitle</label><br>
+                        <label><input type="checkbox" name="commands" value="kanal-ac"> 🔓 -kanal aç</label><br>
+                        <label><input type="checkbox" name="commands" value="kanal-resetle"> 🗑️ -kanal resetle</label><br>
+                        <label><input type="checkbox" name="commands" value="logkanal"> 📋 -logkanal</label><br>
+                        <label><input type="checkbox" name="commands" value="mute"> 🔇 -mute</label><br>
+                        <label><input type="checkbox" name="commands" value="uyarı"> ⚠️ -uyarı</label><br>
+                        <label><input type="checkbox" name="commands" value="ticket"> 🎫 /ticket</label><br>
+                        <label><input type="checkbox" name="commands" value="destek"> 📞 /destek</label><br>
+                        <label><input type="checkbox" name="commands" value="rolver"> ➕ /rolver</label><br>
+                        <label><input type="checkbox" name="commands" value="rolal"> ➖ /rolal</label><br>
+                    </div>
+                </div>
+
+                <button type="submit">💾 Kaydet</button>
+                <div class="success" id="commands-success">✅ İzinler kaydedildi!</div>
+                <div class="error" id="commands-error"></div>
+            </form>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+            <h3>📊 Tüm İzinler</h3>
+            <div id="allPermissions" style="background: #f9f9f9; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto;">
+                <p style="text-align: center; color: #999;">Yükleniyor...</p>
+            </div>
         </div>
 
         <!-- DM KUTUSU TAB -->
@@ -367,6 +406,8 @@
 
             if (tabName === 'dmbox') {
                 loadDMUsers();
+            } else if (tabName === 'commands') {
+                loadAllPermissions();
             } else if (tabName === 'logs') {
                 loadLogs();
             }
@@ -611,7 +652,68 @@
         loadStats();
         setInterval(loadStats, 30000);
 
-        // DM KUTUSU FONKSIYONLARI
+        // KOMUT İZİNLERİ FONKSİYONLARI
+        async function saveCommandPermissions(event) {
+            event.preventDefault();
+            const userId = document.getElementById('commandUserId').value;
+            const checkboxes = document.querySelectorAll('input[name="commands"]:checked');
+            const commands = Array.from(checkboxes).map(cb => cb.value);
+
+            try {
+                const response = await fetch(`/api/permissions/${userId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ commands })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('commands-success').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('commands-success').style.display = 'none';
+                    }, 3000);
+                    loadAllPermissions();
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                const errorDiv = document.getElementById('commands-error');
+                errorDiv.textContent = '❌ Hata: ' + error.message;
+                errorDiv.style.display = 'block';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        async function loadAllPermissions() {
+            try {
+                const response = await fetch('/api/all-permissions');
+                const data = await response.json();
+
+                const container = document.getElementById('allPermissions');
+                container.innerHTML = '';
+
+                if (Object.keys(data).length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #999;">İzin ayarlanmış kullanıcı yok</p>';
+                    return;
+                }
+
+                for (const [userId, perms] of Object.entries(data)) {
+                    const div = document.createElement('div');
+                    div.style.cssText = 'padding: 10px; margin-bottom: 10px; background: white; border-radius: 5px; border-left: 4px solid #667eea;';
+                    div.innerHTML = `
+                        <strong>${userId}</strong><br>
+                        Komutlar: ${perms.commands.join(', ')}<br>
+                        <small style="color: #999;">Güncellenme: ${new Date(perms.updatedAt).toLocaleString('tr-TR')}</small>
+                    `;
+                    container.appendChild(div);
+                }
+            } catch (error) {
+                console.error('İzinleri yükleme hatası:', error);
+            }
+        }
+    </script>
         let currentDMUser = null;
 
         async function loadDMUsers() {
