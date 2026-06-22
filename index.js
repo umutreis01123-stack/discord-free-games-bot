@@ -267,28 +267,82 @@ client.on('messageCreate', async (message) => {
   }
 
   // PREFIX KOMUTLARI
+  if (!message.content.startsWith('-') && !message.content.startsWith('z!')) return;
+
+  // z! YARDIM KOMUTU
+  if (message.content === 'z!yardım') {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece umutpapa123 kullanabilir!');
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#667eea')
+      .setTitle('📚 ZWOZ Bot - Komut Rehberi')
+      .setDescription('v5.0 - Sadece umutpapa123 kullanabilir')
+      .addFields(
+        { name: 'z!yardım', value: 'Bu mesajı göster' },
+        { name: '-logkanal', value: 'Log kanalı oluştur (Rol, ses, mute olayları)' },
+        { name: '-kanal kilitle', value: 'Kanalı yazılmaya kapalı yap' },
+        { name: '-kanal aç', value: 'Kanalı yazılmaya açık yap' },
+        { name: '-kanal resetle', value: 'Kanal mesajlarını sil' },
+        { name: '-mute @user sebep zaman', value: 'Kullanıcıyı sustur (1s, 5m, 1h)' },
+        { name: '-uyarı @user mesaj', value: 'Uyarı ver (1-5, 5=mute)' },
+        { name: '/ticket', value: 'Ticket sistemi' },
+        { name: '/destek', value: 'Destek sistemi' }
+      )
+      .setFooter({ text: 'WEB PANELİ: ID gir → Komut seç → Çalıştır' })
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+    return;
+  }
+
   if (!message.content.startsWith('-')) return;
 
   const args = message.content.slice(1).split(/ +/);
   const command = args.shift().toLowerCase();
 
-  try {
-    // YARDIM KOMUTU
-    if (command === 'yardım') {
-      const embed = new EmbedBuilder()
-        .setColor('#2ecc71')
-        .setTitle('📚 Bot Komutları')
-        .setDescription('ZWOZ Bot Komutları')
-        .addFields(
-          { name: '🔧 Kanal Komutları', value: '`-kanal kilitle` - Kanalı kilitler\n`-kanal aç` - Kanalı açar\n`-kanal resetle` - Mesajları siler', inline: false },
-          { name: '🚫 Moderasyon', value: '`-mute @user sebep zaman` - Kullanıcıyı sustur\n`-uyarı @user mesaj` - Uyarı ver (1-5, 5=mute)', inline: false },
-          { name: '👥 Davet', value: '`-i` - Davet ettiklerin\n`-botdavet` - Bot linki', inline: false },
-          { name: '👑 Admin (/)', value: '`/rolver @user @role` - Rol ver\n`/rolal @user @role` - Rol al', inline: false }
-        )
-        .setFooter({ text: 'ZWOZ Bot | v2.0' })
-        .setTimestamp();
+  // Tüm prefix komutları için owner check
+  if (message.author.id !== OWNER_ID) {
+    return await message.reply('❌ Sadece umutpapa123 komutları kullanabilir!');
+  }
 
-      await message.reply({ embeds: [embed] });
+  try {
+    // LOG KANAL KOMUTU
+    if (command === 'logkanal') {
+      try {
+        const guild = message.guild;
+        if (!guild) return await message.reply('❌ Bu komut sadece sunucuda kullanılabilir!');
+
+        const logChannel = await guild.channels.create({
+          name: '📋-log',
+          type: ChannelType.GuildText,
+          permissionOverwrites: [
+            {
+              id: guild.id,
+              deny: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.ViewChannel],
+            },
+            {
+              id: OWNER_ID,
+              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+            }
+          ],
+        });
+
+        const embed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('✅ Log Kanalı Oluşturuldu')
+          .setDescription(`${logChannel} kanalında olaylar loglanacak`)
+          .addFields(
+            { name: 'Loglanacak Olaylar', value: '• Rol ver/al\n• Mute/Uyarı\n• Ses giriş/çıkış\n• Kötü mesajlar' }
+          )
+          .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+      } catch (error) {
+        console.error('Log kanal hatası:', error);
+        await message.reply('❌ Hata oluştu!');
+      }
       return;
     }
 
@@ -318,7 +372,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // KANAL AÇ KOMUTU
-    else if (command === 'kanal' && args[0] === 'aç') {
+    if (command === 'kanal' && args[0] === 'aç') {
       if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         return await message.reply('❌ Kanal yönetme yetkisine sahip değilsiniz!');
       }
@@ -343,7 +397,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // KANAL RESETLE KOMUTU
-    else if (command === 'kanal' && args[0] === 'resetle') {
+    if (command === 'kanal' && args[0] === 'resetle') {
       if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
         return await message.reply('❌ Mesaj yönetme yetkisine sahip değilsiniz!');
       }
