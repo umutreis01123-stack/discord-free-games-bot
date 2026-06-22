@@ -208,6 +208,26 @@ function isOwner(userId) {
   return userId === OWNER_ID;
 }
 
+// KOMUT İZNİ KONTROLÜ
+function hasCommandPermission(userId, command) {
+  // Sadece owner tüm komutları kullanabilir
+  if (userId === OWNER_ID) {
+    return true;
+  }
+
+  // Diğer kullanıcılar için izinleri kontrol et
+  try {
+    const permissions = getPermissions();
+    if (permissions[userId] && permissions[userId].commands) {
+      return permissions[userId].commands.includes(command);
+    }
+  } catch (error) {
+    console.error('İzin kontrolü hatası:', error);
+  }
+
+  return false;
+}
+
 // MESAJ LOG SISTEMI
 client.on('messageCreate', async (message) => {
   console.log(`[MESAJ] ${message.author.tag}: "${message.content.substring(0, 50)}" | Guild: ${message.guild?.name || 'DM'}`);
@@ -320,6 +340,10 @@ client.on('messageCreate', async (message) => {
   try {
     // LOG KANAL KOMUTU
     if (command === 'logkanal') {
+      if (!hasCommandPermission(message.author.id, 'logkanal')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       try {
         const guild = message.guild;
         if (!guild) return await message.reply('❌ Bu komut sadece sunucuda kullanılabilir!');
@@ -358,6 +382,10 @@ client.on('messageCreate', async (message) => {
 
     // KANAL KİLİT KOMUTU
     if (command === 'kanal' && args[0] === 'kilitle') {
+      if (!hasCommandPermission(message.author.id, 'kanal-kilitle')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         return await message.reply('❌ Kanal yönetme yetkisine sahip değilsiniz!');
       }
@@ -383,6 +411,10 @@ client.on('messageCreate', async (message) => {
 
     // KANAL AÇ KOMUTU
     if (command === 'kanal' && args[0] === 'aç') {
+      if (!hasCommandPermission(message.author.id, 'kanal-ac')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       if (!message.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         return await message.reply('❌ Kanal yönetme yetkisine sahip değilsiniz!');
       }
@@ -408,6 +440,10 @@ client.on('messageCreate', async (message) => {
 
     // KANAL RESETLE KOMUTU
     if (command === 'kanal' && args[0] === 'resetle') {
+      if (!hasCommandPermission(message.author.id, 'kanal-resetle')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       if (!message.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
         return await message.reply('❌ Mesaj yönetme yetkisine sahip değilsiniz!');
       }
@@ -450,6 +486,10 @@ client.on('messageCreate', async (message) => {
 
     // MUTE KOMUTU
     if (command === 'mute') {
+      if (!hasCommandPermission(message.author.id, 'mute')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
         return await message.reply('❌ Üye susturma yetkisine sahip değilsiniz!');
       }
@@ -502,6 +542,10 @@ client.on('messageCreate', async (message) => {
 
     // UYARI KOMUTU
     if (command === 'uyarı') {
+      if (!hasCommandPermission(message.author.id, 'uyarı')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       if (!message.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
         return await message.reply('❌ Moderasyon yetkisine sahip değilsiniz!');
       }
@@ -523,7 +567,7 @@ client.on('messageCreate', async (message) => {
         });
 
         const warnCount = warnLog[logKey].length;
-        saveMuteLog(warnLog);
+        saveWarnLog(warnLog);
 
         let responseText = `⚠️ ${user.tag} uyarılandı (${warnCount}/5)`;
 
@@ -554,6 +598,10 @@ client.on('messageCreate', async (message) => {
 
     // DAVETLİ KOMUTU
     if (command === 'i') {
+      if (!hasCommandPermission(message.author.id, 'i')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       try {
         const invites = await message.guild.invites.fetch();
         const userInvites = invites.filter(inv => inv.inviter?.id === message.author.id);
@@ -590,6 +638,10 @@ client.on('messageCreate', async (message) => {
 
     // BOT DAVET LINKI
     if (command === 'botdavet') {
+      if (!hasCommandPermission(message.author.id, 'botdavet')) {
+        return await message.reply('❌ Bu komuttu kullanma izniniz yok!');
+      }
+
       try {
         const botLink = `https://discord.com/api/oauth2/authorize?client_id=${client.user.id}&permissions=8&scope=bot%20applications.commands`;
         
