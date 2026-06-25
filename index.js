@@ -185,8 +185,7 @@ function updateBotStatus() {
   
   const statuses = [
     `${serverCount} sunucuda 🤖`,
-    `${totalMembers} kişi kullanıyor 👥`,
-    `Çok tatlış bir botum 😊 | Sorun olursa kurucumla iletişime geçin 📞`
+    `${totalMembers} kişi kullanıyor 👥`
   ];
   
   client.user.setActivity(statuses[statusIndex], { type: 2 });
@@ -437,26 +436,38 @@ client.on('messageCreate', async (message) => {
       const photos = getPhotos();
 
       if (photos.length === 0) {
-        return await message.reply('❌ Henüz fotoğraf yok!');
+        return await message.reply('❌ Henüz onaylanan fotoğraf yok!');
+      }
+
+      const config = getConfig();
+      
+      if (!config.adChannelGuild || !config.adChannelId) {
+        return await message.reply('❌ Reklam kanalı ayarlanmamış! Önce `/reklamkanalı` komutu ile kanal belirle.');
       }
 
       const randomPhoto = photos[Math.floor(Math.random() * photos.length)];
 
       try {
-        const config = getConfig();
         const guild = client.guilds.cache.get(config.adChannelGuild);
         const channel = guild?.channels.cache.get(config.adChannelId);
 
-        if (!channel) {
-          return await message.reply('❌ Reklam kanalı ayarlanmamış!');
+        if (!guild || !channel) {
+          return await message.reply('❌ Sunucu veya reklam kanalı bulunamadı!');
         }
+
+        // Dosya var mı kontrol et
+        if (!fs.existsSync(randomPhoto.filePath)) {
+          return await message.reply(`❌ Fotoğraf dosyası silinmiş: ${randomPhoto.fileName}`);
+        }
+
+        const fileName = path.basename(randomPhoto.filePath);
 
         await channel.send({
           files: [randomPhoto.filePath],
           embeds: [new EmbedBuilder()
             .setColor('#667eea')
             .setTitle('📢 Random Reklam')
-            .setImage(`attachment://` + path.basename(randomPhoto.filePath))
+            .setImage(`attachment://` + fileName)
             .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
             .setTimestamp()
           ]
@@ -465,7 +476,7 @@ client.on('messageCreate', async (message) => {
         await message.reply('✅ Fotoğraf paylaşıldı!');
       } catch (error) {
         console.error('Fotoğraf paylaşma hatası:', error);
-        await message.reply('❌ Hata oluştu!');
+        await message.reply('❌ Hata oluştu: ' + error.message);
       }
     }
 
