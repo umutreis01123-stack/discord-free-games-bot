@@ -227,14 +227,29 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         let config = getConfig();
-        config.adChannelGuild = sunucu_id;
-        config.adChannelId = kanal_id;
+        
+        // adChannels listesi oluştur (eğer yok ise)
+        if (!config.adChannels) {
+          config.adChannels = [];
+        }
+
+        // Aynı sunucu zaten var mı kontrol et
+        const existingIndex = config.adChannels.findIndex(ad => ad.guildId === sunucu_id);
+        
+        if (existingIndex >= 0) {
+          // Var ise güncelle
+          config.adChannels[existingIndex] = { guildId: sunucu_id, channelId: kanal_id };
+        } else {
+          // Yoksa ekle
+          config.adChannels.push({ guildId: sunucu_id, channelId: kanal_id });
+        }
+
         saveConfig(config);
 
         const embed = new EmbedBuilder()
           .setColor('#2ecc71')
-          .setTitle('✅ Reklam Kanalı Ayarlandı')
-          .setDescription(`Sunucu: ${guild.name}\nKanal: ${channel.name}`)
+          .setTitle('✅ Reklam Kanalı Eklendi')
+          .setDescription(`Sunucu: ${guild.name}\nKanal: ${channel.name}\n\nToplam reklam kanalı: ${config.adChannels.length}`)
           .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -441,43 +456,53 @@ client.on('messageCreate', async (message) => {
 
       const config = getConfig();
       
-      if (!config.adChannelGuild || !config.adChannelId) {
-        return await message.reply('❌ Reklam kanalı ayarlanmamış! Önce `/reklamkanalı` komutu ile kanal belirle.');
+      if (!config.adChannels || config.adChannels.length === 0) {
+        return await message.reply('❌ Reklam kanalları ayarlanmamış! Önce `/reklamkanalı` komutu ile kanal belirle.');
       }
 
       const randomPhoto = photos[Math.floor(Math.random() * photos.length)];
 
-      try {
-        const guild = client.guilds.cache.get(config.adChannelGuild);
-        const channel = guild?.channels.cache.get(config.adChannelId);
+      let successCount = 0;
+      let failCount = 0;
 
-        if (!guild || !channel) {
-          return await message.reply('❌ Sunucu veya reklam kanalı bulunamadı!');
+      // Tüm reklam kanallarına gönder
+      for (const adConfig of config.adChannels) {
+        try {
+          const guild = client.guilds.cache.get(adConfig.guildId);
+          const channel = guild?.channels.cache.get(adConfig.channelId);
+
+          if (!channel) {
+            failCount++;
+            continue;
+          }
+
+          // Dosya var mı kontrol et
+          if (!fs.existsSync(randomPhoto.filePath)) {
+            failCount++;
+            continue;
+          }
+
+          const fileName = path.basename(randomPhoto.filePath);
+
+          await channel.send({
+            files: [randomPhoto.filePath],
+            embeds: [new EmbedBuilder()
+              .setColor('#667eea')
+              .setTitle('📢 Random Reklam')
+              .setImage(`attachment://` + fileName)
+              .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
+              .setTimestamp()
+            ]
+          });
+
+          successCount++;
+        } catch (error) {
+          console.error(`Sunucu ${adConfig.guildId} fotoğraf gönderme hatası:`, error);
+          failCount++;
         }
-
-        // Dosya var mı kontrol et
-        if (!fs.existsSync(randomPhoto.filePath)) {
-          return await message.reply(`❌ Fotoğraf dosyası silinmiş: ${randomPhoto.fileName}`);
-        }
-
-        const fileName = path.basename(randomPhoto.filePath);
-
-        await channel.send({
-          files: [randomPhoto.filePath],
-          embeds: [new EmbedBuilder()
-            .setColor('#667eea')
-            .setTitle('📢 Random Reklam')
-            .setImage(`attachment://` + fileName)
-            .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
-            .setTimestamp()
-          ]
-        });
-
-        await message.reply('✅ Fotoğraf paylaşıldı!');
-      } catch (error) {
-        console.error('Fotoğraf paylaşma hatası:', error);
-        await message.reply('❌ Hata oluştu: ' + error.message);
       }
+
+      await message.reply(`✅ ${successCount} sunucuya fotoğraf paylaşıldı${failCount > 0 ? ` (${failCount} hata)` : ''}`);
     }
 
   } catch (error) {
@@ -487,7 +512,7 @@ client.on('messageCreate', async (message) => {
 
 // WEB SERVER
 
-// REKLAM MESAJI GÖNDER
+// REKLAM MESAJI GÖNDER (TÜM SUNUCULARA)
 app.post('/api/send-ad', async (req, res) => {
   try {
     const { message } = req.body;
@@ -498,25 +523,44 @@ app.post('/api/send-ad', async (req, res) => {
 
     const config = getConfig();
 
-    if (!config.adChannelGuild || !config.adChannelId) {
-      return res.status(400).json({ success: false, error: 'Reklam kanalı ayarlanmamış' });
+    if (!config.adChannels || config.adChannels.length === 0) {
+      return res.status(400).json({ success: false, error: 'Reklam kanalları ayarlanmamış' });
     }
 
-    const guild = client.guilds.cache.get(config.adChannelGuild);
-    const channel = guild?.channels.cache.get(config.adChannelId);
+    let successCount = 0;
+    let failCount = 0;
 
-    if (!channel) {
-      return res.status(404).json({ success: false, error: 'Reklam kanalı bulunamadı' });
+    // Tüm ayarlanmış sunuculara gönder
+    for (const adConfig of config.adChannels) {
+      try {
+        const guild = client.guilds.cache.get(adConfig.guildId);
+        const channel = guild?.channels.cache.get(adConfig.channelId);
+
+        if (!channel) {
+          failCount++;
+          continue;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor('#667eea')
+          .setTitle('📢 Reklam Mesajı')
+          .setDescription(message)
+          .setTimestamp();
+
+        await channel.send({ embeds: [embed] });
+        successCount++;
+      } catch (error) {
+        console.error(`Sunucu ${adConfig.guildId} mesaj gönderme hatası:`, error);
+        failCount++;
+      }
     }
 
-    const embed = new EmbedBuilder()
-      .setColor('#667eea')
-      .setTitle('📢 Reklam Mesajı')
-      .setDescription(message)
-      .setTimestamp();
-
-    await channel.send({ embeds: [embed] });
-    res.json({ success: true, message: 'Mesaj gönderildi' });
+    res.json({ 
+      success: true, 
+      message: `${successCount} sunucuya mesaj gönderildi`,
+      sent: successCount,
+      failed: failCount
+    });
   } catch (error) {
     console.error('Reklam mesajı gönderme hatası:', error);
     res.status(500).json({ success: false, error: error.message });
