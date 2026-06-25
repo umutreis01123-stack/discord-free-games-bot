@@ -442,7 +442,7 @@ client.on('messageCreate', async (message) => {
   const command = args.shift().toLowerCase();
 
   try {
-    // RANDOM FOTOĞRAF PAYLAŞ
+    // RANDOM FOTOĞRAF PAYLAŞ (KOMUTU YAZILAN KANALA)
     if (command === 'randomfoto') {
       if (message.author.id !== OWNER_ID) {
         return await message.reply('❌ Sadece owner kullanabilir!');
@@ -454,55 +454,33 @@ client.on('messageCreate', async (message) => {
         return await message.reply('❌ Henüz onaylanan fotoğraf yok!');
       }
 
-      const config = getConfig();
-      
-      if (!config.adChannels || config.adChannels.length === 0) {
-        return await message.reply('❌ Reklam kanalları ayarlanmamış! Önce `/reklamkanalı` komutu ile kanal belirle.');
-      }
-
       const randomPhoto = photos[Math.floor(Math.random() * photos.length)];
 
-      let successCount = 0;
-      let failCount = 0;
-
-      // Tüm reklam kanallarına gönder
-      for (const adConfig of config.adChannels) {
-        try {
-          const guild = client.guilds.cache.get(adConfig.guildId);
-          const channel = guild?.channels.cache.get(adConfig.channelId);
-
-          if (!channel) {
-            failCount++;
-            continue;
-          }
-
-          // Dosya var mı kontrol et
-          if (!fs.existsSync(randomPhoto.filePath)) {
-            failCount++;
-            continue;
-          }
-
-          const fileName = path.basename(randomPhoto.filePath);
-
-          await channel.send({
-            files: [randomPhoto.filePath],
-            embeds: [new EmbedBuilder()
-              .setColor('#667eea')
-              .setTitle('📢 Random Reklam')
-              .setImage(`attachment://` + fileName)
-              .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
-              .setTimestamp()
-            ]
-          });
-
-          successCount++;
-        } catch (error) {
-          console.error(`Sunucu ${adConfig.guildId} fotoğraf gönderme hatası:`, error);
-          failCount++;
+      try {
+        // Dosya var mı kontrol et
+        if (!fs.existsSync(randomPhoto.filePath)) {
+          return await message.reply(`❌ Fotoğraf dosyası silinmiş: ${randomPhoto.fileName}`);
         }
-      }
 
-      await message.reply(`✅ ${successCount} sunucuya fotoğraf paylaşıldı${failCount > 0 ? ` (${failCount} hata)` : ''}`);
+        const fileName = path.basename(randomPhoto.filePath);
+
+        // Komutu yazılan kanala gönder
+        await message.channel.send({
+          files: [randomPhoto.filePath],
+          embeds: [new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('📢 Random Reklam')
+            .setImage(`attachment://` + fileName)
+            .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
+            .setTimestamp()
+          ]
+        });
+
+        await message.reply('✅ Fotoğraf bu kanala paylaşıldı!');
+      } catch (error) {
+        console.error('Fotoğraf paylaşma hatası:', error);
+        await message.reply('❌ Hata oluştu: ' + error.message);
+      }
     }
 
   } catch (error) {
