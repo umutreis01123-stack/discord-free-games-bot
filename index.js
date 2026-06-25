@@ -469,7 +469,7 @@ client.on('messageCreate', async (message) => {
           files: [randomPhoto.filePath],
           embeds: [new EmbedBuilder()
             .setColor('#667eea')
-            .setTitle('📢 Random Reklam')
+            .setTitle('📸 Random Foto')
             .setImage(`attachment://` + fileName)
             .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
             .setTimestamp()
