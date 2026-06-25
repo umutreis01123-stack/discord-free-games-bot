@@ -120,6 +120,7 @@ initFiles();
 // Bot ready
 client.once('ready', async () => {
   console.log('✅ Bot çalışıyor: ' + client.user.tag);
+  console.log('📊 Toplam Sunucu: ' + client.guilds.cache.size);
   
   try {
     console.log('⚙️ Slash komutları kurgulanıyor...');
@@ -162,9 +163,37 @@ client.once('ready', async () => {
     await client.application.commands.set(commands);
     console.log('✅ Slash komutları eklendi: ' + commands.length);
     
+    // BOT STATUS'UNU BAŞLAT (Her 5 saniye değiş)
+    updateBotStatus();
+    setInterval(updateBotStatus, 5000);
+    
   } catch (error) {
     console.error('❌ Komut kurulum hatası:', error);
   }
+});
+
+// BOT STATUS UPDATE
+let statusIndex = 0;
+function updateBotStatus() {
+  const serverCount = client.guilds.cache.size;
+  
+  const statuses = [
+    `${serverCount} sunucuda 🤖`,
+    `Çok tatlış bir botum 😊 | Sorun olursa kurucumla iletişime geçin 📞`
+  ];
+  
+  client.user.setActivity(statuses[statusIndex], { type: 2 });
+  statusIndex = (statusIndex + 1) % statuses.length;
+}
+
+// Yeni sunucu eklenirse
+client.on('guildCreate', (guild) => {
+  console.log(`➕ Yeni sunucu: ${guild.name} (Toplam: ${client.guilds.cache.size})`);
+});
+
+// Sunucu kaldırılırsa
+client.on('guildDelete', (guild) => {
+  console.log(`➖ Sunucu kaldırıldı: ${guild.name} (Toplam: ${client.guilds.cache.size})`);
 });
 
 // Slash Commands
