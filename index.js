@@ -177,8 +177,15 @@ let statusIndex = 0;
 function updateBotStatus() {
   const serverCount = client.guilds.cache.size;
   
+  // Tüm sunuculardaki toplam üye sayısını hesapla
+  let totalMembers = 0;
+  client.guilds.cache.forEach(guild => {
+    totalMembers += guild.memberCount;
+  });
+  
   const statuses = [
     `${serverCount} sunucuda 🤖`,
+    `${totalMembers} kişi kullanıyor 👥`,
     `Çok tatlış bir botum 😊 | Sorun olursa kurucumla iletişime geçin 📞`
   ];
   
