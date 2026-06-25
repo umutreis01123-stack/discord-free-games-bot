@@ -268,7 +268,7 @@
 
         <!-- FOTOĞRAF YÜKLE -->
         <div id="upload" class="tab-content active">
-            <h2>📤 Fotoğraf Yükle</h2>
+            <h2>📤 Fotoğraf Yükle (Random Paylaş)</h2>
             <form onsubmit="uploadPhoto(event)">
                 <div class="form-group">
                     <label>İsim:</label>
@@ -289,6 +289,20 @@
                 <button type="submit">📤 Yükle</button>
                 <div class="success" id="upload-success">✅ Fotoğraf yüklendi!</div>
                 <div class="error" id="upload-error"></div>
+            </form>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+
+            <h2>📢 Reklam Mesajı Gönder</h2>
+            <form onsubmit="sendAd(event)">
+                <div class="form-group">
+                    <label>Reklam Mesajı:</label>
+                    <textarea id="adMessage" placeholder="Göndermek istediğiniz reklam mesajını yazın..." required></textarea>
+                </div>
+
+                <button type="submit">📤 Gönder</button>
+                <div class="success" id="ad-success">✅ Mesaj gönderildi!</div>
+                <div class="error" id="ad-error"></div>
             </form>
         </div>
 
@@ -449,6 +463,40 @@
             setTimeout(() => {
                 element.style.display = 'none';
             }, 5000);
+        }
+
+        // REKLAM MESAJI GÖNDER
+        async function sendAd(event) {
+            event.preventDefault();
+            const message = document.getElementById('adMessage').value;
+
+            if (!message) {
+                showError('ad-error', 'Mesaj yazın!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/send-ad', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('ad-success').style.display = 'block';
+                    document.getElementById('adMessage').value = '';
+                    setTimeout(() => {
+                        document.getElementById('ad-success').style.display = 'none';
+                    }, 3000);
+                    loadStats();
+                } else {
+                    showError('ad-error', result.error);
+                }
+            } catch (error) {
+                showError('ad-error', error.message);
+            }
         }
 
         // BAŞLANGIÇ

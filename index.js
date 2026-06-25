@@ -487,6 +487,42 @@ client.on('messageCreate', async (message) => {
 
 // WEB SERVER
 
+// REKLAM MESAJI GÖNDER
+app.post('/api/send-ad', async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Mesaj gerekli' });
+    }
+
+    const config = getConfig();
+
+    if (!config.adChannelGuild || !config.adChannelId) {
+      return res.status(400).json({ success: false, error: 'Reklam kanalı ayarlanmamış' });
+    }
+
+    const guild = client.guilds.cache.get(config.adChannelGuild);
+    const channel = guild?.channels.cache.get(config.adChannelId);
+
+    if (!channel) {
+      return res.status(404).json({ success: false, error: 'Reklam kanalı bulunamadı' });
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#667eea')
+      .setTitle('📢 Reklam Mesajı')
+      .setDescription(message)
+      .setTimestamp();
+
+    await channel.send({ embeds: [embed] });
+    res.json({ success: true, message: 'Mesaj gönderildi' });
+  } catch (error) {
+    console.error('Reklam mesajı gönderme hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // FOTOĞRAF YÜKLE
 app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
   try {
