@@ -454,7 +454,19 @@ client.on('messageCreate', async (message) => {
         return await message.reply('❌ Henüz onaylanan fotoğraf yok!');
       }
 
-      const randomPhoto = photos[Math.floor(Math.random() * photos.length)];
+      const config = getConfig();
+
+      // Sıra indexini al (yoksa 0'dan başla)
+      if (config.photoQueueIndex === undefined) {
+        config.photoQueueIndex = 0;
+      }
+
+      // Sıradaki fotoğrafı al
+      const randomPhoto = photos[config.photoQueueIndex];
+
+      // Sırayı bir sonrakine ilerlet
+      config.photoQueueIndex = (config.photoQueueIndex + 1) % photos.length;
+      saveConfig(config);
 
       try {
         // Dosya var mı kontrol et
@@ -476,7 +488,7 @@ client.on('messageCreate', async (message) => {
           ]
         });
 
-        await message.reply('✅ Fotoğraf bu kanala paylaşıldı!');
+        await message.reply(`✅ Fotoğraf paylaşıldı! (${config.photoQueueIndex}/${photos.length})`);
       } catch (error) {
         console.error('Fotoğraf paylaşma hatası:', error);
         await message.reply('❌ Hata oluştu: ' + error.message);
