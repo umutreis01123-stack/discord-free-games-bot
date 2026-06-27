@@ -6,13 +6,14 @@ const fs = require('fs');
 
 /*
 =================================================================
-ZWOZ BOT v6.0 - TICKET & DM LOG SİSTEMİ
+ZWOZ BOT v6.1 - TICKET & DM LOG & KAYIT SİSTEMİ
 =================================================================
 
 KOMUTLAR (/):
-- /sorumlu ayarla @user     → Ticket sorumlusu belirle
-- /dmlogkur                  → DM log kanalı ayarla
-- /kayıtolkur                → Kayıt sistemi kanalı ayarla
+- /sorumlu @user     → Ticket sorumlusu belirle
+- /dmlogkur          → DM log kanalı ayarla
+- /kayıtolkur        → Kayıt sistemi butonunu göster
+- /ticket            → Ticket sistemi
 
 TİCKET SİSTEMİ:
 1. Talep Üstlen → Sorumlu atanır
@@ -20,13 +21,12 @@ TİCKET SİSTEMİ:
 
 DM LOG SİSTEMİ:
 - Bot DM alırsa → Log kanalına kaydedilir
-- Kullanıcı yanıt yazarsa → Log kanalına kaydedilir
 
 KAYIT SİSTEMİ:
-- /kayıtolkur ile aktif edilir
-- Kullanıcı DM'de başlayabilir
-- İsim + Yaş sorulur
-- Sunucuya kaydedilir
+- /kayıtolkur ile buton gösterilir
+- Butona tıkla → DM'de isim sorusu
+- İsim + Yaş girişi
+- Sunucuda isim & yaş gösterilir
 
 =================================================================
 */
@@ -124,11 +124,17 @@ client.once('ready', async () => {
       
       new SlashCommandBuilder()
         .setName('kayıtolkur')
-        .setDescription('📝 Kayıt sistemi kanalını ayarla'),
+        .setDescription('📝 Kayıt sistemi butonunu göster'),
 
       new SlashCommandBuilder()
         .setName('ticket')
         .setDescription('🎫 Ticket aç'),
+
+      new SlashCommandBuilder()
+        .setName('dmmesajyolla')
+        .setDescription('💬 Kullanıcıya DM gönder')
+        .addUserOption(option => option.setName('kullanici').setDescription('Mesaj göndereceği kullanıcı').setRequired(true))
+        .addStringOption(option => option.setName('mesaj').setDescription('Gönderilecek mesaj').setRequired(true)),
     ];
 
     await client.application.commands.set(commands);
@@ -173,12 +179,11 @@ async function saveDMLog(userId, username, message, type) {
   }
 
   logs[key].messages.push({
-    author: type, // 'user' or 'bot'
+    author: type,
     content: message,
     timestamp: new Date().toISOString()
   });
 
-  // Son 100 mesajı tut
   if (logs[key].messages.length > 100) {
     logs[key].messages = logs[key].messages.slice(-100);
   }
@@ -219,58 +224,68 @@ client.on('messageCreate', async (message) => {
       }
     }
 
-    // Kayıt sistemi kontrolü
-    const config2 = getConfig();
-    if (config2.registrationEnabled) {
-      const registers = getRegisters();
-      const userReg = registers[message.author.id];
+    // KAYIT SISTEMI
+    const registers = getRegisters();
+    const userReg = registers[message.author.id];
 
-      if (!userReg) {
-        // Yeni kayıt başlat
-        if (message.content.toLowerCase() === 'tamam' || message.content.toLowerCase() === 'ok' || message.content.toLowerCase() === 'tm') {
-          registers[message.author.id] = { step: 'name_wait', username: message.author.tag };
-          saveRegisters(registers);
-          
-          await message.reply('📝 Lütfen adınızı yazın:');
-          return;
-        }
-      } else if (userReg.step === 'name_wait') {
-        userReg.name = message.content;
-        userReg.step = 'age_wait';
-        saveRegisters(registers);
-        
-        await message.reply('📝 Lütfen yaşınızı yazın:');
-        return;
-      } else if (userReg.step === 'age_wait') {
-        userReg.age = message.content;
-        userReg.step = 'completed';
-        userReg.registeredAt = new Date().toISOString();
-        saveRegisters(registers);
-        
-        await message.reply(`✅ Kaydınız tamamlandı!\n**İsim:** ${userReg.name}\n**Yaş:** ${userReg.age}`);
+    if (userReg && userReg.step === 'name_wait') {
+      userReg.name = message.content;
+      userReg.step = 'age_wait';
+      saveRegisters(registers);
+      
+      await message.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#f39c12')
+            .setTitle('📝 Yaşınız?')
+            .setDescription(`**İsim:** ${userReg.name}\n\nLütfen **yaşınızı** yazın`)
+            .setTimestamp()
+        ]
+      });
+      return;
+    }
 
-        // Sunucuya gönder
-        if (config2.registrationGuildId) {
-          const guild = client.guilds.cache.get(config2.registrationGuildId);
-          if (guild) {
-            try {
-              const embed = new EmbedBuilder()
-                .setColor('#2ecc71')
-                .setTitle('📝 Yeni Kayıt')
-                .setDescription(`**İsim:** ${userReg.name}\n**Yaş:** ${userReg.age}\n**Kullanıcı:** ${message.author.tag}`)
-                .setTimestamp();
+    if (userReg && userReg.step === 'age_wait') {
+      userReg.age = message.content;
+      userReg.step = 'completed';
+      saveRegisters(registers);
+      
+      await message.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Kayıt Tamamlandı!')
+            .setDescription(`**İsim:** ${userReg.name}\n**Yaş:** ${userReg.age}\n\nSunucuya kaydedildiniz`)
+            .setTimestamp()
+        ]
+      });
 
-              const generalChannel = guild.channels.cache.find(ch => ch.name === 'genel' || ch.name === 'general');
-              if (generalChannel) {
-                await generalChannel.send({ embeds: [embed] });
-              }
-            } catch (error) {
-              console.error('Kayıt gönderme hatası:', error);
+      // Sunucuda göster
+      if (userReg.guildId) {
+        const guild = client.guilds.cache.get(userReg.guildId);
+        if (guild) {
+          try {
+            const embed = new EmbedBuilder()
+              .setColor('#2ecc71')
+              .setTitle('✅ Yeni Kayıt')
+              .addFields(
+                { name: '👤 İsim', value: userReg.name, inline: true },
+                { name: '🎂 Yaş', value: userReg.age, inline: true },
+                { name: '📱 Kullanıcı', value: message.author.tag, inline: false }
+              )
+              .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+              .setTimestamp();
+
+            const generalChannel = guild.channels.cache.find(ch => ch.name === 'genel' || ch.name === 'general' || ch.isTextBased());
+            if (generalChannel) {
+              await generalChannel.send({ embeds: [embed] });
             }
+          } catch (error) {
+            console.error('Kayıt gönderme hatası:', error);
           }
         }
-        return;
       }
+      return;
     }
   }
 });
@@ -327,7 +342,7 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // KAYIT SISTEMI KANALINI AYARLA
+      // KAYIT SISTEMI BUTONUNU GÖSTER
       else if (commandName === 'kayıtolkur') {
         if (user.id !== OWNER_ID) {
           return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
@@ -336,15 +351,25 @@ client.on('interactionCreate', async (interaction) => {
         let config = getConfig();
         config.registrationEnabled = true;
         config.registrationGuildId = interaction.guildId;
+        config.registrationChannelId = interaction.channelId;
         saveConfig(config);
+
+        const registerBtn = new ButtonBuilder()
+          .setCustomId('start_registration')
+          .setLabel('📝 Kayıt Ol')
+          .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(registerBtn);
 
         const embed = new EmbedBuilder()
           .setColor('#2ecc71')
-          .setTitle('✅ Kayıt Sistemi Aktif Edildi')
-          .setDescription('Kullanıcılar bota DM yazarak kayıt olabilirler\n\nKayıt için: `tamam`, `ok` veya `tm` yazmalıdırlar')
+          .setTitle('📝 Kayıt Sistemi')
+          .setDescription('Aşağıdaki buton ile kayıt olabilirsiniz\n\n**Kayıt için:**\n• İsminiz\n• Yaşınız\n\ngereklidir')
           .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+
+        await interaction.reply({ content: '✅ Kayıt sistemi butonları gösterildi', ephemeral: true });
       }
 
       // TICKET COMMAND
@@ -364,13 +389,57 @@ client.on('interactionCreate', async (interaction) => {
 
         await interaction.reply({ embeds: [embed], components: [row] });
       }
-    }
 
     // BUTTON HANDLER
     else if (interaction.isButton()) {
       const { customId } = interaction;
 
-      if (customId === 'create_ticket') {
+      // KAYIT BASLA
+      if (customId === 'start_registration') {
+        try {
+          const registers = getRegisters();
+          
+          if (registers[user.id] && registers[user.id].step === 'completed') {
+            return await interaction.reply({ 
+              content: '❌ Zaten kayıtlısınız!', 
+              ephemeral: true 
+            });
+          }
+
+          registers[user.id] = { 
+            step: 'name_wait',
+            username: user.tag,
+            guildId: interaction.guildId,
+            registeredAt: new Date().toISOString()
+          };
+          saveRegisters(registers);
+
+          await user.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor('#2ecc71')
+                .setTitle('📝 Kayıt Başladı')
+                .setDescription('Lütfen **adınızı** yazın')
+                .setTimestamp()
+            ]
+          });
+
+          await interaction.reply({ 
+            content: '✅ DM\'inize kayıt mesajı gönderildi!', 
+            ephemeral: true 
+          });
+
+        } catch (error) {
+          console.error('Kayıt başlatma hatası:', error);
+          await interaction.reply({ 
+            content: '❌ Hata oluştu!', 
+            ephemeral: true 
+          });
+        }
+      }
+
+      // TICKET SISTEMI
+      else if (customId === 'create_ticket') {
         const guild = interaction.guild;
         const tickets = getTickets();
         const config = getConfig();
