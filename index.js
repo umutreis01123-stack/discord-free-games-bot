@@ -3,26 +3,30 @@ const { Client, GatewayIntentBits, EmbedBuilder, ChannelType, PermissionFlagsBit
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 
 /*
 =================================================================
-ZWOZ BOT v5.0 - SUNUCU GÜVENLİĞİ & REKLAM YÖNETIMI
+ZWOZ BOT v6.0 - TICKET & DM LOG SİSTEMİ
 =================================================================
 
-KOMUTLAR:
-- /reklamkanalı          → Reklam sunucusu & kanalı belirle
-- -randomfoto            → Siteden fotoğraf yükle
-- /fotoyasak             → Fotoğraf kontrolünü aç
-- /fotokapa              → Fotoğraf kontrolünü kapat
-- /adminayarla @user     → Admin ekle
-- /admin-kaldır @user    → Admin çıkar
+KOMUTLAR (/):
+- /sorumlu ayarla @user     → Ticket sorumlusu belirle
+- /dmlogkur                  → DM log kanalı ayarla
+- /kayıtolkur                → Kayıt sistemi kanalı ayarla
 
-İŞLEYİŞ:
-1. Web sitesinden fotoğraf yükle
-2. Admin onay bekle (Onayla/Reddet)
-3. -randomfoto ile random paylaş
-4. Reklam kanalına gönder
+TİCKET SİSTEMİ:
+1. Talep Üstlen → Sorumlu atanır
+2. Ticket Kapat → Kanal 5s sonra silinir
+
+DM LOG SİSTEMİ:
+- Bot DM alırsa → Log kanalına kaydedilir
+- Kullanıcı yanıt yazarsa → Log kanalına kaydedilir
+
+KAYIT SİSTEMİ:
+- /kayıtolkur ile aktif edilir
+- Kullanıcı DM'de başlayabilir
+- İsim + Yaş sorulur
+- Sunucuya kaydedilir
 
 =================================================================
 */
@@ -32,31 +36,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.static('public'));
-
-// Fotoğraf upload ayarları
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = './uploads';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
-});
-
-const upload = multer({
-  storage: storage,
-  fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Sadece resim dosyaları yükleme yapılabilir'));
-    }
-  },
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
-});
 
 const client = new Client({
   intents: [
@@ -70,17 +49,17 @@ const client = new Client({
 
 const OWNER_ID = '1403495996138323989';
 
-// JSON Files
+// JSON FILES
 const configFile = './config.json';
-const photosFile = './photos.json';
-const adminsFile = './admins.json';
-const pendingFile = './pending-photos.json';
+const dmLogFile = './dm-logs.json';
+const registersFile = './registers.json';
+const ticketsFile = './tickets.json';
 
 function initFiles() {
   if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({}));
-  if (!fs.existsSync(photosFile)) fs.writeFileSync(photosFile, JSON.stringify([]));
-  if (!fs.existsSync(adminsFile)) fs.writeFileSync(adminsFile, JSON.stringify({}));
-  if (!fs.existsSync(pendingFile)) fs.writeFileSync(pendingFile, JSON.stringify([]));
+  if (!fs.existsSync(dmLogFile)) fs.writeFileSync(dmLogFile, JSON.stringify({}));
+  if (!fs.existsSync(registersFile)) fs.writeFileSync(registersFile, JSON.stringify({}));
+  if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
 }
 
 function getConfig() {
@@ -91,36 +70,35 @@ function saveConfig(data) {
   fs.writeFileSync(configFile, JSON.stringify(data, null, 2));
 }
 
-function getPhotos() {
-  return JSON.parse(fs.readFileSync(photosFile, 'utf8'));
+function getDMLogs() {
+  return JSON.parse(fs.readFileSync(dmLogFile, 'utf8'));
 }
 
-function savePhotos(data) {
-  fs.writeFileSync(photosFile, JSON.stringify(data, null, 2));
+function saveDMLogs(data) {
+  fs.writeFileSync(dmLogFile, JSON.stringify(data, null, 2));
 }
 
-function getAdmins() {
-  return JSON.parse(fs.readFileSync(adminsFile, 'utf8'));
+function getRegisters() {
+  return JSON.parse(fs.readFileSync(registersFile, 'utf8'));
 }
 
-function saveAdmins(data) {
-  fs.writeFileSync(adminsFile, JSON.stringify(data, null, 2));
+function saveRegisters(data) {
+  fs.writeFileSync(registersFile, JSON.stringify(data, null, 2));
 }
 
-function getPending() {
-  return JSON.parse(fs.readFileSync(pendingFile, 'utf8'));
+function getTickets() {
+  return JSON.parse(fs.readFileSync(ticketsFile, 'utf8'));
 }
 
-function savePending(data) {
-  fs.writeFileSync(pendingFile, JSON.stringify(data, null, 2));
+function saveTickets(data) {
+  fs.writeFileSync(ticketsFile, JSON.stringify(data, null, 2));
 }
 
 initFiles();
 
-// Bot ready
+// BOT READY
 client.once('ready', async () => {
   console.log('✅ Bot çalışıyor: ' + client.user.tag);
-  console.log('📊 Toplam Sunucu: ' + client.guilds.cache.size);
   
   try {
     console.log('⚙️ Slash komutları kurgulanıyor...');
@@ -136,34 +114,27 @@ client.once('ready', async () => {
 
     const commands = [
       new SlashCommandBuilder()
-        .setName('reklamkanalı')
-        .setDescription('📢 Reklam sunucusu ve kanalı belirle')
-        .addStringOption(option => option.setName('sunucu_id').setDescription('Sunucu ID').setRequired(true))
-        .addStringOption(option => option.setName('kanal_id').setDescription('Kanal ID').setRequired(true)),
+        .setName('sorumlu')
+        .setDescription('👨‍💼 Ticket sorumlusunu belirle')
+        .addUserOption(option => option.setName('kullanici').setDescription('Sorumlu yapılacak kullanıcı').setRequired(true)),
       
       new SlashCommandBuilder()
-        .setName('fotoyasak')
-        .setDescription('🔒 Fotoğraf kontrolünü aç'),
+        .setName('dmlogkur')
+        .setDescription('📋 DM log kanalını ayarla'),
       
       new SlashCommandBuilder()
-        .setName('fotokapa')
-        .setDescription('🔓 Fotoğraf kontrolünü kapat'),
-      
+        .setName('kayıtolkur')
+        .setDescription('📝 Kayıt sistemi kanalını ayarla'),
+
       new SlashCommandBuilder()
-        .setName('adminayarla')
-        .setDescription('👨‍💼 Admin ekle')
-        .addUserOption(option => option.setName('kullanici').setDescription('Admin yapılacak kullanıcı').setRequired(true)),
-      
-      new SlashCommandBuilder()
-        .setName('admin-kaldır')
-        .setDescription('❌ Admin kaldır')
-        .addUserOption(option => option.setName('kullanici').setDescription('Admin kaldırılacak kullanıcı').setRequired(true)),
+        .setName('ticket')
+        .setDescription('🎫 Ticket aç'),
     ];
 
     await client.application.commands.set(commands);
     console.log('✅ Slash komutları eklendi: ' + commands.length);
     
-    // BOT STATUS'UNU BAŞLAT (Her 5 saniye değiş)
+    // Bot status
     updateBotStatus();
     setInterval(updateBotStatus, 5000);
     
@@ -172,12 +143,9 @@ client.once('ready', async () => {
   }
 });
 
-// BOT STATUS UPDATE
 let statusIndex = 0;
 function updateBotStatus() {
   const serverCount = client.guilds.cache.size;
-  
-  // Tüm sunuculardaki toplam üye sayısını hesapla
   let totalMembers = 0;
   client.guilds.cache.forEach(guild => {
     totalMembers += guild.memberCount;
@@ -192,17 +160,122 @@ function updateBotStatus() {
   statusIndex = (statusIndex + 1) % statuses.length;
 }
 
-// Yeni sunucu eklenirse
-client.on('guildCreate', (guild) => {
-  console.log(`➕ Yeni sunucu: ${guild.name} (Toplam: ${client.guilds.cache.size})`);
+// DM MESAJ KAYDET
+async function saveDMLog(userId, username, message, type) {
+  const logs = getDMLogs();
+  const key = userId;
+
+  if (!logs[key]) {
+    logs[key] = {
+      username: username,
+      messages: []
+    };
+  }
+
+  logs[key].messages.push({
+    author: type, // 'user' or 'bot'
+    content: message,
+    timestamp: new Date().toISOString()
+  });
+
+  // Son 100 mesajı tut
+  if (logs[key].messages.length > 100) {
+    logs[key].messages = logs[key].messages.slice(-100);
+  }
+
+  saveDMLogs(logs);
+}
+
+// DM MESSAGE HANDLER
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  // DM'leri kaydet
+  if (!message.guild) {
+    console.log(`[DM] ${message.author.tag}: ${message.content}`);
+    
+    await saveDMLog(message.author.id, message.author.tag, message.content, 'user');
+
+    const config = getConfig();
+    
+    // Log kanalına gönder
+    if (config.dmLogChannelId && config.dmLogGuildId) {
+      try {
+        const guild = client.guilds.cache.get(config.dmLogGuildId);
+        const channel = guild?.channels.cache.get(config.dmLogChannelId);
+
+        if (channel) {
+          const embed = new EmbedBuilder()
+            .setColor('#3498db')
+            .setTitle('📨 DM Alındı')
+            .setDescription(`**Gönderen:** ${message.author.tag}\n**Mesaj:** ${message.content}`)
+            .setFooter({ text: message.author.id })
+            .setTimestamp();
+
+          await channel.send({ embeds: [embed] });
+        }
+      } catch (error) {
+        console.error('DM log gönderme hatası:', error);
+      }
+    }
+
+    // Kayıt sistemi kontrolü
+    const config2 = getConfig();
+    if (config2.registrationEnabled) {
+      const registers = getRegisters();
+      const userReg = registers[message.author.id];
+
+      if (!userReg) {
+        // Yeni kayıt başlat
+        if (message.content.toLowerCase() === 'tamam' || message.content.toLowerCase() === 'ok' || message.content.toLowerCase() === 'tm') {
+          registers[message.author.id] = { step: 'name_wait', username: message.author.tag };
+          saveRegisters(registers);
+          
+          await message.reply('📝 Lütfen adınızı yazın:');
+          return;
+        }
+      } else if (userReg.step === 'name_wait') {
+        userReg.name = message.content;
+        userReg.step = 'age_wait';
+        saveRegisters(registers);
+        
+        await message.reply('📝 Lütfen yaşınızı yazın:');
+        return;
+      } else if (userReg.step === 'age_wait') {
+        userReg.age = message.content;
+        userReg.step = 'completed';
+        userReg.registeredAt = new Date().toISOString();
+        saveRegisters(registers);
+        
+        await message.reply(`✅ Kaydınız tamamlandı!\n**İsim:** ${userReg.name}\n**Yaş:** ${userReg.age}`);
+
+        // Sunucuya gönder
+        if (config2.registrationGuildId) {
+          const guild = client.guilds.cache.get(config2.registrationGuildId);
+          if (guild) {
+            try {
+              const embed = new EmbedBuilder()
+                .setColor('#2ecc71')
+                .setTitle('📝 Yeni Kayıt')
+                .setDescription(`**İsim:** ${userReg.name}\n**Yaş:** ${userReg.age}\n**Kullanıcı:** ${message.author.tag}`)
+                .setTimestamp();
+
+              const generalChannel = guild.channels.cache.find(ch => ch.name === 'genel' || ch.name === 'general');
+              if (generalChannel) {
+                await generalChannel.send({ embeds: [embed] });
+              }
+            } catch (error) {
+              console.error('Kayıt gönderme hatası:', error);
+            }
+          }
+        }
+        return;
+      }
+    }
+  }
 });
 
-// Sunucu kaldırılırsa
-client.on('guildDelete', (guild) => {
-  console.log(`➖ Sunucu kaldırıldı: ${guild.name} (Toplam: ${client.guilds.cache.size})`);
-});
-
-// Slash Commands
+// SLASH COMMANDS
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
@@ -210,217 +283,191 @@ client.on('interactionCreate', async (interaction) => {
 
   try {
     if (interaction.isChatInputCommand()) {
-      // REKLAM KANALINI BELIRLE
-      if (commandName === 'reklamkanalı') {
+      // SORUMLU AYARLA
+      if (commandName === 'sorumlu') {
         if (user.id !== OWNER_ID) {
           return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
         }
 
-        const sunucu_id = interaction.options.getString('sunucu_id');
-        const kanal_id = interaction.options.getString('kanal_id');
-
-        const guild = client.guilds.cache.get(sunucu_id);
-        const channel = guild?.channels.cache.get(kanal_id);
-
-        if (!guild || !channel) {
-          return await interaction.reply({ content: '❌ Sunucu veya kanal bulunamadı!', ephemeral: true });
-        }
-
+        const targetUser = interaction.options.getUser('kullanici');
         let config = getConfig();
-        
-        // adChannels listesi oluştur (eğer yok ise)
-        if (!config.adChannels) {
-          config.adChannels = [];
-        }
 
-        // Aynı sunucu zaten var mı kontrol et
-        const existingIndex = config.adChannels.findIndex(ad => ad.guildId === sunucu_id);
-        
-        if (existingIndex >= 0) {
-          // Var ise güncelle
-          config.adChannels[existingIndex] = { guildId: sunucu_id, channelId: kanal_id };
-        } else {
-          // Yoksa ekle
-          config.adChannels.push({ guildId: sunucu_id, channelId: kanal_id });
-        }
+        if (!config.tickets) config.tickets = {};
+        if (!config.tickets[interaction.guildId]) config.tickets[interaction.guildId] = {};
 
+        config.tickets[interaction.guildId].responsibleId = targetUser.id;
         saveConfig(config);
 
         const embed = new EmbedBuilder()
           .setColor('#2ecc71')
-          .setTitle('✅ Reklam Kanalı Eklendi')
-          .setDescription(`Sunucu: ${guild.name}\nKanal: ${channel.name}\n\nToplam reklam kanalı: ${config.adChannels.length}`)
+          .setTitle('✅ Ticket Sorumlusu Ayarlandı')
+          .setDescription(`${targetUser.tag} ticket sorumlusu oldu`)
           .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      // FOTOĞRAF KONTROLÜNÜ AÇ
-      else if (commandName === 'fotoyasak') {
+      // DM LOG KANALINI AYARLA
+      else if (commandName === 'dmlogkur') {
         if (user.id !== OWNER_ID) {
           return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
         }
 
         let config = getConfig();
-        config.photoCheckEnabled = true;
+        config.dmLogGuildId = interaction.guildId;
+        config.dmLogChannelId = interaction.channelId;
         saveConfig(config);
+
+        const embed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('✅ DM Log Kanalı Ayarlandı')
+          .setDescription(`${interaction.channel} kanalında DM'ler loglanacak`)
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // KAYIT SISTEMI KANALINI AYARLA
+      else if (commandName === 'kayıtolkur') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        let config = getConfig();
+        config.registrationEnabled = true;
+        config.registrationGuildId = interaction.guildId;
+        saveConfig(config);
+
+        const embed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('✅ Kayıt Sistemi Aktif Edildi')
+          .setDescription('Kullanıcılar bota DM yazarak kayıt olabilirler\n\nKayıt için: `tamam`, `ok` veya `tm` yazmalıdırlar')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // TICKET COMMAND
+      else if (commandName === 'ticket') {
+        const ticketBtn = new ButtonBuilder()
+          .setCustomId('create_ticket')
+          .setLabel('🎫 Ticket Aç')
+          .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(ticketBtn);
 
         const embed = new EmbedBuilder()
           .setColor('#667eea')
-          .setTitle('✅ Fotoğraf Kontrolü Açıldı')
-          .setDescription('Artık tüm fotoğraflar admin onayı bekleyecek')
+          .setTitle('🎫 Ticket Sistemi')
+          .setDescription('Aşağıdaki buton ile ticket açabilirsiniz')
           .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-      }
-
-      // FOTOĞRAF KONTROLÜNÜ KAPAT
-      else if (commandName === 'fotokapa') {
-        if (user.id !== OWNER_ID) {
-          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
-        }
-
-        let config = getConfig();
-        config.photoCheckEnabled = false;
-        saveConfig(config);
-
-        const embed = new EmbedBuilder()
-          .setColor('#e74c3c')
-          .setTitle('✅ Fotoğraf Kontrolü Kapatıldı')
-          .setDescription('Fotoğraflar artık doğrudan paylaşılacak')
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-      }
-
-      // ADMIN EKLE
-      else if (commandName === 'adminayarla') {
-        if (user.id !== OWNER_ID) {
-          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
-        }
-
-        const targetUser = interaction.options.getUser('kullanici');
-        let admins = getAdmins();
-
-        if (!admins[interaction.guildId]) {
-          admins[interaction.guildId] = [];
-        }
-
-        if (admins[interaction.guildId].includes(targetUser.id)) {
-          return await interaction.reply({ content: '❌ Bu kullanıcı zaten admin!', ephemeral: true });
-        }
-
-        admins[interaction.guildId].push(targetUser.id);
-        saveAdmins(admins);
-
-        const embed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle('✅ Admin Eklendi')
-          .setDescription(`${targetUser.tag} admin yapıldı`)
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-      }
-
-      // ADMIN KALDIR
-      else if (commandName === 'admin-kaldır') {
-        if (user.id !== OWNER_ID) {
-          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
-        }
-
-        const targetUser = interaction.options.getUser('kullanici');
-        let admins = getAdmins();
-
-        if (!admins[interaction.guildId] || !admins[interaction.guildId].includes(targetUser.id)) {
-          return await interaction.reply({ content: '❌ Bu kullanıcı admin değil!', ephemeral: true });
-        }
-
-        admins[interaction.guildId] = admins[interaction.guildId].filter(id => id !== targetUser.id);
-        saveAdmins(admins);
-
-        const embed = new EmbedBuilder()
-          .setColor('#e74c3c')
-          .setTitle('✅ Admin Kaldırıldı')
-          .setDescription(`${targetUser.tag} admin olmaktan çıkarıldı`)
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], components: [row] });
       }
     }
 
-    // BUTTON HANDLER - FOTOĞRAF ONAY/REDDET
+    // BUTTON HANDLER
     else if (interaction.isButton()) {
-      const [action, photoId] = interaction.customId.split('_');
+      const { customId } = interaction;
 
-      if (action === 'approve') {
-        let pending = getPending();
-        const photo = pending.find(p => p.id === photoId);
+      if (customId === 'create_ticket') {
+        const guild = interaction.guild;
+        const tickets = getTickets();
+        const config = getConfig();
 
-        if (!photo) {
-          return await interaction.reply({ content: '❌ Fotoğraf bulunamadı!', ephemeral: true });
-        }
+        if (!tickets[guild.id]) tickets[guild.id] = {};
 
-        // Reklam kanalına gönder
         try {
-          const config = getConfig();
-          const guild = client.guilds.cache.get(config.adChannelGuild);
-          const channel = guild?.channels.cache.get(config.adChannelId);
+          const ticketChannel = await guild.channels.create({
+            name: `🎫-ticket-${user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              {
+                id: user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: config.tickets?.[guild.id]?.responsibleId || OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              }
+            ],
+          });
 
-          if (channel) {
-            await channel.send({
-              files: [photo.filePath],
-              embeds: [new EmbedBuilder()
-                .setColor('#2ecc71')
-                .setTitle('📢 Reklam')
-                .setImage(`attachment://` + path.basename(photo.filePath))
-                .setFooter({ text: 'Yüklediği: ' + photo.uploader })
-                .setTimestamp()
-              ]
-            });
-          }
+          tickets[guild.id][ticketChannel.id] = {
+            userId: user.id,
+            createdAt: Date.now(),
+            responsible: null
+          };
+          saveTickets(tickets);
+
+          const claimBtn = new ButtonBuilder()
+            .setCustomId(`claim_ticket_${user.id}`)
+            .setLabel('👤 Talebi Üstlen')
+            .setStyle(ButtonStyle.Primary);
+
+          const closeBtn = new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('🔒 Ticket Kapat')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(claimBtn, closeBtn);
+
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('🎫 Ticket Oluşturuldu')
+            .setDescription(`Merhaba ${user.username}! Sorununuzu yazabilirsiniz.`)
+            .addFields(
+              { name: 'Ticket ID', value: ticketChannel.id, inline: true },
+              { name: 'Durum', value: '⏳ Beklemede', inline: true }
+            )
+            .setTimestamp();
+
+          await ticketChannel.send({ embeds: [embed], components: [row] });
+          
+          await interaction.reply({ 
+            content: `✅ Ticket kanalı oluşturuldu: ${ticketChannel}`, 
+            ephemeral: true 
+          });
+
         } catch (error) {
-          console.error('Reklam gönderme hatası:', error);
+          console.error('Ticket oluşturma hatası:', error);
+          await interaction.reply({ content: '❌ Hata oluştu!', ephemeral: true });
         }
-
-        // Pending'den sil
-        pending = pending.filter(p => p.id !== photoId);
-        savePending(pending);
-
-        const embed = new EmbedBuilder()
-          .setColor('#2ecc71')
-          .setTitle('✅ Fotoğraf Onaylandı')
-          .setDescription('Reklam kanalına gönderildi')
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
       }
 
-      else if (action === 'reject') {
-        let pending = getPending();
-        const photo = pending.find(p => p.id === photoId);
+      else if (customId.startsWith('claim_ticket_')) {
+        const userId = customId.split('_')[2];
+        const guild = interaction.guild;
+        const tickets = getTickets();
 
-        if (!photo) {
-          return await interaction.reply({ content: '❌ Fotoğraf bulunamadı!', ephemeral: true });
+        if (tickets[guild.id]?.[interaction.channelId]) {
+          tickets[guild.id][interaction.channelId].responsible = interaction.user.id;
+          saveTickets(tickets);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ Talebi Üstlendi')
+            .setDescription(`${interaction.user.tag} tarafından üstlenildi`)
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed] });
         }
+      }
 
-        // Dosyayı sil
-        try {
-          fs.unlinkSync(photo.filePath);
-        } catch (error) {
-          console.error('Dosya silme hatası:', error);
-        }
-
-        // Pending'den sil
-        pending = pending.filter(p => p.id !== photoId);
-        savePending(pending);
-
-        const embed = new EmbedBuilder()
-          .setColor('#e74c3c')
-          .setTitle('❌ Fotoğraf Reddedildi')
-          .setDescription('Fotoğraf silinmiştir')
-          .setTimestamp();
-
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+      else if (customId === 'close_ticket') {
+        await interaction.reply({ content: '⏳ Ticket 5 saniye içinde kapatılacak...', ephemeral: true });
+        
+        setTimeout(async () => {
+          try {
+            await interaction.channel.delete();
+          } catch (error) {
+            console.error('Ticket silme hatası:', error);
+          }
+        }, 5000);
       }
     }
 
@@ -432,78 +479,10 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// PREFIX COMMANDS
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-
-  if (!message.content.startsWith('-')) return;
-
-  const args = message.content.slice(1).split(/ +/);
-  const command = args.shift().toLowerCase();
-
-  try {
-    // RANDOM FOTOĞRAF PAYLAŞ (KOMUTU YAZILAN KANALA)
-    if (command === 'randomfoto') {
-      if (message.author.id !== OWNER_ID) {
-        return await message.reply('❌ Sadece owner kullanabilir!');
-      }
-
-      const photos = getPhotos();
-
-      if (photos.length === 0) {
-        return await message.reply('❌ Henüz onaylanan fotoğraf yok!');
-      }
-
-      const config = getConfig();
-
-      // Sıra indexini al (yoksa 0'dan başla)
-      if (config.photoQueueIndex === undefined) {
-        config.photoQueueIndex = 0;
-      }
-
-      // Sıradaki fotoğrafı al
-      const randomPhoto = photos[config.photoQueueIndex];
-
-      // Sırayı bir sonrakine ilerlet
-      config.photoQueueIndex = (config.photoQueueIndex + 1) % photos.length;
-      saveConfig(config);
-
-      try {
-        // Dosya var mı kontrol et
-        if (!fs.existsSync(randomPhoto.filePath)) {
-          return await message.reply(`❌ Fotoğraf dosyası silinmiş: ${randomPhoto.fileName}`);
-        }
-
-        const fileName = path.basename(randomPhoto.filePath);
-
-        // Komutu yazılan kanala gönder
-        await message.channel.send({
-          files: [randomPhoto.filePath],
-          embeds: [new EmbedBuilder()
-            .setColor('#667eea')
-            .setTitle('📸 Random Foto')
-            .setImage(`attachment://` + fileName)
-            .setFooter({ text: 'Yüklediği: ' + randomPhoto.uploader })
-            .setTimestamp()
-          ]
-        });
-
-        await message.reply(`✅ Fotoğraf paylaşıldı! (${config.photoQueueIndex}/${photos.length})`);
-      } catch (error) {
-        console.error('Fotoğraf paylaşma hatası:', error);
-        await message.reply('❌ Hata oluştu: ' + error.message);
-      }
-    }
-
-  } catch (error) {
-    console.error('Komut hatası:', error);
-  }
-});
-
 // WEB SERVER
 
-// REKLAM MESAJI GÖNDER (TÜM SUNUCULARA)
-app.post('/api/send-ad', async (req, res) => {
+// SUNUCULARA MESAJ GÖNDER
+app.post('/api/send-global-message', async (req, res) => {
   try {
     const { message } = req.body;
 
@@ -511,36 +490,27 @@ app.post('/api/send-ad', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Mesaj gerekli' });
     }
 
-    const config = getConfig();
-
-    if (!config.adChannels || config.adChannels.length === 0) {
-      return res.status(400).json({ success: false, error: 'Reklam kanalları ayarlanmamış' });
-    }
-
     let successCount = 0;
     let failCount = 0;
 
-    // Tüm ayarlanmış sunuculara gönder
-    for (const adConfig of config.adChannels) {
+    // Tüm sunuculara gönder
+    for (const guild of client.guilds.cache.values()) {
       try {
-        const guild = client.guilds.cache.get(adConfig.guildId);
-        const channel = guild?.channels.cache.get(adConfig.channelId);
+        const channel = guild.channels.cache.find(ch => 
+          ch.name === 'genel' || ch.name === 'general' || ch.isTextBased()
+        );
 
-        if (!channel) {
-          failCount++;
-          continue;
+        if (channel) {
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('📢 Mesaj')
+            .setDescription(message)
+            .setTimestamp();
+
+          await channel.send({ embeds: [embed] });
+          successCount++;
         }
-
-        const embed = new EmbedBuilder()
-          .setColor('#667eea')
-          .setTitle('📢 Reklam Mesajı')
-          .setDescription(message)
-          .setTimestamp();
-
-        await channel.send({ embeds: [embed] });
-        successCount++;
       } catch (error) {
-        console.error(`Sunucu ${adConfig.guildId} mesaj gönderme hatası:`, error);
         failCount++;
       }
     }
@@ -552,129 +522,8 @@ app.post('/api/send-ad', async (req, res) => {
       failed: failCount
     });
   } catch (error) {
-    console.error('Reklam mesajı gönderme hatası:', error);
+    console.error('Mesaj gönderme hatası:', error);
     res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// FOTOĞRAF YÜKLE
-app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, error: 'Fotoğraf gerekli' });
-    }
-
-    const config = getConfig();
-    const photoId = Date.now().toString();
-
-    const photoData = {
-      id: photoId,
-      filePath: req.file.path,
-      fileName: req.file.filename,
-      uploader: req.body.uploader || 'Bilinmiyor',
-      uploadedAt: new Date().toISOString(),
-      status: config.photoCheckEnabled ? 'pending' : 'approved'
-    };
-
-    if (config.photoCheckEnabled) {
-      // Admin onayı bekle
-      let pending = getPending();
-      pending.push(photoData);
-      savePending(pending);
-
-      // Admin'lere bildirim gönder
-      try {
-        const guild = client.guilds.cache.first();
-        if (guild) {
-          const admins = getAdmins()[guild.id] || [];
-          
-          for (const adminId of admins) {
-            const user = await client.users.fetch(adminId);
-            
-            const approveBtn = new ButtonBuilder()
-              .setCustomId(`approve_${photoId}`)
-              .setLabel('✅ Onayla')
-              .setStyle(ButtonStyle.Success);
-
-            const rejectBtn = new ButtonBuilder()
-              .setCustomId(`reject_${photoId}`)
-              .setLabel('❌ Reddet')
-              .setStyle(ButtonStyle.Danger);
-
-            const row = new ActionRowBuilder().addComponents(approveBtn, rejectBtn);
-
-            const embed = new EmbedBuilder()
-              .setColor('#f39c12')
-              .setTitle('📸 Fotoğraf Onayı Bekleniyor')
-              .setDescription(`${photoData.uploader} tarafından yüklendi`)
-              .setImage(`attachment://` + photoData.fileName)
-              .setFooter({ text: 'Onayla veya Reddet' })
-              .setTimestamp();
-
-            await user.send({
-              embeds: [embed],
-              components: [row],
-              files: [req.file.path]
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Admin bildirimi hatası:', error);
-      }
-
-      return res.json({ success: true, message: 'Fotoğraf admin onayı bekleniyor', photoId });
-    } else {
-      // Doğrudan kaydet
-      let photos = getPhotos();
-      photos.push(photoData);
-      savePhotos(photos);
-
-      return res.json({ success: true, message: 'Fotoğraf kaydedildi', photoId });
-    }
-
-  } catch (error) {
-    console.error('Fotoğraf yükleme hatası:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// BEKLEMEDE OLAN FOTOĞRAFLAR
-app.get('/api/pending-photos', (req, res) => {
-  try {
-    const pending = getPending();
-    const config = getConfig();
-    
-    res.json({
-      enabled: config.photoCheckEnabled,
-      count: pending.length,
-      photos: pending.map(p => ({
-        id: p.id,
-        uploader: p.uploader,
-        uploadedAt: p.uploadedAt,
-        status: p.status
-      }))
-    });
-  } catch (error) {
-    console.error('Pending fotoğraflar getirme hatası:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ONAYLANAN FOTOĞRAFLAR
-app.get('/api/approved-photos', (req, res) => {
-  try {
-    const photos = getPhotos();
-    res.json({
-      count: photos.length,
-      photos: photos.map(p => ({
-        id: p.id,
-        uploader: p.uploader,
-        uploadedAt: p.uploadedAt
-      }))
-    });
-  } catch (error) {
-    console.error('Onaylanan fotoğraflar getirme hatası:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -691,15 +540,14 @@ app.get('/api/config', (req, res) => {
 // İSTATİSTİKLER
 app.get('/api/stats', (req, res) => {
   try {
-    const photos = getPhotos();
-    const pending = getPending();
     const config = getConfig();
+    const registers = getRegisters();
 
     res.json({
-      approvedPhotos: photos.length,
-      pendingPhotos: pending.length,
-      photoCheckEnabled: config.photoCheckEnabled,
-      adChannelSet: !!config.adChannelId
+      servers: client.guilds.cache.size,
+      users: Object.keys(registers).length,
+      dmLogEnabled: !!config.dmLogChannelId,
+      registrationEnabled: !!config.registrationEnabled
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -710,7 +558,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Server
+// SERVER
 const server = app.listen(PORT, () => {
   console.log('🌐 Web server çalışıyor: port ' + PORT);
 });
