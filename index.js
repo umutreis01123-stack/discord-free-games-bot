@@ -606,6 +606,7 @@ client.on('interactionCreate', async (interaction) => {
         }, 5000);
       }
     }
+    }
 
   } catch (error) {
     console.error('Interaction hatası:', error);
