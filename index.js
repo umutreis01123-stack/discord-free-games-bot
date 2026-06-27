@@ -390,6 +390,73 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [embed], components: [row] });
       }
 
+      // DM MESAJ YOLLA
+      else if (commandName === 'dmmesajyolla') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        const targetUser = interaction.options.getUser('kullanici');
+        const message = interaction.options.getString('mesaj');
+
+        try {
+          // Kullanıcıya mesaj gönder
+          await targetUser.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor('#667eea')
+                .setTitle('💬 Mesaj')
+                .setDescription(message)
+                .setFooter({ text: 'Bot tarafından gönderilen mesaj' })
+                .setTimestamp()
+            ]
+          });
+
+          // DM log'a kaydet
+          await saveDMLog(targetUser.id, targetUser.tag, message, 'bot');
+
+          // Log kanalına gönder
+          const config = getConfig();
+          if (config.dmLogChannelId && config.dmLogGuildId) {
+            try {
+              const guild = client.guilds.cache.get(config.dmLogGuildId);
+              const channel = guild?.channels.cache.get(config.dmLogChannelId);
+
+              if (channel) {
+                const embed = new EmbedBuilder()
+                  .setColor('#667eea')
+                  .setTitle('📤 DM Gönderildi')
+                  .setDescription(`**Alıcı:** ${targetUser.tag}\n**Mesaj:** ${message}`)
+                  .setFooter({ text: targetUser.id })
+                  .setTimestamp();
+
+                await channel.send({ embeds: [embed] });
+              }
+            } catch (error) {
+              console.error('DM log gönderme hatası:', error);
+            }
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('✅ DM Gönderildi')
+            .setDescription(`${targetUser.tag} adlı kullanıcıya mesaj gönderildi`)
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+
+        } catch (error) {
+          console.error('DM gönderme hatası:', error);
+          const errorEmbed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('❌ Hata')
+            .setDescription(`${targetUser.tag} adlı kullanıcıya mesaj gönderilemedi`)
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        }
+      }
+
     // BUTTON HANDLER
     else if (interaction.isButton()) {
       const { customId } = interaction;
