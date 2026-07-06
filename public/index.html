@@ -180,8 +180,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🤖 ZWOZ Bot Paneli</h1>
-            <p>Ticket & DM Log Sistemi</p>
+            <h1>🤖 ZWOZ Bot Paneli v7.0</h1>
+            <p>Gelişmiş Yönetim Sistemi</p>
         </header>
 
         <div class="stats" id="stats">
@@ -194,18 +194,54 @@
                 <p id="register-count">0</p>
             </div>
             <div class="stat-card">
-                <h2>📋 DM Log</h2>
-                <p id="dm-log-status">❌ Pasif</p>
+                <h2>🎫 Şikayetler</h2>
+                <p id="complaint-count">0</p>
+            </div>
+            <div class="stat-card">
+                <h2>💣 Bom Oyunları</h2>
+                <p id="bom-games-count">0</p>
             </div>
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('message')">📢 Sunuculara Mesaj Gönder</button>
+            <button class="tab-btn active" onclick="switchTab('servers')">🌐 Sunucu Seçimi</button>
+            <button class="tab-btn" onclick="switchTab('message')">📢 Sunuculara Mesaj</button>
+            <button class="tab-btn" onclick="switchTab('quota')">📊 Quota Ayarları</button>
             <button class="tab-btn" onclick="switchTab('info')">ℹ️ Bilgi</button>
         </div>
 
+        <!-- SUNUCU SEÇİMİ -->
+        <div id="servers" class="tab-content active">
+            <h2>🌐 Sunucu ve Komut Ayarları</h2>
+            
+            <div class="form-group">
+                <label>Sunucu Seç:</label>
+                <select id="serverSelect">
+                    <option value="">Sunucu seçin...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Komut Seç:</label>
+                <select id="commandSelect">
+                    <option value="">Önce sunucu seçin...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Kanal Seç:</label>
+                <select id="channelSelect">
+                    <option value="">Önce sunucu seçin...</option>
+                </select>
+            </div>
+
+            <button onclick="setupCommand()">⚙️ Komutu Kur</button>
+            <div class="success" id="setup-success">✅ Komut kuruldu!</div>
+            <div class="error" id="setup-error"></div>
+        </div>
+
         <!-- SUNUCULARA MESAJ GÖNDER -->
-        <div id="message" class="tab-content active">
+        <div id="message" class="tab-content")
             <h2>📢 Tüm Sunuculara Mesaj Gönder</h2>
             <form onsubmit="sendGlobalMessage(event)">
                 <div class="form-group">
@@ -224,35 +260,71 @@
             </div>
         </div>
 
+        <!-- QUOTA AYARLARI -->
+        <div id="quota" class="tab-content">
+            <h2>📊 Haftalık Quota Sistemi</h2>
+            
+            <div class="form-group">
+                <label>Sunucu Seç:</label>
+                <select id="quotaServerSelect">
+                    <option value="">Sunucu seçin...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Developer Quota Metni:</label>
+                <textarea id="devQuotaText" placeholder="@kullanici quota'yı geçti/geçemedi nedeni..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Moderatör Quota Metni:</label>
+                <textarea id="modQuotaText" placeholder="@kullanici quota'yı geçti/geçemedi nedeni..."></textarea>
+            </div>
+
+            <button onclick="saveQuotaSettings()">💾 Quota Ayarlarını Kaydet</button>
+            <button onclick="shareEarlyQuota()">⚡ Erken Quota Paylaş</button>
+            
+            <div class="success" id="quota-success">✅ Quota ayarları kaydedildi!</div>
+            <div class="error" id="quota-error"></div>
+        </div>
+
         <!-- BİLGİ -->
         <div id="info" class="tab-content">
-            <h2>ℹ️ Bot Komutları</h2>
+            <h2>ℹ️ Bot Komutları v7.0</h2>
             <div style="margin-top: 20px;">
-                <h3>⚙️ Slash Komutları</h3>
+                <h3>⚙️ Yönetim Komutları</h3>
                 <ul style="margin: 20px 0; padding-left: 20px;">
                     <li><strong>/sorumlu @user</strong> - Ticket sorumlusunu belirle</li>
                     <li><strong>/dmlogkur</strong> - DM log kanalını ayarla</li>
                     <li><strong>/kayıtolkur</strong> - Kayıt sistemi kanalını ayarla</li>
-                    <li><strong>/ticket</strong> - Ticket sistemi</li>
+                    <li><strong>/dmmesajyolla @user "mesaj"</strong> - Kullanıcıya DM gönder</li>
                 </ul>
 
-                <h3>🎫 Ticket Sistemi</h3>
+                <h3>� Yeni Komutlar v7.0</h3>
+                <ul style="margin: 20px 0; padding-left: 20px;">
+                    <li><strong>/kötürol @rol</strong> - Yasaklı rol yönetimi</li>
+                    <li><strong>/sesteafk</strong> - Botu sese çağır (7/24 durur)</li>
+                    <li><strong>/şikayetkur</strong> - Şikayet sistemi kur</li>
+                    <li><strong>/puantablosu</strong> - Bot genel puan tablosu</li>
+                    <li><strong>/ticketkur</strong> - Ticket sistemi kur</li>
+                    <li><strong>/quotaayarla #kanal</strong> - Haftalık quota sistemi</li>
+                    <li><strong>/bomkur</strong> - Bom oyunu kur</li>
+                </ul>
+
+                <h3>🎫 Sistemler</h3>
                 <p style="margin: 10px 0;">
-                    • Kullanıcılar /ticket ile ticket açabilir<br>
-                    • Sorumlu "Talebi Üstlen" butonuna tıklayabilir<br>
-                    • "Ticket Kapat" ile kanal silinir
+                    <strong>🎫 Ticket:</strong> Kullanıcılar /ticket ile ticket açabilir<br>
+                    <strong>📝 Şikayet:</strong> Şikayet sistemi + değerlendirme<br>
+                    <strong>⚠️ Kötü Rol:</strong> Yasaklı rolü veren 1 saat timeout alır<br>
+                    <strong>📊 Quota:</strong> Haftalık aktiflik değerlendirmesi<br>
+                    <strong>💣 Bom Oyunu:</strong> 1-5 sayma oyunu<br>
+                    <strong>🔊 Ses AFK:</strong> Bot 7/24 seste durur
                 </p>
 
-                <h3>📝 Kayıt Sistemi</h3>
+                <h3>� Kayıt & DM Sistemi</h3>
                 <p style="margin: 10px 0;">
                     • /kayıtolkur ile aktif edilir<br>
                     • Kullanıcılar bota DM yazarak kayıt olur<br>
-                    • İsim ve yaş sorusu sorulur
-                </p>
-
-                <h3>📋 DM Log Sistemi</h3>
-                <p style="margin: 10px 0;">
-                    • /dmlogkur ile aktif edilir<br>
                     • Tüm DM'ler log kanalına kaydedilir
                 </p>
             </div>
@@ -266,6 +338,128 @@
             
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            if (tabName === 'servers' || tabName === 'quota') {
+                loadServers();
+            }
+        }
+
+        async function loadServers() {
+            try {
+                const response = await fetch('/api/servers');
+                const servers = await response.json();
+                
+                const serverSelects = ['serverSelect', 'quotaServerSelect'];
+                serverSelects.forEach(selectId => {
+                    const select = document.getElementById(selectId);
+                    if (select) {
+                        select.innerHTML = '<option value="">Sunucu seçin...</option>';
+                        servers.forEach(server => {
+                            const option = document.createElement('option');
+                            option.value = server.id;
+                            option.textContent = server.name;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+
+            } catch (error) {
+                console.error('Sunucular yüklenirken hata:', error);
+            }
+        }
+
+        async function setupCommand() {
+            const serverId = document.getElementById('serverSelect').value;
+            const command = document.getElementById('commandSelect').value;
+            const channelId = document.getElementById('channelSelect').value;
+
+            if (!serverId || !command) {
+                showError('setup-error', 'Sunucu ve komut seçin!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/setup-command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId, command, channelId })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('setup-success').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('setup-success').style.display = 'none';
+                    }, 3000);
+                } else {
+                    showError('setup-error', result.error);
+                }
+            } catch (error) {
+                showError('setup-error', error.message);
+            }
+        }
+
+        async function saveQuotaSettings() {
+            const serverId = document.getElementById('quotaServerSelect').value;
+            const devText = document.getElementById('devQuotaText').value;
+            const modText = document.getElementById('modQuotaText').value;
+
+            if (!serverId) {
+                showError('quota-error', 'Sunucu seçin!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/quota-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId, devText, modText })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('quota-success').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('quota-success').style.display = 'none';
+                    }, 3000);
+                } else {
+                    showError('quota-error', result.error);
+                }
+            } catch (error) {
+                showError('quota-error', error.message);
+            }
+        }
+
+        async function shareEarlyQuota() {
+            const serverId = document.getElementById('quotaServerSelect').value;
+
+            if (!serverId) {
+                showError('quota-error', 'Sunucu seçin!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/share-quota', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serverId })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('quota-success').style.display = 'block';
+                    setTimeout(() => {
+                        document.getElementById('quota-success').style.display = 'none';
+                    }, 3000);
+                } else {
+                    showError('quota-error', result.error);
+                }
+            } catch (error) {
+                showError('quota-error', error.message);
+            }
         }
 
         async function sendGlobalMessage(event) {
@@ -319,7 +513,8 @@
 
                 document.getElementById('server-count').textContent = data.servers;
                 document.getElementById('register-count').textContent = data.users;
-                document.getElementById('dm-log-status').textContent = data.dmLogEnabled ? '✅ Aktif' : '❌ Pasif';
+                document.getElementById('complaint-count').textContent = data.complaints || 0;
+                document.getElementById('bom-games-count').textContent = data.bomGames || 0;
             } catch (error) {
                 console.error('İstatistik yükleme hatası:', error);
             }
