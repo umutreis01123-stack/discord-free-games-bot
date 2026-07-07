@@ -633,7 +633,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// WEB SERVER
+// WEB SERVER API'LER
 app.post('/api/share-quota', async (req, res) => {
   try {
     const { serverId } = req.body;
@@ -697,6 +697,115 @@ app.get('/api/servers', (req, res) => {
     res.json(servers);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// QUOTA AYARLARI KAYDET
+app.post('/api/quota-settings', async (req, res) => {
+  try {
+    const { serverId, devText, modText } = req.body;
+    
+    let config = getConfig();
+    if (!config.quotaTexts) config.quotaTexts = {};
+    if (!config.quotaTexts[serverId]) config.quotaTexts[serverId] = {};
+    
+    config.quotaTexts[serverId].devText = devText;
+    config.quotaTexts[serverId].modText = modText;
+    saveConfig(config);
+
+    res.json({ success: true, message: 'Quota ayarları kaydedildi' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// KOMUT KURULUMU
+app.post('/api/setup-command', async (req, res) => {
+  try {
+    const { serverId, command, channelId } = req.body;
+    
+    res.json({ success: true, message: `${command} komutu ${serverId} sunucusunda kuruldu` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// İSTATİSTİKLER
+app.get('/api/stats', (req, res) => {
+  try {
+    const config = getConfig();
+    const activity = getActivity();
+    const complaints = getComplaints();
+    const bomGames = getBomGames();
+
+    let userCount = 0;
+    Object.values(activity).forEach(guildActivity => {
+      userCount += Object.keys(guildActivity).length;
+    });
+
+    let complaintCount = 0;
+    Object.values(complaints).forEach(guildComplaints => {
+      complaintCount += Object.keys(guildComplaints).length;
+    });
+
+    let bomGameCount = 0;
+    Object.values(bomGames).forEach(game => {
+      if (game.active) bomGameCount++;
+    });
+
+    res.json({
+      servers: client.guilds.cache.size,
+      users: userCount,
+      complaints: complaintCount,
+      bomGames: bomGameCount
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SUNUCULARA MESAJ GÖNDER
+app.post('/api/send-global-message', async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Mesaj gerekli' });
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        const channel = guild.channels.cache.find(ch => 
+          ch.name === 'genel' || ch.name === 'general' || ch.isTextBased()
+        );
+
+        if (channel) {
+          const embed = new EmbedBuilder()
+            .setColor('#667eea')
+            .setTitle('📢 Genel Mesaj')
+            .setDescription(message)
+            .setTimestamp();
+
+          await channel.send({ embeds: [embed] });
+          successCount++;
+        }
+      } catch (error) {
+        failCount++;
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      message: `${successCount} sunucuya mesaj gönderildi`,
+      sent: successCount,
+      failed: failCount
+    });
+  } catch (error) {
+    console.error('Mesaj gönderme hatası:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

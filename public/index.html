@@ -241,7 +241,7 @@
         </div>
 
         <!-- SUNUCULARA MESAJ GÖNDER -->
-        <div id="message" class="tab-content")
+        <div id="message" class="tab-content">
             <h2>📢 Tüm Sunuculara Mesaj Gönder</h2>
             <form onsubmit="sendGlobalMessage(event)">
                 <div class="form-group">
@@ -363,8 +363,29 @@
                     }
                 });
 
+                // Sunucu seçildiğinde komutları yükle
+                const serverSelect = document.getElementById('serverSelect');
+                if (serverSelect) {
+                    serverSelect.addEventListener('change', function() {
+                        const commandSelect = document.getElementById('commandSelect');
+                        if (this.value && commandSelect) {
+                            commandSelect.innerHTML = `
+                                <option value="">Komut seçin...</option>
+                                <option value="kötürol">⚠️ /kötürol - Yasaklı rol yönetimi</option>
+                                <option value="sesteafk">🔊 /sesteafk - Bot ses kanalında AFK</option>
+                                <option value="şikayetkur">📝 /şikayetkur - Şikayet sistemi</option>
+                                <option value="bomkur">💣 /bomkur - Bom oyunu</option>
+                                <option value="quotaayarla">📊 /quotaayarla - Quota sistemi</option>
+                            `;
+                        } else if (commandSelect) {
+                            commandSelect.innerHTML = '<option value="">Önce sunucu seçin...</option>';
+                        }
+                    });
+                }
+
             } catch (error) {
                 console.error('Sunucular yüklenirken hata:', error);
+                showError('setup-error', 'Sunucular yüklenemedi!');
             }
         }
 
@@ -522,6 +543,9 @@
 
         loadStats();
         setInterval(loadStats, 10000);
+        
+        // Sayfa açıldığında sunucuları yükle
+        loadServers();
     </script>
 </body>
 </html>
