@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZWOZ Bot Paneli</title>
+    <title>ZWOZ Bot v8.0</title>
     <style>
         * {
             margin: 0;
@@ -180,8 +180,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🤖 ZWOZ Bot Paneli v7.0</h1>
-            <p>Gelişmiş Yönetim Sistemi</p>
+            <h1>⚽ ZWOZ Bot v8.0</h1>
+            <p>Futbol & Welcome Sistemi</p>
         </header>
 
         <div class="stats" id="stats">
@@ -190,142 +190,100 @@
                 <p id="server-count">0</p>
             </div>
             <div class="stat-card">
-                <h2>📝 Kayıtlar</h2>
-                <p id="register-count">0</p>
+                <h2>⚽ Futbol Takibi</h2>
+                <p id="football-count">3</p>
             </div>
             <div class="stat-card">
-                <h2>🎫 Şikayetler</h2>
+                <h2>📝 Şikayetler</h2>
                 <p id="complaint-count">0</p>
             </div>
             <div class="stat-card">
-                <h2>💣 Bom Oyunları</h2>
-                <p id="bom-games-count">0</p>
+                <h2>👋 Hoşgeldin</h2>
+                <p id="welcome-count">0</p>
             </div>
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('servers')">🌐 Sunucu Seçimi</button>
-            <button class="tab-btn" onclick="switchTab('message')">📢 Sunuculara Mesaj</button>
-            <button class="tab-btn" onclick="switchTab('quota')">📊 Quota Ayarları</button>
-            <button class="tab-btn" onclick="switchTab('info')">ℹ️ Bilgi</button>
+            <button class="tab-btn active" onclick="switchTab('football')">⚽ Futbol Ayarları</button>
+            <button class="tab-btn" onclick="switchTab('info')">📋 Komutlar</button>
         </div>
 
-        <!-- SUNUCU SEÇİMİ -->
-        <div id="servers" class="tab-content active">
-            <h2>🌐 Sunucu ve Komut Ayarları</h2>
+        <!-- FUTBOL AYARLARI -->
+        <div id="football" class="tab-content active">
+            <h2>⚽ Futbol Maç Takibi</h2>
             
             <div class="form-group">
-                <label>Sunucu Seç:</label>
-                <select id="serverSelect">
-                    <option value="">Sunucu seçin...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Komut Seç:</label>
-                <select id="commandSelect">
-                    <option value="">Önce sunucu seçin...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Kanal Seç:</label>
-                <select id="channelSelect">
-                    <option value="">Önce sunucu seçin...</option>
-                </select>
-            </div>
-
-            <button onclick="setupCommand()">⚙️ Komutu Kur</button>
-            <div class="success" id="setup-success">✅ Komut kuruldu!</div>
-            <div class="error" id="setup-error"></div>
-        </div>
-
-        <!-- SUNUCULARA MESAJ GÖNDER -->
-        <div id="message" class="tab-content">
-            <h2>📢 Tüm Sunuculara Mesaj Gönder</h2>
-            <form onsubmit="sendGlobalMessage(event)">
-                <div class="form-group">
-                    <label>Mesaj Yazın:</label>
-                    <textarea id="globalMessage" placeholder="Tüm sunuculara gönderilecek mesajı yazın..." required></textarea>
+                <label>Aktif Lig Takipleri:</label>
+                <div style="padding: 15px; background: #f0f4ff; border-radius: 8px; margin-bottom: 20px;">
+                    <p><strong>🏆 Dünya Kupası:</strong> Maçlar canlı takip edilecek</p>
+                    <p><strong>🇪🇸 La Liga:</strong> Real Madrid, Barcelona, Atletico Madrid</p>
+                    <p><strong>🇹🇷 Türkiye Ligi:</strong> Galatasaray, Fenerbahçe, Beşiktaş</p>
                 </div>
+            </div>
 
-                <button type="submit">📤 Gönder</button>
-                <div class="success" id="message-success">✅ Mesaj gönderildi!</div>
-                <div class="error" id="message-error"></div>
-            </form>
+            <div class="form-group">
+                <label>Maç Takibi Özellikleri:</label>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>📅 Maç başlama/bitiş saatleri</li>
+                    <li>⏰ Dakika bilgisi (1', 45', 90')</li>
+                    <li>⚽ Gol durumları (Gol atan, gol yiyen)</li>
+                    <li>📊 Skor güncellemeleri</li>
+                    <li>🔄 Canlı takip</li>
+                </ul>
+            </div>
 
-            <div style="margin-top: 30px; padding: 20px; background: #f0f4ff; border-radius: 8px;">
-                <h3>📊 Sonuçlar</h3>
-                <p id="send-result" style="color: #667eea; font-weight: bold;"></p>
+            <div style="margin-top: 30px; padding: 20px; background: #e8f8f5; border-radius: 8px;">
+                <h3>📋 Komut Kullanımı</h3>
+                <p><strong>/futbolayarla</strong> - Futbol takibini ayarlayın</p>
+                <p><strong>n!maçlar</strong> - Günün maçlarını göster</p>
             </div>
         </div>
 
-        <!-- QUOTA AYARLARI -->
-        <div id="quota" class="tab-content">
-            <h2>📊 Haftalık Quota Sistemi</h2>
-            
-            <div class="form-group">
-                <label>Sunucu Seç:</label>
-                <select id="quotaServerSelect">
-                    <option value="">Sunucu seçin...</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>Developer Quota Metni:</label>
-                <textarea id="devQuotaText" placeholder="@kullanici quota'yı geçti/geçemedi nedeni..."></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>Moderatör Quota Metni:</label>
-                <textarea id="modQuotaText" placeholder="@kullanici quota'yı geçti/geçemedi nedeni..."></textarea>
-            </div>
-
-            <button onclick="saveQuotaSettings()">💾 Quota Ayarlarını Kaydet</button>
-            <button onclick="shareEarlyQuota()">⚡ Erken Quota Paylaş</button>
-            
-            <div class="success" id="quota-success">✅ Quota ayarları kaydedildi!</div>
-            <div class="error" id="quota-error"></div>
-        </div>
-
-        <!-- BİLGİ -->
+        <!-- KOMUTLAR -->
         <div id="info" class="tab-content">
-            <h2>ℹ️ Bot Komutları v7.0</h2>
+            <h2>📋 ZWOZ Bot v8.0 Komutları</h2>
             <div style="margin-top: 20px;">
-                <h3>⚙️ Yönetim Komutları</h3>
+                <h3>⚽ Futbol Komutları</h3>
                 <ul style="margin: 20px 0; padding-left: 20px;">
-                    <li><strong>/sorumlu @user</strong> - Ticket sorumlusunu belirle</li>
-                    <li><strong>/dmlogkur</strong> - DM log kanalını ayarla</li>
-                    <li><strong>/kayıtolkur</strong> - Kayıt sistemi kanalını ayarla</li>
-                    <li><strong>/dmmesajyolla @user "mesaj"</strong> - Kullanıcıya DM gönder</li>
+                    <li><strong>/futbolayarla</strong> - Futbol maç takibi ayarla (Dünya Kupası, La Liga, TR Lig)</li>
+                    <li><strong>n!maçlar</strong> - Günün futbol maçlarını göster</li>
                 </ul>
 
-                <h3>� Yeni Komutlar v7.0</h3>
+                <h3>📝 Şikayet Sistemi</h3>
                 <ul style="margin: 20px 0; padding-left: 20px;">
-                    <li><strong>/kötürol @rol</strong> - Yasaklı rol yönetimi</li>
-                    <li><strong>/sesteafk</strong> - Botu sese çağır (7/24 durur)</li>
                     <li><strong>/şikayetkur</strong> - Şikayet sistemi kur</li>
-                    <li><strong>/puantablosu</strong> - Bot genel puan tablosu</li>
-                    <li><strong>/ticketkur</strong> - Ticket sistemi kur</li>
-                    <li><strong>/quotaayarla #kanal</strong> - Haftalık quota sistemi</li>
-                    <li><strong>/bomkur</strong> - Bom oyunu kur</li>
+                    <li><strong>Şikayet Et butonu</strong> - Kullanıcılar şikayet kanalı açabilir</li>
                 </ul>
 
-                <h3>🎫 Sistemler</h3>
-                <p style="margin: 10px 0;">
-                    <strong>🎫 Ticket:</strong> Kullanıcılar /ticket ile ticket açabilir<br>
-                    <strong>📝 Şikayet:</strong> Şikayet sistemi + değerlendirme<br>
-                    <strong>⚠️ Kötü Rol:</strong> Yasaklı rolü veren 1 saat timeout alır<br>
-                    <strong>📊 Quota:</strong> Haftalık aktiflik değerlendirmesi<br>
-                    <strong>💣 Bom Oyunu:</strong> 1-5 sayma oyunu<br>
-                    <strong>🔊 Ses AFK:</strong> Bot 7/24 seste durur
-                </p>
+                <h3>👋 Gelen-Giden Sistemi</h3>
+                <ul style="margin: 20px 0; padding-left: 20px;">
+                    <li><strong>/gelengidenkur</strong> - Giriş/çıkış mesajları ayarla</li>
+                    <li><strong>Giriş:</strong> "Hoş geldin reis" + kullanıcı fotoğrafı</li>
+                    <li><strong>Çıkış:</strong> "Hadi sattı gidebilirsin"</li>
+                </ul>
 
-                <h3>� Kayıt & DM Sistemi</h3>
+                <h3>🔊 Ses Sistemi</h3>
+                <ul style="margin: 20px 0; padding-left: 20px;">
+                    <li><strong>/sesteafk</strong> - Bot 7/24 ses kanalında durur</li>
+                </ul>
+
+                <h3>💬 Genel Komutlar</h3>
+                <ul style="margin: 20px 0; padding-left: 20px;">
+                    <li><strong>sa</strong> → as (Selam sistemi)</li>
+                    <li><strong>n!yardım</strong> - Tüm komutları göster</li>
+                </ul>
+
+                <h3>🏆 Desteklenen Ligler</h3>
                 <p style="margin: 10px 0;">
-                    • /kayıtolkur ile aktif edilir<br>
-                    • Kullanıcılar bota DM yazarak kayıt olur<br>
-                    • Tüm DM'ler log kanalına kaydedilir
+                    <strong>🏆 Dünya Kupası:</strong> Tüm maçlar canlı takip<br>
+                    <strong>🇪🇸 La Liga:</strong> İspanya Primera División<br>
+                    <strong>🇹🇷 Türkiye Ligi:</strong> Süper Lig maçları<br><br>
+                    
+                    <strong>📊 Maç Bilgileri:</strong><br>
+                    • Maç başlama/bitiş saati<br>
+                    • Hangi dakikada olduğu<br>
+                    • Gol atan/yiyen takımlar<br>
+                    • Güncel skor
                 </p>
             </div>
         </div>
@@ -338,214 +296,7 @@
             
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
-            
-            if (tabName === 'servers' || tabName === 'quota') {
-                loadServers();
-            }
         }
-
-        async function loadServers() {
-            try {
-                const response = await fetch('/api/servers');
-                const servers = await response.json();
-                
-                const serverSelects = ['serverSelect', 'quotaServerSelect'];
-                serverSelects.forEach(selectId => {
-                    const select = document.getElementById(selectId);
-                    if (select) {
-                        select.innerHTML = '<option value="">Sunucu seçin...</option>';
-                        servers.forEach(server => {
-                            const option = document.createElement('option');
-                            option.value = server.id;
-                            option.textContent = server.name;
-                            select.appendChild(option);
-                        });
-                    }
-                });
-
-                // Sunucu seçildiğinde komutları yükle
-                const serverSelect = document.getElementById('serverSelect');
-                if (serverSelect) {
-                    serverSelect.addEventListener('change', function() {
-                        const commandSelect = document.getElementById('commandSelect');
-                        if (this.value && commandSelect) {
-                            commandSelect.innerHTML = `
-                                <option value="">Komut seçin...</option>
-                                <option value="kötürol">⚠️ /kötürol - Yasaklı rol yönetimi</option>
-                                <option value="sesteafk">🔊 /sesteafk - Bot ses kanalında AFK</option>
-                                <option value="şikayetkur">📝 /şikayetkur - Şikayet sistemi</option>
-                                <option value="bomkur">💣 /bomkur - Bom oyunu</option>
-                                <option value="quotaayarla">📊 /quotaayarla - Quota sistemi</option>
-                            `;
-                        } else if (commandSelect) {
-                            commandSelect.innerHTML = '<option value="">Önce sunucu seçin...</option>';
-                        }
-                    });
-                }
-
-            } catch (error) {
-                console.error('Sunucular yüklenirken hata:', error);
-                showError('setup-error', 'Sunucular yüklenemedi!');
-            }
-        }
-
-        async function setupCommand() {
-            const serverId = document.getElementById('serverSelect').value;
-            const command = document.getElementById('commandSelect').value;
-            const channelId = document.getElementById('channelSelect').value;
-
-            if (!serverId || !command) {
-                showError('setup-error', 'Sunucu ve komut seçin!');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/setup-command', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serverId, command, channelId })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('setup-success').style.display = 'block';
-                    setTimeout(() => {
-                        document.getElementById('setup-success').style.display = 'none';
-                    }, 3000);
-                } else {
-                    showError('setup-error', result.error);
-                }
-            } catch (error) {
-                showError('setup-error', error.message);
-            }
-        }
-
-        async function saveQuotaSettings() {
-            const serverId = document.getElementById('quotaServerSelect').value;
-            const devText = document.getElementById('devQuotaText').value;
-            const modText = document.getElementById('modQuotaText').value;
-
-            if (!serverId) {
-                showError('quota-error', 'Sunucu seçin!');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/quota-settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serverId, devText, modText })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('quota-success').style.display = 'block';
-                    setTimeout(() => {
-                        document.getElementById('quota-success').style.display = 'none';
-                    }, 3000);
-                } else {
-                    showError('quota-error', result.error);
-                }
-            } catch (error) {
-                showError('quota-error', error.message);
-            }
-        }
-
-        async function shareEarlyQuota() {
-            const serverId = document.getElementById('quotaServerSelect').value;
-
-            if (!serverId) {
-                showError('quota-error', 'Sunucu seçin!');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/share-quota', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serverId })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('quota-success').style.display = 'block';
-                    setTimeout(() => {
-                        document.getElementById('quota-success').style.display = 'none';
-                    }, 3000);
-                } else {
-                    showError('quota-error', result.error);
-                }
-            } catch (error) {
-                showError('quota-error', error.message);
-            }
-        }
-
-        async function sendGlobalMessage(event) {
-            event.preventDefault();
-            const message = document.getElementById('globalMessage').value;
-
-            if (!message) {
-                showError('message-error', 'Mesaj yazın!');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/send-global-message', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('message-success').style.display = 'block';
-                    document.getElementById('globalMessage').value = '';
-                    document.getElementById('send-result').textContent = 
-                        `✅ ${result.sent} sunucuya mesaj gönderildi${result.failed > 0 ? ` (${result.failed} hata)` : ''}`;
-                    
-                    setTimeout(() => {
-                        document.getElementById('message-success').style.display = 'none';
-                    }, 3000);
-                } else {
-                    showError('message-error', result.error);
-                }
-            } catch (error) {
-                showError('message-error', error.message);
-            }
-        }
-
-        function showError(elementId, message) {
-            const element = document.getElementById(elementId);
-            element.textContent = '❌ Hata: ' + message;
-            element.style.display = 'block';
-            setTimeout(() => {
-                element.style.display = 'none';
-            }, 5000);
-        }
-
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
-
-                document.getElementById('server-count').textContent = data.servers;
-                document.getElementById('register-count').textContent = data.users;
-                document.getElementById('complaint-count').textContent = data.complaints || 0;
-                document.getElementById('bom-games-count').textContent = data.bomGames || 0;
-            } catch (error) {
-                console.error('İstatistik yükleme hatası:', error);
-            }
-        }
-
-        loadStats();
-        setInterval(loadStats, 10000);
-        
-        // Sayfa açıldığında sunucuları yükle
-        loadServers();
     </script>
 </body>
 </html>
