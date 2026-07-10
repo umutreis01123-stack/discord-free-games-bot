@@ -3,6 +3,8 @@ const { Client, GatewayIntentBits, EmbedBuilder, ChannelType, PermissionFlagsBit
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
 
 /*
 =================================================================
@@ -803,7 +805,8 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceReceiver } = require('@discordjs/voice');
+          const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
+          const { Readable } = require('stream');
           
           const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
@@ -815,40 +818,136 @@ client.on('interactionCreate', async (interaction) => {
 
           // Voice receiver oluştur
           const receiver = connection.receiver;
+          const userAudioStreams = new Map();
 
-          // Konuşma olaylarını dinle
+          // Her kullanıcının ses kaydını tut
           receiver.speaking.on('start', (userId) => {
             const member = interaction.guild.members.cache.get(userId);
             if (member && !member.user.bot) {
-              const timestamp = new Date().toLocaleTimeString('tr-TR', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
-              });
+              console.log(`[SES KAYDI BAŞLADI] ${member.user.tag}`);
               
-              textChannel.send(`🎤 **${member.user.username}** konuşmaya başladı - \`${timestamp}\``).catch(console.error);
-              console.log(`[${voiceChannel.name}] ${member.user.tag} konuşmaya başladı`);
-            }
-          });
+              // Kullanıcı sesini yakalamaya başla
+              const audioStream = receiver.subscribe(userId, {
+                end: {
+                  behavior: EndBehaviorType.AfterSilence,
+                  duration: 500, // 500ms sessizlikten sonra bitir
+                }
+              });
 
-          receiver.speaking.on('end', (userId) => {
-            const member = interaction.guild.members.cache.get(userId);
-            if (member && !member.user.bot) {
-              const timestamp = new Date().toLocaleTimeString('tr-TR', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
+              userAudioStreams.set(userId, {
+                stream: audioStream,
+                chunks: [],
+                member: member,
+                startTime: Date.now()
               });
-              
-              textChannel.send(`⏹️ **${member.user.username}** konuşmayı bitirdi - \`${timestamp}\``).catch(console.error);
-              console.log(`[${voiceChannel.name}] ${member.user.tag} konuşmayı bitirdi`);
+
+              // Audio chunks toplayabiliriz
+              audioStream.on('data', (chunk) => {
+                const userData = userAudioStreams.get(userId);
+                if (userData) {
+                  userData.chunks.push(chunk);
+                }
+              });
+
+              audioStream.on('end', async () => {
+                const userData = userAudioStreams.get(userId);
+                if (!userData) return;
+
+                try {
+                  const buffer = Buffer.concat(userData.chunks);
+                  console.log(`[SES KARTI TAMAMLANDI] ${userData.member.user.tag} - ${buffer.length} bytes`);
+                  
+                  if (buffer.length < 1000) {
+                    console.log('[UYARI] Ses çok kısa, atlıyor');
+                    userAudioStreams.delete(userId);
+                    return;
+                  }
+
+                  // Whisper API'ye gönder
+                  if (process.env.OPENAI_API_KEY) {
+                    try {
+                      const form = new FormData();
+                      
+                      // Buffer'ı Blob'a dönüştür
+                      form.append('file', buffer, {
+                        filename: `audio-${userData.member.user.id}-${Date.now()}.wav`,
+                        contentType: 'audio/wav'
+                      });
+                      form.append('model', 'whisper-1');
+                      form.append('language', 'tr');
+
+                      console.log('[WHISPER] API çağrısı yapılıyor...');
+                      
+                      const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+                        headers: {
+                          ...form.getHeaders(),
+                          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+                        },
+                        timeout: 60000
+                      });
+
+                      if (response.data && response.data.text) {
+                        const text = response.data.text.trim();
+                        
+                        if (text.length > 0) {
+                          const timestamp = new Date().toLocaleTimeString('tr-TR', { 
+                            hour: '2-digit', 
+                            minute: '2-digit', 
+                            second: '2-digit' 
+                          });
+
+                          const embed = new EmbedBuilder()
+                            .setColor('#3498db')
+                            .setAuthor({ 
+                              name: `🎤 ${userData.member.user.username}`, 
+                              iconURL: userData.member.user.displayAvatarURL() 
+                            })
+                            .setDescription(text)
+                            .setFooter({ text: timestamp })
+                            .setTimestamp();
+
+                          await textChannel.send({ embeds: [embed] }).catch(err => console.error('Mesaj gönderme hatası:', err));
+                          console.log(`[YAZIYA ÇEVRİLDİ] ${userData.member.user.tag}: "${text}"`);
+                        } else {
+                          console.log('[BOS METIN] Whisper metin döndürmedi');
+                        }
+                      }
+                    } catch (whisperError) {
+                      console.error('[WHISPER HATA]', whisperError.response?.data || whisperError.message);
+                      
+                      const timestamp = new Date().toLocaleTimeString('tr-TR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        second: '2-digit' 
+                      });
+                      
+                      await textChannel.send(`⚠️ **${userData.member.user.username}** konuştu (yazıya çevirme hatası) - \`${timestamp}\``).catch(console.error);
+                    }
+                  } else {
+                    console.log('[UYARI] OPENAI_API_KEY tanımlı değil');
+                    const timestamp = new Date().toLocaleTimeString('tr-TR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit', 
+                      second: '2-digit' 
+                    });
+                    await textChannel.send(`🎤 **${userData.member.user.username}** konuştu (API key eksik) - \`${timestamp}\``).catch(console.error);
+                  }
+
+                } catch (error) {
+                  console.error('[SES ISLEME HATASI]', error);
+                } finally {
+                  userAudioStreams.delete(userId);
+                }
+              });
             }
           });
 
           // Bağlantı kesilirse yeniden bağlan
           connection.on('stateChange', (oldState, newState) => {
+            console.log(`[BAGLANTI DURUM] ${oldState.status} -> ${newState.status}`);
+            
             if (newState.status === 'disconnected') {
-              console.log('Ses bağlantısı kesildi, yeniden bağlanıyor...');
+              console.log('[YENIDEN BAGLANIYOR]');
               setTimeout(() => {
                 try {
                   const newConnection = joinVoiceChannel({
@@ -858,8 +957,9 @@ client.on('interactionCreate', async (interaction) => {
                     selfDeaf: false,
                     selfMute: false,
                   });
+                  console.log('[BAGLANTI BASARILI]');
                 } catch (error) {
-                  console.error('Yeniden bağlanma hatası:', error);
+                  console.error('[YENIDEN BAGLANIYOR HATASI]', error);
                 }
               }, 5000);
             }
@@ -877,24 +977,25 @@ client.on('interactionCreate', async (interaction) => {
 
           const embed = new EmbedBuilder()
             .setColor('#2ecc71')
-            .setTitle('🎙️ Ses Kaydı Başlatıldı')
-            .setDescription(`Bot **${voiceChannel.name}** kanalını dinleyecek!\n\n**Özellikler:**\n• Kim ne konuşuyor takip eder\n• Konuşma başlama/bitirme günlüğü\n• Otomatik yeniden bağlanma\n• Zaman damgası ile kayıt`)
+            .setTitle('🎙️ Ses Kaydı & Yazıya Çevirme Başlatıldı')
+            .setDescription(`Bot **${voiceChannel.name}** kanalında konuşmaları Whisper AI ile yazıya çevirecek!\n\n**Nasıl Çalışıyor:**\n1️⃣ Ses kanalında konuşmaya başlasın\n2️⃣ Bot sesini kaydeder\n3️⃣ Whisper AI yazıya çevirir\n4️⃣ Metin kanalına gönderir`)
             .addFields(
               { name: '🎤 Dinleme Kanalı', value: voiceChannel.name, inline: true },
               { name: '📝 Kayıt Kanalı', value: textChannel.name, inline: true },
-              { name: '📅 Başlama', value: new Date().toLocaleTimeString('tr-TR'), inline: true }
+              { name: '⚙️ Model', value: 'Whisper-1 (OpenAI)', inline: true }
             )
             .setTimestamp();
 
           await interaction.reply({ embeds: [embed], ephemeral: true });
+          console.log(`[BASLATILDI] ${interaction.guild.name} - Ses kaydı aktif`);
 
         } catch (error) {
-          console.error('Ses kayıt hatası:', error);
+          console.error('[BASLATMA HATASI]', error);
           
           const errorEmbed = new EmbedBuilder()
             .setColor('#e74c3c')
-            .setTitle('❌ Hata')
-            .setDescription(`Ses kaydı başlatılamadı:\n\`${error.message}\``)
+            .setTitle('❌ Ses Kaydı Başlatılamadı')
+            .setDescription(`Hata: \`${error.message}\``)
             .setTimestamp();
 
           await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
