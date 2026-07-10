@@ -803,8 +803,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
-          const { VoiceReceiver } = require('@discordjs/voice');
+          const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceReceiver } = require('@discordjs/voice');
           
           const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
@@ -814,46 +813,39 @@ client.on('interactionCreate', async (interaction) => {
             selfMute: false,
           });
 
-          // Voice receiver kur - konuşmaları yakalamak için
+          // Voice receiver oluştur
           const receiver = connection.receiver;
 
-          // Ses paketi dinle
-          const audioSubscription = connection.subscribe(receiver);
-
-          // Kullanıcı konuşmalarını yakalamak için event listener
+          // Konuşma olaylarını dinle
           receiver.speaking.on('start', (userId) => {
-            const user_obj = interaction.guild.members.cache.get(userId);
-            if (user_obj && !user_obj.user.bot) {
-              console.log(`[${voiceChannel.name}] ${user_obj.user.tag} konuşmaya başladı`);
-              
-              // Zaman damgası ile bildirim gönder
+            const member = interaction.guild.members.cache.get(userId);
+            if (member && !member.user.bot) {
               const timestamp = new Date().toLocaleTimeString('tr-TR', { 
                 hour: '2-digit', 
                 minute: '2-digit', 
                 second: '2-digit' 
               });
               
-              textChannel.send(`🎤 **${user_obj.user.username}** konuşmaya başladı - \`${timestamp}\``).catch(console.error);
+              textChannel.send(`🎤 **${member.user.username}** konuşmaya başladı - \`${timestamp}\``).catch(console.error);
+              console.log(`[${voiceChannel.name}] ${member.user.tag} konuşmaya başladı`);
             }
           });
 
           receiver.speaking.on('end', (userId) => {
-            const user_obj = interaction.guild.members.cache.get(userId);
-            if (user_obj && !user_obj.user.bot) {
-              console.log(`[${voiceChannel.name}] ${user_obj.user.tag} konuşmayı bitti`);
-              
-              // Zaman damgası ile bildirim gönder
+            const member = interaction.guild.members.cache.get(userId);
+            if (member && !member.user.bot) {
               const timestamp = new Date().toLocaleTimeString('tr-TR', { 
                 hour: '2-digit', 
                 minute: '2-digit', 
                 second: '2-digit' 
               });
               
-              textChannel.send(`⏹️ **${user_obj.user.username}** konuşmayı bitirdi - \`${timestamp}\``).catch(console.error);
+              textChannel.send(`⏹️ **${member.user.username}** konuşmayı bitirdi - \`${timestamp}\``).catch(console.error);
+              console.log(`[${voiceChannel.name}] ${member.user.tag} konuşmayı bitirdi`);
             }
           });
 
-          // Bağlantı kaybında yeniden bağlan
+          // Bağlantı kesilirse yeniden bağlan
           connection.on('stateChange', (oldState, newState) => {
             if (newState.status === 'disconnected') {
               console.log('Ses bağlantısı kesildi, yeniden bağlanıyor...');
@@ -873,7 +865,7 @@ client.on('interactionCreate', async (interaction) => {
             }
           });
 
-          // Kayıt ayarlarını kaydet
+          // Ayarları kaydet
           let voiceConfig = getVoiceTranscripts();
           voiceConfig[interaction.guildId] = {
             listeningChannelId: voiceChannel.id,
@@ -886,7 +878,7 @@ client.on('interactionCreate', async (interaction) => {
           const embed = new EmbedBuilder()
             .setColor('#2ecc71')
             .setTitle('🎙️ Ses Kaydı Başlatıldı')
-            .setDescription(`Bot **${voiceChannel.name}** kanalını dinleyecek!\n\n**Özellikler:**\n• Konuşmaları yazıya dönüştürüp kaydeder\n• Kim ne konuşmuş takip edilir\n• Otomatik yeniden bağlanma\n• Zaman damgası ile kayıt`)
+            .setDescription(`Bot **${voiceChannel.name}** kanalını dinleyecek!\n\n**Özellikler:**\n• Kim ne konuşuyor takip eder\n• Konuşma başlama/bitirme günlüğü\n• Otomatik yeniden bağlanma\n• Zaman damgası ile kayıt`)
             .addFields(
               { name: '🎤 Dinleme Kanalı', value: voiceChannel.name, inline: true },
               { name: '📝 Kayıt Kanalı', value: textChannel.name, inline: true },
@@ -899,13 +891,13 @@ client.on('interactionCreate', async (interaction) => {
         } catch (error) {
           console.error('Ses kayıt hatası:', error);
           
-          const embed = new EmbedBuilder()
+          const errorEmbed = new EmbedBuilder()
             .setColor('#e74c3c')
             .setTitle('❌ Hata')
-            .setDescription(`Ses kaydı başlatılamadı: ${error.message}`)
+            .setDescription(`Ses kaydı başlatılamadı:\n\`${error.message}\``)
             .setTimestamp();
 
-          await interaction.reply({ embeds: [embed], ephemeral: true });
+          await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
         }
       }
     }
