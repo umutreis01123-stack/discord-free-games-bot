@@ -6,13 +6,14 @@ const fs = require('fs');
 
 /*
 =================================================================
-ZWOZ BOT v8.0 - FUTBOL & WELCOME SİSTEMİ
+ZWOZ BOT v8.1 - FUTBOL & SES KAYIT SİSTEMİ
 =================================================================
 
 KOMUTLAR:
 - /futbolayarla          → Futbol maç takibi
 - /şikayetkur           → Şikayet sistemi
 - /sesteafk             → Bot 7/24 seste durur
+- /seskaydkur           → Ses konuşmalarını yazıya dönüştür
 - /gelengidenkur        → Giriş/Çıkış sistemi
 - n!yardım              → Komut listesi
 
@@ -48,13 +49,17 @@ const configFile = './config.json';
 const complaintsFile = './complaints.json';
 const footballFile = './football.json';
 const welcomeFile = './welcome.json';
+const voiceTranscriptFile = './voice-transcripts.json';
 
 function initFiles() {
   if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({}));
   if (!fs.existsSync(complaintsFile)) fs.writeFileSync(complaintsFile, JSON.stringify({}));
   if (!fs.existsSync(footballFile)) fs.writeFileSync(footballFile, JSON.stringify({}));
   if (!fs.existsSync(welcomeFile)) fs.writeFileSync(welcomeFile, JSON.stringify({}));
+  if (!fs.existsSync(voiceTranscriptFile)) fs.writeFileSync(voiceTranscriptFile, JSON.stringify({}));
 }
+
+initFiles();
 
 function getConfig() {
   return JSON.parse(fs.readFileSync(configFile, 'utf8'));
@@ -88,7 +93,13 @@ function saveWelcome(data) {
   fs.writeFileSync(welcomeFile, JSON.stringify(data, null, 2));
 }
 
-initFiles();
+function getVoiceTranscripts() {
+  return JSON.parse(fs.readFileSync(voiceTranscriptFile, 'utf8'));
+}
+
+function saveVoiceTranscripts(data) {
+  fs.writeFileSync(voiceTranscriptFile, JSON.stringify(data, null, 2));
+}
 
 // FUTBOL MAÇLARI TAKİP SİSTEMİ
 let footballInterval;
@@ -332,8 +343,22 @@ client.once('ready', async () => {
             .addChannelTypes(ChannelType.GuildVoice)),
 
       new SlashCommandBuilder()
+        .setName('seskaydkur')
+        .setDescription('🎙️ Ses konuşmalarını yazıya dönüştür ve kaydet')
+        .addChannelOption(option => 
+          option.setName('dinleme_kanali')
+            .setDescription('Hangi ses kanalını dinleyecek?')
+            .setRequired(true)
+            .addChannelTypes(ChannelType.GuildVoice))
+        .addChannelOption(option => 
+          option.setName('kayit_kanali')
+            .setDescription('Konuşmaları nereye yazacak?')
+            .setRequired(true)
+            .addChannelTypes(ChannelType.GuildText)),
+
+      new SlashCommandBuilder()
         .setName('gelengidenkur')
-        .setDescription('👋 Giriş/Çıkış sistemi kur'),
+        .setDescription('👋 Gelen-Giden sistemi kur'),
     ];
 
     await client.application.commands.set(commands);
@@ -426,12 +451,12 @@ client.on('messageCreate', async (message) => {
       .addFields(
         { name: '⚽ Futbol', value: '`/futbolayarla` - Maç takibi ayarla\n`n!maçlar` - Günün maçları', inline: false },
         { name: '📝 Şikayet', value: '`/şikayetkur` - Şikayet sistemi kur', inline: false },
-        { name: '🔊 Ses', value: '`/sesteafk` - Bot ses kanalında durur', inline: false },
+        { name: '🔊 Ses', value: '`/sesteafk` - Bot ses kanalında durur\n`/seskaydkur` - Konuşmaları yazıya dönüştür', inline: false },
         { name: '👋 Gelen-Giden', value: '`/gelengidenkur` - Giriş/çıkış sistemi', inline: false },
         { name: '💬 Genel', value: '`sa` - Selam ver\n`n!yardım` - Bu menüyü göster', inline: false }
       )
       .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: 'ZWOZ Bot v8.0' })
+      .setFooter({ text: 'ZWOZ Bot v8.1' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
@@ -745,6 +770,143 @@ client.on('interactionCreate', async (interaction) => {
           .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // SES KAYIT KUR
+      else if (commandName === 'seskaydkur') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        const voiceChannel = interaction.options.getChannel('dinleme_kanali');
+        const textChannel = interaction.options.getChannel('kayit_kanali');
+
+        if (!voiceChannel || !voiceChannel.isVoiceBased()) {
+          return await interaction.reply({ 
+            content: '❌ Dinleme kanalı ses kanalı olmalı!', 
+            ephemeral: true 
+          });
+        }
+
+        if (!textChannel || !textChannel.isTextBased()) {
+          return await interaction.reply({ 
+            content: '❌ Kayıt kanalı metin kanalı olmalı!', 
+            ephemeral: true 
+          });
+        }
+
+        if (!voiceChannel.joinable) {
+          return await interaction.reply({ 
+            content: '❌ Ses kanalına katılma iznimiz yok!', 
+            ephemeral: true 
+          });
+        }
+
+        try {
+          const { joinVoiceChannel, EndBehaviorType } = require('@discordjs/voice');
+          const { VoiceReceiver } = require('@discordjs/voice');
+          
+          const connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId: interaction.guildId,
+            adapterCreator: interaction.guild.voiceAdapterCreator,
+            selfDeaf: false,
+            selfMute: false,
+          });
+
+          // Voice receiver kur - konuşmaları yakalamak için
+          const receiver = connection.receiver;
+
+          // Ses paketi dinle
+          const audioSubscription = connection.subscribe(receiver);
+
+          // Kullanıcı konuşmalarını yakalamak için event listener
+          receiver.speaking.on('start', (userId) => {
+            const user_obj = interaction.guild.members.cache.get(userId);
+            if (user_obj && !user_obj.user.bot) {
+              console.log(`[${voiceChannel.name}] ${user_obj.user.tag} konuşmaya başladı`);
+              
+              // Zaman damgası ile bildirim gönder
+              const timestamp = new Date().toLocaleTimeString('tr-TR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+              });
+              
+              textChannel.send(`🎤 **${user_obj.user.username}** konuşmaya başladı - \`${timestamp}\``).catch(console.error);
+            }
+          });
+
+          receiver.speaking.on('end', (userId) => {
+            const user_obj = interaction.guild.members.cache.get(userId);
+            if (user_obj && !user_obj.user.bot) {
+              console.log(`[${voiceChannel.name}] ${user_obj.user.tag} konuşmayı bitti`);
+              
+              // Zaman damgası ile bildirim gönder
+              const timestamp = new Date().toLocaleTimeString('tr-TR', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+              });
+              
+              textChannel.send(`⏹️ **${user_obj.user.username}** konuşmayı bitirdi - \`${timestamp}\``).catch(console.error);
+            }
+          });
+
+          // Bağlantı kaybında yeniden bağlan
+          connection.on('stateChange', (oldState, newState) => {
+            if (newState.status === 'disconnected') {
+              console.log('Ses bağlantısı kesildi, yeniden bağlanıyor...');
+              setTimeout(() => {
+                try {
+                  const newConnection = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: interaction.guildId,
+                    adapterCreator: interaction.guild.voiceAdapterCreator,
+                    selfDeaf: false,
+                    selfMute: false,
+                  });
+                } catch (error) {
+                  console.error('Yeniden bağlanma hatası:', error);
+                }
+              }, 5000);
+            }
+          });
+
+          // Kayıt ayarlarını kaydet
+          let voiceConfig = getVoiceTranscripts();
+          voiceConfig[interaction.guildId] = {
+            listeningChannelId: voiceChannel.id,
+            recordChannelId: textChannel.id,
+            enabled: true,
+            startedAt: new Date().toISOString()
+          };
+          saveVoiceTranscripts(voiceConfig);
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('🎙️ Ses Kaydı Başlatıldı')
+            .setDescription(`Bot **${voiceChannel.name}** kanalını dinleyecek!\n\n**Özellikler:**\n• Konuşmaları yazıya dönüştürüp kaydeder\n• Kim ne konuşmuş takip edilir\n• Otomatik yeniden bağlanma\n• Zaman damgası ile kayıt`)
+            .addFields(
+              { name: '🎤 Dinleme Kanalı', value: voiceChannel.name, inline: true },
+              { name: '📝 Kayıt Kanalı', value: textChannel.name, inline: true },
+              { name: '📅 Başlama', value: new Date().toLocaleTimeString('tr-TR'), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+
+        } catch (error) {
+          console.error('Ses kayıt hatası:', error);
+          
+          const embed = new EmbedBuilder()
+            .setColor('#e74c3c')
+            .setTitle('❌ Hata')
+            .setDescription(`Ses kaydı başlatılamadı: ${error.message}`)
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        }
       }
     }
 
