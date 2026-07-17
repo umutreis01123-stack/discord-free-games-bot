@@ -408,14 +408,27 @@ client.on('guildMemberAdd', async (member) => {
     const embed = new EmbedBuilder()
       .setColor('#2ecc71')
       .setTitle('👋 Hoş Geldin!')
-      .setDescription(`**Hoş geldin reis** ${member.user.tag}!\n\nSunucumuza katıldığın için teşekkürler.`)
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+      .setDescription(`**Hoş geldin reis** ${member.user.username}!\n\nSunucumuza katıldığın için teşekkürler.`)
+      .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .addFields(
-        { name: '👤 Kullanıcı', value: member.user.tag, inline: true },
-        { name: '📅 Hesap Oluşturma', value: member.user.createdAt.toLocaleDateString('tr-TR'), inline: true },
-        { name: '🆔 ID', value: member.user.id, inline: true }
+        { name: '👤 Kullanıcı', value: `${member.user.username}#${member.user.discriminator}`, inline: true },
+        { name: '🆔 ID', value: member.user.id, inline: true },
+        { name: '📅 Discord\'a Katılma', value: member.user.createdAt.toLocaleDateString('tr-TR', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }), inline: false },
+        { name: '🔗 Sunucuya Katılma', value: new Date().toLocaleDateString('tr-TR', {
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }), inline: false }
       )
-      .setFooter({ text: `Toplam üye: ${member.guild.memberCount}` })
+      .setFooter({ text: `Toplam üye: ${member.guild.memberCount} | Hoş geldin!` })
       .setTimestamp();
 
     await channel.send({ embeds: [embed] });
@@ -437,13 +450,19 @@ client.on('guildMemberRemove', async (member) => {
     const embed = new EmbedBuilder()
       .setColor('#e74c3c')
       .setTitle('👋 Güle Güle!')
-      .setDescription(`**Hadi sattı gidebilirsin** ${member.user.tag}!\n\nBir üyemiz ayrıldı.`)
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+      .setDescription(`**Hadi sattı gidebilirsin** ${member.user.username}!\n\nBir üyemiz ayrıldı.`)
+      .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .addFields(
-        { name: '👤 Ayrılan', value: member.user.tag, inline: true },
-        { name: '📅 Ayrılma', value: new Date().toLocaleDateString('tr-TR'), inline: true }
+        { name: '👤 Ayrılan', value: `${member.user.username}#${member.user.discriminator}`, inline: true },
+        { name: '📅 Ayrılma Zamanı', value: new Date().toLocaleDateString('tr-TR', {
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }), inline: true }
       )
-      .setFooter({ text: `Toplam üye: ${member.guild.memberCount}` })
+      .setFooter({ text: `Toplam üye: ${member.guild.memberCount} | Görüşürüz!` })
       .setTimestamp();
 
     await channel.send({ embeds: [embed] });
@@ -517,6 +536,93 @@ client.on('messageCreate', async (message) => {
         }
       }
     }
+  }
+
+  // Z!ROBLOX - ROBLOX KOD TAKİBİ
+  if (content.toLowerCase().startsWith('z!roblox')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    const args = content.split(' ');
+    if (args.length < 2) {
+      return await message.reply('❌ Oyun adı yazın! Örnek: `z!roblox Pet Simulator X`');
+    }
+
+    const gameName = args.slice(1).join(' ');
+    let roblox = getRoblox();
+
+    if (!roblox[message.guildId]) {
+      roblox[message.guildId] = {};
+    }
+
+    roblox[message.guildId][gameName] = {
+      channelId: message.channelId,
+      enabled: true,
+      lastCheck: Date.now()
+    };
+    saveRoblox(roblox);
+
+    const embed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('🎮 Roblox Kod Takibi Açıldı')
+      .setDescription(`**${gameName}** oyunu için kod takibi başlatıldı!\n\nYeni kodlar bu kanalda otomatik paylaşılacak.`)
+      .addFields(
+        { name: '🎮 Oyun', value: gameName, inline: true },
+        { name: '📺 Kanal', value: message.channel.toString(), inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!YARIM - YARIM KOMUT
+  if (content.toLowerCase() === 'z!yarım') {
+    const embed = new EmbedBuilder()
+      .setColor('#ff6b6b')
+      .setTitle('🍉 Yarım Komut')
+      .setDescription('Bu komut yarım kaldı... 🤔\n\nBelki ileride tamamlanır!')
+      .addFields(
+        { name: '📊 Durum', value: 'Yarım', inline: true },
+        { name: '🔧 Tamamlanma', value: 'Belirsiz', inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!REKLAM - REKLAM SİSTEMİ
+  if (content.toLowerCase().startsWith('z!reklam')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    const args = content.split(' ');
+    if (args.length < 2) {
+      return await message.reply('❌ Discord davet linki yazın! Örnek: `z!reklam https://discord.gg/example`');
+    }
+
+    const inviteLink = args[1];
+    if (!inviteLink.includes('discord.gg/') && !inviteLink.includes('discord.com/invite/')) {
+      return await message.reply('❌ Geçerli bir Discord davet linki yazın!');
+    }
+
+    let adSystem = getAdSystem();
+    adSystem.requiredServer = inviteLink;
+    adSystem.enabled = true;
+    saveAdSystem(adSystem);
+
+    const embed = new EmbedBuilder()
+      .setColor('#5865f2')
+      .setTitle('📢 Reklam Sistemi Ayarlandı')
+      .setDescription(`Reklam sistemi aktif edildi!\n\nKullanıcılar komutları kullanmak için **${inviteLink}** sunucusuna katılmalı.`)
+      .addFields(
+        { name: '🔗 Gerekli Sunucu', value: inviteLink, inline: false },
+        { name: '⚙️ Durum', value: 'Aktif', inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
   }
 
   // YARDIM KOMUTU
