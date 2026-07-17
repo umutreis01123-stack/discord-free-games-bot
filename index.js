@@ -8,7 +8,7 @@ const FormData = require('form-data');
 
 /*
 =================================================================
-ZWOZ BOT v9.0 - YENİLENMİŞ SİSTEM
+ZWOZ BOT v9.1 - DEVAM EDİLEN SİSTEM
 =================================================================
 
 SLASH KOMUTLAR:
@@ -17,12 +17,31 @@ SLASH KOMUTLAR:
 - /futbol               → Futbol maç takibi (7/24)
 - /seskur               → Konuşmaları DM'e gönder
 - /gelengidenkur        → Giriş/Çıkış sistemi
+- /bum                  → Sunucuyu sil (OWNER ONLY)
 
 MESAJ KOMUTLAR:
 - z!roblox [oyun]       → Roblox kod takibi
 - z!yarım               → Yarım komut
 - z!reklam [davet]      → Reklam sistemi
 - z!ban @everyone       → Herkesi banla
+- z!yardım              → Komut listesi
+- z!ping                → Bot gecikme ölçer
+- z!uptime              → Çalışma süresi
+- z!sunucu              → Sunucu bilgileri
+- z!avatar [@user]      → Avatar göster
+- z!kullanıcı [@user]   → Kullanıcı bilgileri
+- z!say [mesaj]         → Bot konuştur (OWNER)
+- z!temizle [sayı]      → Mesaj sil (OWNER)
+- z!maçlar              → Futbol maçları
+
+YENİ ÖZELLİKLER v9.1:
++ Gelişmiş yardım sistemi
++ Ping ve uptime komutları
++ Avatar ve kullanıcı bilgi komutları
++ Sunucu bilgileri komutu
++ Mesaj temizleme komutu
++ Bot konuşturma komutu
++ Hata düzeltmeleri ve optimizasyonlar
 
 =================================================================
 */
@@ -410,6 +429,8 @@ function startRobloxTracking() {
 // BOT READY
 client.once('ready', async () => {
   console.log('✅ Bot çalışıyor: ' + client.user.tag);
+  console.log(`📊 ${client.guilds.cache.size} sunucuda aktif`);
+  console.log(`👥 ${client.users.cache.size} kullanıcıya hizmet veriyor`);
   
   try {
     const commands = [
@@ -460,6 +481,10 @@ client.once('ready', async () => {
     await client.application.commands.set(commands);
     console.log('✅ Slash komutları eklendi: ' + commands.length);
     
+    // Bot activity status ayarla
+    client.user.setActivity('z!yardım | umutpapa123', { type: 0 });
+    console.log('🎮 Bot aktivitesi ayarlandı');
+    
     // Futbol takibini başlat
     console.log('⚽ Futbol maç takibi başlatılıyor...');
     startFootballTracking();
@@ -467,6 +492,8 @@ client.once('ready', async () => {
     // Roblox kod takibini başlat
     console.log('🎮 Roblox kod takibi başlatılıyor...');
     startRobloxTracking();
+    
+    console.log('🚀 ZWOZ Bot v9.1 tamamen hazır!');
     
   } catch (error) {
     console.error('❌ Komut kurulum hatası:', error);
@@ -704,28 +731,198 @@ client.on('messageCreate', async (message) => {
     await message.reply({ embeds: [embed] });
   }
 
-  // YARDIM KOMUTU
-  if (content === 'n!yardım' || content === 'n!help') {
+  // Z!YARDIM VE Z!HELP - GELİŞTİRİLMİŞ YARDIM
+  if (content === 'z!yardım' || content === 'z!help' || content === 'z!komutlar') {
     const embed = new EmbedBuilder()
       .setColor('#667eea')
-      .setTitle('📋 ZWOZ Bot Komut Listesi')
-      .setDescription('**Mevcut komutlar:**')
+      .setTitle('🤖 ZWOZ Bot v9.0 - Komut Listesi')
+      .setDescription('**Tüm komutlar ve özellikleri:**')
       .addFields(
-        { name: '⚽ Futbol', value: '`/futbolayarla` - Maç takibi ayarla\n`n!maçlar` - Günün maçları', inline: false },
-        { name: '📝 Şikayet', value: '`/şikayetkur` - Şikayet sistemi kur', inline: false },
-        { name: '🔊 Ses', value: '`/sesteafk` - Bot ses kanalında durur\n`/seskaydkur` - Konuşmaları yazıya dönüştür', inline: false },
-        { name: '👋 Gelen-Giden', value: '`/gelengidenkur` - Giriş/çıkış sistemi', inline: false },
-        { name: '💬 Genel', value: '`sa` - Selam ver\n`n!yardım` - Bu menüyü göster', inline: false }
+        { name: '⚔️ OWNER KOMUTLARI', value: '`/futbol` - 7/24 maç takibi\n`/seskur` - Konuşmaları DM\'e gönder\n`/sesteafk` - Bot ses kanalında dursun\n`/şikayetkur` - Şikayet sistemi\n`/gelengidenkur` - Gelen-Giden sistemi\n`/bum` - Sunucuyu sil (TEHLİKELİ!)', inline: false },
+        { name: '🎮 ROBLOX & OYUNLAR', value: '`z!roblox [oyun]` - Kod takibi\n`z!yarım` - Yarım komut', inline: true },
+        { name: '🚫 MOD KOMUTLARI', value: '`z!ban @everyone` - Herkesi banla\n`z!reklam [davet]` - Reklam sistemi', inline: true },
+        { name: '💬 GENEL KOMUTLAR', value: '`sa` - Selam ver\n`z!ping` - Bot pingini göster\n`z!uptime` - Çalışma süresi', inline: false },
+        { name: '🔥 YENİ ÖZELLİKLER', value: '• 7/24 Futbol maç takibi\n• Whisper AI ses yazıya çevirme\n• Otomatik Roblox kod bulma\n• Gelişmiş gelen-giden (avatar + tarih)', inline: false }
       )
       .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: 'ZWOZ Bot v8.1' })
+      .setFooter({ text: 'ZWOZ Bot v9.1 | umutpapa123 tarafından' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
   }
 
+  // Z!PING - GECIKME ÖLÇER
+  if (content === 'z!ping') {
+    const embed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('🏓 Pong!')
+      .addFields(
+        { name: '📶 Bot Gecikmesi', value: `${client.ws.ping}ms`, inline: true },
+        { name: '⏱️ Yanıt Süresi', value: `${Date.now() - message.createdTimestamp}ms`, inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!UPTIME - ÇALIŞMA SÜRESİ
+  if (content === 'z!uptime' || content === 'z!süre') {
+    const uptime = process.uptime();
+    const days = Math.floor(uptime / 86400);
+    const hours = Math.floor((uptime % 86400) / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('⏰ Bot Çalışma Süresi')
+      .setDescription(`Bot **${days}** gün, **${hours}** saat, **${minutes}** dakika, **${seconds}** saniyedir çalışıyor!`)
+      .addFields(
+        { name: '🚀 Başlangıç', value: new Date(Date.now() - uptime * 1000).toLocaleString('tr-TR'), inline: true },
+        { name: '📊 Durum', value: 'Çevrimiçi ✅', inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!SUNUCU - SUNUCU BİLGİLERİ
+  if (content === 'z!sunucu' || content === 'z!server' || content === 'z!info') {
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle(`📋 ${message.guild.name} - Sunucu Bilgileri`)
+      .setThumbnail(message.guild.iconURL({ dynamic: true }))
+      .addFields(
+        { name: '👑 Sahip', value: `<@${message.guild.ownerId}>`, inline: true },
+        { name: '👥 Üye Sayısı', value: `${message.guild.memberCount}`, inline: true },
+        { name: '📅 Kuruluş', value: message.guild.createdAt.toLocaleDateString('tr-TR'), inline: true },
+        { name: '💬 Kanal Sayısı', value: `${message.guild.channels.cache.size}`, inline: true },
+        { name: '🎭 Rol Sayısı', value: `${message.guild.roles.cache.size}`, inline: true },
+        { name: '🌍 Bölge', value: 'Otomatik', inline: true }
+      )
+      .setFooter({ text: `Sunucu ID: ${message.guild.id}` })
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!AVATAR - AVATAR GÖSTER
+  if (content.startsWith('z!avatar') || content.startsWith('z!pp')) {
+    const args = content.split(' ');
+    let targetUser = message.author;
+
+    if (args.length > 1) {
+      // Eğer mention varsa
+      if (message.mentions.users.size > 0) {
+        targetUser = message.mentions.users.first();
+      } else {
+        // ID ile arama
+        try {
+          targetUser = await client.users.fetch(args[1]);
+        } catch {
+          targetUser = message.author;
+        }
+      }
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#e91e63')
+      .setTitle(`🖼️ ${targetUser.username} - Avatar`)
+      .setImage(targetUser.displayAvatarURL({ dynamic: true, size: 1024 }))
+      .setFooter({ text: `İstendi: ${message.author.username}` })
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!KULLANICI - KULLANICI BİLGİLERİ
+  if (content.startsWith('z!kullanıcı') || content.startsWith('z!user')) {
+    const args = content.split(' ');
+    let targetUser = message.author;
+    let targetMember = message.member;
+
+    if (args.length > 1) {
+      if (message.mentions.users.size > 0) {
+        targetUser = message.mentions.users.first();
+        targetMember = message.mentions.members.first();
+      } else {
+        try {
+          targetUser = await client.users.fetch(args[1]);
+          targetMember = await message.guild.members.fetch(args[1]);
+        } catch {
+          targetUser = message.author;
+          targetMember = message.member;
+        }
+      }
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle(`👤 ${targetUser.username} - Kullanıcı Bilgileri`)
+      .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+      .addFields(
+        { name: '🏷️ Tag', value: `${targetUser.username}#${targetUser.discriminator}`, inline: true },
+        { name: '🆔 ID', value: targetUser.id, inline: true },
+        { name: '🤖 Bot mu?', value: targetUser.bot ? 'Evet' : 'Hayır', inline: true },
+        { name: '📅 Discord\'a Katılma', value: targetUser.createdAt.toLocaleDateString('tr-TR'), inline: true },
+        { name: '📅 Sunucuya Katılma', value: targetMember ? targetMember.joinedAt.toLocaleDateString('tr-TR') : 'Bilinmiyor', inline: true },
+        { name: '🎭 Roller', value: targetMember ? (targetMember.roles.cache.size > 1 ? `${targetMember.roles.cache.size - 1} rol` : 'Rol yok') : 'Bilinmiyor', inline: true }
+      )
+      .setFooter({ text: `İstendi: ${message.author.username}` })
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!SAY - BOTU KONUŞTUR
+  if (content.startsWith('z!say ') || content.startsWith('z!söyle ')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    const text = content.split(' ').slice(1).join(' ');
+    if (!text) return await message.reply('❌ Bir mesaj yazın!');
+
+    // Orijinal mesajı sil
+    try {
+      await message.delete();
+    } catch {}
+
+    await message.channel.send(text);
+  }
+
+  // Z!TEMIZLE - MESAJLARI TEMİZLE
+  if (content.startsWith('z!temizle ') || content.startsWith('z!clear ')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    const args = content.split(' ');
+    const amount = parseInt(args[1]);
+
+    if (!amount || amount < 1 || amount > 100) {
+      return await message.reply('❌ 1-100 arasında bir sayı girin!');
+    }
+
+    try {
+      const messages = await message.channel.messages.fetch({ limit: amount + 1 });
+      await message.channel.bulkDelete(messages);
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('🗑️ Mesajlar Temizlendi')
+        .setDescription(`**${amount}** mesaj silindi!`)
+        .setTimestamp();
+
+      const sent = await message.channel.send({ embeds: [embed] });
+      setTimeout(() => sent.delete().catch(() => {}), 3000);
+    } catch (error) {
+      await message.reply('❌ Mesajları silerken hata oluştu!');
+    }
+  }
+
   // MAÇLAR KOMUTU
-  if (content === 'n!maçlar' || content === 'n!maclar') {
+  if (content === 'z!maçlar' || content === 'z!maclar' || content === 'z!futbol') {
     try {
       // Tüm liglerdeki günün maçlarını göster
       const allMatches = [];
@@ -1350,7 +1547,7 @@ client.on('interactionCreate', async (interaction) => {
           let voiceConfig = getVoiceTranscripts();
           voiceConfig[interaction.guildId] = {
             listeningChannelId: voiceChannel.id,
-            recordChannelId: textChannel.id,
+            recordChannelId: interaction.channelId,
             enabled: true,
             startedAt: new Date().toISOString()
           };

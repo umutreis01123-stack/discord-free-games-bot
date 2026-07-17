@@ -1,7 +1,7 @@
 {
   "name": "discord-bot-logger",
-  "version": "3.0.0",
-  "description": "Discord Bot - Advanced Logging System",
+  "version": "9.1.0",
+  "description": "Discord Bot - Advanced Gaming & Community Management System",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
