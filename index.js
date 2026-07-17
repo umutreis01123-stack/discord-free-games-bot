@@ -1438,74 +1438,94 @@ client.on('interactionCreate', async (interaction) => {
                     return;
                   }
 
-                  // Whisper API'ye gönder
-                  if (process.env.OPENAI_API_KEY) {
-                    try {
-                      const form = new FormData();
+                  // Google Gemini API ile ses tanıma
+                  try {
+                    if (process.env.GEMINI_API_KEY) {
+                      // Gemini'ye ses dosyasını gönder
+                      const base64Audio = buffer.toString('base64');
                       
-                      // Buffer'ı Blob'a dönüştür
-                      form.append('file', buffer, {
-                        filename: `audio-${userData.member.user.id}-${Date.now()}.wav`,
-                        contentType: 'audio/wav'
-                      });
-                      form.append('model', 'whisper-1');
-                      form.append('language', 'tr');
-
-                      console.log('[WHISPER] API çağrısı yapılıyor...');
-                      
-                      const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
+                      const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+                        contents: [
+                          {
+                            parts: [
+                              {
+                                text: "Bu ses dosyasındaki konuşmayı Türkçe olarak yazıya çevir. Sadece konuşulan metni ver, açıklama yapma."
+                              },
+                              {
+                                inline_data: {
+                                  mime_type: "audio/wav",
+                                  data: base64Audio
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }, {
                         headers: {
-                          ...form.getHeaders(),
-                          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+                          'Content-Type': 'application/json'
                         },
-                        timeout: 60000
+                        timeout: 30000
                       });
 
-                      if (response.data && response.data.text) {
-                        const text = response.data.text.trim();
+                      if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                        const text = response.data.candidates[0].content.parts[0].text.trim();
                         
                         if (text.length > 0) {
-                          // OWNER'a DM gönder
-                          try {
-                            const owner = await client.users.fetch(OWNER_ID);
-                            const timestamp = new Date().toLocaleTimeString('tr-TR');
-                            
-                            const embed = new EmbedBuilder()
-                              .setColor('#3498db')
-                              .setTitle('🎤 Ses Kaydı')
-                              .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
-                              .addFields(
-                                { name: '💬 Konuşma Metni', value: text, inline: false },
-                                { name: '⏰ Zaman', value: timestamp, inline: true }
-                              )
-                              .setThumbnail(userData.member.user.displayAvatarURL())
-                              .setTimestamp();
+                          const owner = await client.users.fetch(OWNER_ID);
+                          const timestamp = new Date().toLocaleTimeString('tr-TR');
+                          
+                          const embed = new EmbedBuilder()
+                            .setColor('#4285f4')
+                            .setTitle('🎤 Ses Kaydı (Gemini AI)')
+                            .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
+                            .addFields(
+                              { name: '💬 Konuşma Metni', value: text, inline: false },
+                              { name: '⏰ Zaman', value: timestamp, inline: true },
+                              { name: '🤖 AI', value: 'Google Gemini', inline: true }
+                            )
+                            .setThumbnail(userData.member.user.displayAvatarURL())
+                            .setTimestamp();
 
-                            await owner.send({ embeds: [embed] });
-                            console.log(`[SESKUR] DM gönderildi: ${userData.member.user.tag} - "${text}"`);
-                          } catch (dmError) {
-                            console.error('[SESKUR] DM gönderme hatası:', dmError);
-                          }
+                          await owner.send({ embeds: [embed] });
+                          console.log(`[GEMINI] DM gönderildi: ${userData.member.user.tag} - "${text}"`);
                         } else {
-                          console.log('[SESKUR] Boş metin');
+                          console.log('[GEMINI] Boş metin döndü');
                         }
-                      }
-                    } catch (whisperError) {
-                      console.error('[SESKUR] Whisper hatası:', whisperError.message);
-                      
-                      // Hata olursa da DM gönder
-                      try {
+                      } else {
+                        console.log('[GEMINI] Ses tanınamadı');
+                        
+                        // Fallback bildirim
                         const owner = await client.users.fetch(OWNER_ID);
-                        await owner.send(`🎤 **${userData.member.user.username}** konuştu (yazıya çevirme hatası) - ${new Date().toLocaleTimeString('tr-TR')}`);
-                      } catch (dmError) {
-                        console.error('[SESKUR] DM gönderme hatası:', dmError);
+                        await owner.send(`🎤 **${userData.member.user.username}** konuştu (ses tanınamadı) - ${new Date().toLocaleTimeString('tr-TR')}`);
                       }
+                      
+                    } else {
+                      // API key yoksa sadece bildirim
+                      const owner = await client.users.fetch(OWNER_ID);
+                      const timestamp = new Date().toLocaleTimeString('tr-TR');
+                      
+                      const embed = new EmbedBuilder()
+                        .setColor('#3498db')
+                        .setTitle('🎤 Ses Kaydı Algılandı')
+                        .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
+                        .addFields(
+                          { name: '💬 Durum', value: 'Ses algılandı (API key eksik)', inline: false },
+                          { name: '⏰ Zaman', value: timestamp, inline: true }
+                        )
+                        .setThumbnail(userData.member.user.displayAvatarURL())
+                        .setTimestamp();
+
+                      await owner.send({ embeds: [embed] });
+                      console.log(`[SESKUR] Bildirim gönderildi: ${userData.member.user.tag}`);
                     }
-                  } else {
-                    // API key yoksa sadece bildirim gönder
+                    
+                  } catch (apiError) {
+                    console.error('[GEMINI] API hatası:', apiError.message);
+                    
+                    // Hata durumunda da bildirim gönder
                     try {
                       const owner = await client.users.fetch(OWNER_ID);
-                      await owner.send(`🎤 **${userData.member.user.username}** konuştu (API key eksik) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                      await owner.send(`🎤 **${userData.member.user.username}** konuştu (AI hatası) - ${new Date().toLocaleTimeString('tr-TR')}`);
                     } catch (dmError) {
                       console.error('[SESKUR] DM gönderme hatası:', dmError);
                     }
