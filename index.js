@@ -470,6 +470,14 @@ client.once('ready', async () => {
             .addChannelTypes(ChannelType.GuildVoice)),
 
       new SlashCommandBuilder()
+        .setName('sestest')
+        .setDescription('🔊 Ses sistemi test (manuel bildirim)')
+        .addStringOption(option =>
+          option.setName('mesaj')
+            .setDescription('Test mesajı')
+            .setRequired(true)),
+
+      new SlashCommandBuilder()
         .setName('gelengidenkur')
         .setDescription('👋 Gelen-Giden sistemi kur'),
 
@@ -1272,6 +1280,46 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
+      // SES TEST - MANUEL BİLDİRİM
+      else if (commandName === 'sestest') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        const testMessage = interaction.options.getString('mesaj');
+
+        try {
+          const owner = await client.users.fetch(OWNER_ID);
+          const timestamp = new Date().toLocaleTimeString('tr-TR');
+          
+          const embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('🔊 Ses Sistemi Test')
+            .setDescription(`**Test Eden:** ${user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${interaction.channel.name}`)
+            .addFields(
+              { name: '💬 Test Mesajı', value: testMessage, inline: false },
+              { name: '⏰ Zaman', value: timestamp, inline: true },
+              { name: '🤖 Durum', value: 'Manuel Test ✅', inline: true }
+            )
+            .setThumbnail(user.displayAvatarURL())
+            .setTimestamp();
+
+          await owner.send({ embeds: [embed] });
+          console.log(`[SESTEST] Test bildirimi gönderildi: ${user.tag} - "${testMessage}"`);
+
+          await interaction.reply({ 
+            content: '✅ Test bildirimi umutpapa123\'e gönderildi!', 
+            ephemeral: true 
+          });
+        } catch (error) {
+          console.error('[SESTEST] Hata:', error);
+          await interaction.reply({ 
+            content: '❌ Test bildirimi gönderilemedi!', 
+            ephemeral: true 
+          });
+        }
+      }
+
       // GELEN GİDEN KUR
       else if (commandName === 'gelengidenkur') {
         if (user.id !== OWNER_ID) {
@@ -1525,8 +1573,22 @@ client.on('interactionCreate', async (interaction) => {
           connection.on('stateChange', (oldState, newState) => {
             console.log(`[BAGLANTI DURUM] ${oldState.status} -> ${newState.status}`);
             
+            if (newState.status === 'ready') {
+              console.log('[BAGLANTI HAZIR] Ses dinleme başladı!');
+              
+              // Bağlantı hazır olduğunda test bildirimi gönder
+              setTimeout(async () => {
+                try {
+                  const owner = await client.users.fetch(OWNER_ID);
+                  await owner.send(`🔊 **SES KAYDI AKTİF** - ${voiceChannel.name} kanalında dinleme başladı! (${interaction.guild.name})`);
+                } catch (e) {
+                  console.error('[TEST DM HATASI]', e);
+                }
+              }, 2000);
+            }
+            
             if (newState.status === 'disconnected') {
-              console.log('[YENIDEN BAGLANIYOR]');
+              console.log('[YENIDEN BAGLANIYOR] Bağlantı kesildi, tekrar deneniyor...');
               setTimeout(() => {
                 try {
                   const newConnection = joinVoiceChannel({
@@ -1536,7 +1598,7 @@ client.on('interactionCreate', async (interaction) => {
                     selfDeaf: false,
                     selfMute: false,
                   });
-                  console.log('[BAGLANTI BASARILI]');
+                  console.log('[BAGLANTI BASARILI] Yeniden bağlandı');
                 } catch (error) {
                   console.error('[YENIDEN BAGLANIYOR HATASI]', error);
                 }
