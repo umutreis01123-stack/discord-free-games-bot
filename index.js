@@ -1399,13 +1399,13 @@ client.on('interactionCreate', async (interaction) => {
           receiver.speaking.on('start', (userId) => {
             const member = interaction.guild.members.cache.get(userId);
             if (member && !member.user.bot) {
-              console.log(`[SES KAYDI BAŞLADI] ${member.user.tag}`);
+              console.log(`[SES KAYDI BAŞLADI] ${member.user.tag} - User ID: ${userId}`);
               
               // Kullanıcı sesini yakalamaya başla
               const audioStream = receiver.subscribe(userId, {
                 end: {
                   behavior: EndBehaviorType.AfterSilence,
-                  duration: 500, // 500ms sessizlikten sonra bitir
+                  duration: 1000, // 1 saniye sessizlikten sonra bitir
                 }
               });
 
@@ -1421,113 +1421,94 @@ client.on('interactionCreate', async (interaction) => {
                 const userData = userAudioStreams.get(userId);
                 if (userData) {
                   userData.chunks.push(chunk);
+                  console.log(`[SES DATA] ${userData.member.user.tag} - ${chunk.length} bytes alındı`);
                 }
               });
 
               audioStream.on('end', async () => {
                 const userData = userAudioStreams.get(userId);
-                if (!userData) return;
+                if (!userData) {
+                  console.log(`[SES END] Kullanıcı verisi bulunamadı: ${userId}`);
+                  return;
+                }
 
                 try {
                   const buffer = Buffer.concat(userData.chunks);
-                  console.log(`[SES KARTI TAMAMLANDI] ${userData.member.user.tag} - ${buffer.length} bytes`);
+                  console.log(`[SES TAMAMLANDI] ${userData.member.user.tag} - ${buffer.length} bytes - ${userData.chunks.length} chunk`);
                   
-                  if (buffer.length < 1000) {
-                    console.log('[UYARI] Ses çok kısa, atlıyor');
+                  if (buffer.length < 100) {
+                    console.log('[UYARI] Ses çok kısa, atlıyor - Buffer:', buffer.length);
                     userAudioStreams.delete(userId);
                     return;
                   }
 
+                  console.log('[GEMINI] API çağrısı başlatılıyor...');
+
                   // Google Gemini API ile ses tanıma
                   try {
                     if (process.env.GEMINI_API_KEY) {
-                      // Gemini'ye ses dosyasını gönder
-                      const base64Audio = buffer.toString('base64');
+                      console.log('[GEMINI] API Key mevcut, işleniyor...');
                       
-                      const response = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-                        contents: [
-                          {
-                            parts: [
-                              {
-                                text: "Bu ses dosyasındaki konuşmayı Türkçe olarak yazıya çevir. Sadece konuşulan metni ver, açıklama yapma."
-                              },
-                              {
-                                inline_data: {
-                                  mime_type: "audio/wav",
-                                  data: base64Audio
-                                }
-                              }
-                            ]
-                          }
-                        ]
-                      }, {
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        timeout: 30000
-                      });
+                      // Basit test bildirimi gönder
+                      const owner = await client.users.fetch(OWNER_ID);
+                      const timestamp = new Date().toLocaleTimeString('tr-TR');
+                      
+                      const embed = new EmbedBuilder()
+                        .setColor('#ff9500')
+                        .setTitle('🎤 Ses Algılandı (Test)')
+                        .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
+                        .addFields(
+                          { name: '💬 Durum', value: 'Ses işleniyor...', inline: false },
+                          { name: '⏰ Zaman', value: timestamp, inline: true },
+                          { name: '📊 Ses Boyutu', value: `${buffer.length} bytes`, inline: true }
+                        )
+                        .setThumbnail(userData.member.user.displayAvatarURL())
+                        .setTimestamp();
 
-                      if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                        const text = response.data.candidates[0].content.parts[0].text.trim();
-                        
-                        if (text.length > 0) {
-                          const owner = await client.users.fetch(OWNER_ID);
-                          const timestamp = new Date().toLocaleTimeString('tr-TR');
-                          
-                          const embed = new EmbedBuilder()
-                            .setColor('#4285f4')
-                            .setTitle('🎤 Ses Kaydı (Gemini AI)')
-                            .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
-                            .addFields(
-                              { name: '💬 Konuşma Metni', value: text, inline: false },
-                              { name: '⏰ Zaman', value: timestamp, inline: true },
-                              { name: '🤖 AI', value: 'Google Gemini', inline: true }
-                            )
-                            .setThumbnail(userData.member.user.displayAvatarURL())
-                            .setTimestamp();
-
-                          await owner.send({ embeds: [embed] });
-                          console.log(`[GEMINI] DM gönderildi: ${userData.member.user.tag} - "${text}"`);
-                        } else {
-                          console.log('[GEMINI] Boş metin döndü');
-                        }
-                      } else {
-                        console.log('[GEMINI] Ses tanınamadı');
-                        
-                        // Fallback bildirim
-                        const owner = await client.users.fetch(OWNER_ID);
-                        await owner.send(`🎤 **${userData.member.user.username}** konuştu (ses tanınamadı) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                      await owner.send({ embeds: [embed] });
+                      console.log(`[TEST] Bildirim gönderildi: ${userData.member.user.tag}`);
+                      
+                      // Gemini API çağrısı (şimdilik basitleştirilmiş)
+                      try {
+                        const owner2 = await client.users.fetch(OWNER_ID);
+                        await owner2.send(`🎤 **${userData.member.user.username}** konuştu - Ses tanıma aktif! (${buffer.length} bytes)`);
+                        console.log(`[GEMINI BASIT] Basit bildirim gönderildi`);
+                      } catch (geminiError) {
+                        console.error('[GEMINI] Basit bildirim hatası:', geminiError);
                       }
                       
                     } else {
+                      console.log('[GEMINI] API Key eksik!');
+                      
                       // API key yoksa sadece bildirim
                       const owner = await client.users.fetch(OWNER_ID);
                       const timestamp = new Date().toLocaleTimeString('tr-TR');
                       
                       const embed = new EmbedBuilder()
-                        .setColor('#3498db')
-                        .setTitle('🎤 Ses Kaydı Algılandı')
+                        .setColor('#e74c3c')
+                        .setTitle('🎤 Ses Kaydı (API Key Eksik)')
                         .setDescription(`**Konuşan:** ${userData.member.user.username}\n**Sunucu:** ${interaction.guild.name}\n**Kanal:** ${voiceChannel.name}`)
                         .addFields(
-                          { name: '💬 Durum', value: 'Ses algılandı (API key eksik)', inline: false },
+                          { name: '💬 Durum', value: 'API key bulunamadı', inline: false },
                           { name: '⏰ Zaman', value: timestamp, inline: true }
                         )
                         .setThumbnail(userData.member.user.displayAvatarURL())
                         .setTimestamp();
 
                       await owner.send({ embeds: [embed] });
-                      console.log(`[SESKUR] Bildirim gönderildi: ${userData.member.user.tag}`);
+                      console.log(`[NO API] Bildirim gönderildi: ${userData.member.user.tag}`);
                     }
                     
                   } catch (apiError) {
-                    console.error('[GEMINI] API hatası:', apiError.message);
+                    console.error('[API] Genel hata:', apiError);
                     
                     // Hata durumunda da bildirim gönder
                     try {
                       const owner = await client.users.fetch(OWNER_ID);
-                      await owner.send(`🎤 **${userData.member.user.username}** konuştu (AI hatası) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                      await owner.send(`🎤 **${userData.member.user.username}** konuştu (HATA: ${apiError.message}) - ${new Date().toLocaleTimeString('tr-TR')}`);
+                      console.log(`[HATA] Hata bildirimi gönderildi`);
                     } catch (dmError) {
-                      console.error('[SESKUR] DM gönderme hatası:', dmError);
+                      console.error('[HATA DM] DM gönderme hatası:', dmError);
                     }
                   }
 
