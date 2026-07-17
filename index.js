@@ -8,21 +8,21 @@ const FormData = require('form-data');
 
 /*
 =================================================================
-ZWOZ BOT v8.1 - FUTBOL & SES KAYIT SİSTEMİ
+ZWOZ BOT v9.0 - YENİLENMİŞ SİSTEM
 =================================================================
 
-KOMUTLAR:
-- /futbolayarla          → Futbol maç takibi
+SLASH KOMUTLAR:
 - /şikayetkur           → Şikayet sistemi
 - /sesteafk             → Bot 7/24 seste durur
-- /seskaydkur           → Ses konuşmalarını yazıya dönüştür
+- /futbol               → Futbol maç takibi (7/24)
+- /seskur               → Konuşmaları DM'e gönder
 - /gelengidenkur        → Giriş/Çıkış sistemi
-- n!yardım              → Komut listesi
 
-FUTBOL LİGLERİ:
-- Dünya Kupası
-- La Liga  
-- Türkiye Ligi
+MESAJ KOMUTLAR:
+- z!roblox [oyun]       → Roblox kod takibi
+- z!yarım               → Yarım komut
+- z!reklam [davet]      → Reklam sistemi
+- z!ban @everyone       → Herkesi banla
 
 =================================================================
 */
@@ -52,6 +52,8 @@ const complaintsFile = './complaints.json';
 const footballFile = './football.json';
 const welcomeFile = './welcome.json';
 const voiceTranscriptFile = './voice-transcripts.json';
+const robloxFile = './roblox-codes.json';
+const adSystemFile = './ad-system.json';
 
 function initFiles() {
   if (!fs.existsSync(configFile)) fs.writeFileSync(configFile, JSON.stringify({}));
@@ -59,6 +61,8 @@ function initFiles() {
   if (!fs.existsSync(footballFile)) fs.writeFileSync(footballFile, JSON.stringify({}));
   if (!fs.existsSync(welcomeFile)) fs.writeFileSync(welcomeFile, JSON.stringify({}));
   if (!fs.existsSync(voiceTranscriptFile)) fs.writeFileSync(voiceTranscriptFile, JSON.stringify({}));
+  if (!fs.existsSync(robloxFile)) fs.writeFileSync(robloxFile, JSON.stringify({}));
+  if (!fs.existsSync(adSystemFile)) fs.writeFileSync(adSystemFile, JSON.stringify({}));
 }
 
 initFiles();
@@ -101,6 +105,22 @@ function getVoiceTranscripts() {
 
 function saveVoiceTranscripts(data) {
   fs.writeFileSync(voiceTranscriptFile, JSON.stringify(data, null, 2));
+}
+
+function getRoblox() {
+  return JSON.parse(fs.readFileSync(robloxFile, 'utf8'));
+}
+
+function saveRoblox(data) {
+  fs.writeFileSync(robloxFile, JSON.stringify(data, null, 2));
+}
+
+function getAdSystem() {
+  return JSON.parse(fs.readFileSync(adSystemFile, 'utf8'));
+}
+
+function saveAdSystem(data) {
+  fs.writeFileSync(adSystemFile, JSON.stringify(data, null, 2));
 }
 
 // FUTBOL MAÇLARI TAKİP SİSTEMİ
@@ -319,19 +339,6 @@ client.once('ready', async () => {
   try {
     const commands = [
       new SlashCommandBuilder()
-        .setName('futbolayarla')
-        .setDescription('⚽ Futbol maç takibi ayarla')
-        .addStringOption(option => 
-          option.setName('lig')
-            .setDescription('Hangi lig?')
-            .setRequired(true)
-            .addChoices(
-              { name: '🏆 Dünya Kupası', value: 'worldcup' },
-              { name: '🇪🇸 La Liga', value: 'laliga' },
-              { name: '🇹🇷 Türkiye Ligi', value: 'superlig' }
-            )),
-
-      new SlashCommandBuilder()
         .setName('şikayetkur')
         .setDescription('📝 Şikayet sistemi kur'),
 
@@ -345,18 +352,26 @@ client.once('ready', async () => {
             .addChannelTypes(ChannelType.GuildVoice)),
 
       new SlashCommandBuilder()
-        .setName('seskaydkur')
-        .setDescription('🎙️ Ses konuşmalarını yazıya dönüştür ve kaydet')
+        .setName('futbol')
+        .setDescription('⚽ Futbol maç takibi (7/24 otomatik)')
+        .addStringOption(option => 
+          option.setName('lig')
+            .setDescription('Hangi lig?')
+            .setRequired(true)
+            .addChoices(
+              { name: '🏆 Dünya Kupası', value: 'worldcup' },
+              { name: '🇪🇸 La Liga', value: 'laliga' },
+              { name: '🇹🇷 Türkiye Ligi', value: 'superlig' }
+            )),
+
+      new SlashCommandBuilder()
+        .setName('seskur')
+        .setDescription('🎙️ Konuşmaları umutpapa123\'e DM gönder')
         .addChannelOption(option => 
-          option.setName('dinleme_kanali')
+          option.setName('ses_kanal')
             .setDescription('Hangi ses kanalını dinleyecek?')
             .setRequired(true)
-            .addChannelTypes(ChannelType.GuildVoice))
-        .addChannelOption(option => 
-          option.setName('kayit_kanali')
-            .setDescription('Konuşmaları nereye yazacak?')
-            .setRequired(true)
-            .addChannelTypes(ChannelType.GuildText)),
+            .addChannelTypes(ChannelType.GuildVoice)),
 
       new SlashCommandBuilder()
         .setName('gelengidenkur')
