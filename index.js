@@ -6,7 +6,7 @@ const fs = require('fs');
 
 /*
 =================================================================
-MCTR BOT v10.0 - YENİ DESTEK SİSTEMİ
+SHDW BOT v10.1 - YENİ DESTEK SİSTEMİ
 =================================================================
 
 SLASH KOMUTLAR:
@@ -62,6 +62,7 @@ const invitesFile = './invites.json';
 const levelsFile = './levels.json';
 const invoicesFile = './invoices.json';
 const xpConfigFile = './xp-config.json';
+const supportConfigFile = './support-config.json';
 
 function initFiles() {
   if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
@@ -69,6 +70,7 @@ function initFiles() {
   if (!fs.existsSync(levelsFile)) fs.writeFileSync(levelsFile, JSON.stringify({}));
   if (!fs.existsSync(invoicesFile)) fs.writeFileSync(invoicesFile, JSON.stringify({}));
   if (!fs.existsSync(xpConfigFile)) fs.writeFileSync(xpConfigFile, JSON.stringify({}));
+  if (!fs.existsSync(supportConfigFile)) fs.writeFileSync(supportConfigFile, JSON.stringify({}));
 }
 
 initFiles();
@@ -111,6 +113,14 @@ function getXpConfig() {
 
 function saveXpConfig(data) {
   fs.writeFileSync(xpConfigFile, JSON.stringify(data, null, 2));
+}
+
+function getSupportConfig() {
+  return JSON.parse(fs.readFileSync(supportConfigFile, 'utf8'));
+}
+
+function saveSupportConfig(data) {
+  fs.writeFileSync(supportConfigFile, JSON.stringify(data, null, 2));
 }
 
 // BOT READY
@@ -176,15 +186,28 @@ client.once('ready', async () => {
       new SlashCommandBuilder()
         .setName('ping')
         .setDescription('🏓 Botun gecikme süresini gösterir'),
+
+      new SlashCommandBuilder()
+        .setName('mesaj')
+        .setDescription('📢 Sunuculara mesaj gönder (Owner)')
+        .addStringOption(option =>
+          option.setName('sunucu')
+            .setDescription('Hangi sunucuya mesaj gönderilecek?')
+            .setRequired(true)
+            .setAutocomplete(true))
+        .addStringOption(option =>
+          option.setName('mesaj')
+            .setDescription('Gönderilecek mesaj')
+            .setRequired(true)),
     ];
 
     await client.application.commands.set(commands);
     console.log('✅ Slash komutları eklendi: ' + commands.length);
     
     // Bot activity status ayarla
-    client.user.setActivity('z!yardım | MCTR Bot', { type: 0 });
+    client.user.setActivity('z!yardım | SHDW Bot', { type: 0 });
     console.log('🎮 Bot aktivitesi ayarlandı');
-    console.log('🚀 MCTR Bot v10.0 tamamen hazır!');
+    console.log('🚀 SHDW Bot v10.1 tamamen hazır!');
     
   } catch (error) {
     console.error('❌ Komut kurulum hatası:', error);
@@ -284,6 +307,38 @@ client.on('messageCreate', async (message) => {
     await message.reply({ embeds: [embed] });
   }
 
+  // Z!DESTEKKATEGORI AYARLA
+  if (content.startsWith('z!destekkategori ayarla') || content.startsWith('z!destekkategori')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    // Kanal kategorisini al
+    const channel = message.channel;
+    if (channel.parent) {
+      const supportConfig = getSupportConfig();
+      supportConfig[message.guild.id] = {
+        categoryId: channel.parentId,
+        categoryName: channel.parent.name
+      };
+      saveSupportConfig(supportConfig);
+
+      const embed = new EmbedBuilder()
+        .setColor('#00ff00')
+        .setTitle('✅ Destek Kategorisi Ayarlandı')
+        .setDescription(`Destek kanalları **${channel.parent.name}** kategorisinde oluşturulacak!\n\n**Kategori ID:** ${channel.parentId}`)
+        .addFields(
+          { name: '📁 Kategori', value: channel.parent.name, inline: true },
+          { name: '🔧 Durum', value: 'Aktif', inline: true }
+        )
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+    } else {
+      await message.reply('❌ Bu kanal bir kategori altında değil! Lütfen kategori içindeki bir kanalda bu komutu kullanın.');
+    }
+  }
+
   // Z!YREKLAMKUR - DESTEK TALEBİ SİSTEMİ
   if (content === 'z!yreklamkur') {
     if (message.author.id !== OWNER_ID) {
@@ -325,7 +380,7 @@ client.on('messageCreate', async (message) => {
     // Embed oluştur
     const embed = new EmbedBuilder()
       .setColor('#5865f2')
-      .setTitle('🎫 MCTR Destek Sistemi')
+      .setTitle('🎫 SHDW Destek Sistemi')
       .setDescription('Aklınıza takılan ve sormak istediğin her sorunuz/sorununuz için destek talebi açabilirsiniz. Talep kategorilerini doğru seçiniz ve sorunuzu açık bir dil ile ifade ediniz. Yetkililer en kısa süre içerisinde dönüş sağlayacaktır. Bu süre zarfında beklediğiniz için teşekkürler.')
       .setFooter({ text: 'Talep açmak istediğiniz konuyu seçin.' })
       .setTimestamp();
@@ -338,18 +393,18 @@ client.on('messageCreate', async (message) => {
   if (content === 'z!yardım' || content === 'z!help' || content === 'z!komutlar') {
     const embed = new EmbedBuilder()
       .setColor('#5865f2')
-      .setTitle('🤖 MCTR Bot - Komut Listesi')
+      .setTitle('🤖 SHDW Bot - Komut Listesi')
       .setDescription('**Tüm komutlar ve özellikleri:**')
       .addFields(
         { name: '👤 KULLANICI KOMUTLARI', value: '`/profil` - Kullanıcı istatistikleri\n`/rank` - Seviye göster\n`/davetler` - Davet bilgileri', inline: false },
         { name: '📊 SUNUCU KOMUTLARI', value: '`/sunucu` - Sunucu bilgileri\n`/roller` - Rol listesi\n`/sıralama` - İstatistik sıralaması\n`/leaderboard` - En iyi 10 seviye', inline: false },
         { name: '🎫 DAVET SİSTEMİ', value: '`/davet-sıralama` - Davet sıralaması\n`/davetleri-sıfırla` - Davetleri sıfırla (Owner)', inline: false },
-        { name: '🛠️ OWNER KOMUTLARI', value: '`z!yreklamkur` - Destek talebi sistemi kur\n`z!xpyeri ayarla` - XP bildirimi kanalı\n`/kurucu` - Sunucu kurucusu', inline: false },
+        { name: '🛠️ OWNER KOMUTLARI', value: '`z!yreklamkur` - Destek talebi sistemi kur\n`z!destekkategori ayarla` - Destek kategori ayarla\n`z!xpyeri ayarla` - XP bildirimi kanalı\n`/mesaj` - Sunuculara mesaj gönder\n`/kurucu` - Sunucu kurucusu', inline: false },
         { name: '⭐ XP SİSTEMİ', value: 'Her mesajda 15-25 XP kazan\n100 XP = 1 Seviye\nCooldown: 60 saniye', inline: false },
         { name: '💬 GENEL KOMUTLAR', value: '`sa` - Selam ver\n`z!yardım` - Bu menüyü göster\n`/ping` - Bot gecikmesi', inline: false }
       )
       .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: 'MCTR Bot v10.0 | OwO Tarzı XP Sistemi' })
+      .setFooter({ text: 'SHDW Bot v10.1 | OwO Tarzı XP Sistemi' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
@@ -596,6 +651,59 @@ client.on('interactionCreate', async (interaction) => {
 
         await interaction.reply({ embeds: [embed] });
       }
+
+      // MESAJ GÖNDER KOMUTU (OWNER)
+      else if (commandName === 'mesaj') {
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
+        }
+
+        const serverName = interaction.options.getString('sunucu');
+        const messageText = interaction.options.getString('mesaj');
+
+        // Sunucuyu bul
+        const guild = client.guilds.cache.find(g => g.name === serverName || g.id === serverName);
+
+        if (!guild) {
+          return await interaction.reply({ content: '❌ Sunucu bulunamadı!', ephemeral: true });
+        }
+
+        // İlk metin kanalını bul
+        const channel = guild.channels.cache.find(ch => ch.type === ChannelType.GuildText && ch.permissionsFor(guild.members.me).has(PermissionFlagsBits.SendMessages));
+
+        if (!channel) {
+          return await interaction.reply({ content: '❌ Mesaj gönderilebilecek kanal bulunamadı!', ephemeral: true });
+        }
+
+        try {
+          await channel.send(messageText);
+
+          const embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('✅ Mesaj Gönderildi')
+            .setDescription(`**Sunucu:** ${guild.name}\n**Kanal:** ${channel.name}\n**Mesaj:** ${messageText}`)
+            .setTimestamp();
+
+          await interaction.reply({ embeds: [embed], ephemeral: true });
+        } catch (error) {
+          console.error('Mesaj gönderme hatası:', error);
+          await interaction.reply({ content: '❌ Mesaj gönderilemedi!', ephemeral: true });
+        }
+      }
+    }
+
+    // AUTOCOMPLETE HANDLER - SUNUCU LİSTESİ
+    else if (interaction.isAutocomplete()) {
+      const focusedOption = interaction.options.getFocused(true);
+
+      if (focusedOption.name === 'sunucu') {
+        const choices = client.guilds.cache.map(guild => ({
+          name: `${guild.name} (${guild.memberCount} üye)`,
+          value: guild.id
+        })).slice(0, 25);
+
+        await interaction.respond(choices);
+      }
     }
 
     // BUTTON HANDLER - DESTEK TALEBİ SİSTEMİ
@@ -631,8 +739,12 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         try {
+          // Destek konfigürasyonunu al
+          const supportConfig = getSupportConfig();
+          const guildConfig = supportConfig[interaction.guild.id];
+          
           // Destek kanalı oluştur
-          const supportChannel = await interaction.guild.channels.create({
+          const channelOptions = {
             name: `${categoryEmoji}-${categoryName.toLowerCase()}-${user.username}`,
             type: ChannelType.GuildText,
             permissionOverwrites: [
@@ -649,14 +761,21 @@ client.on('interactionCreate', async (interaction) => {
                 allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
               }
             ],
-          });
+          };
+
+          // Eğer kategori ayarlanmışsa, kategori altında oluştur
+          if (guildConfig && guildConfig.categoryId) {
+            channelOptions.parent = guildConfig.categoryId;
+          }
+
+          const supportChannel = await interaction.guild.channels.create(channelOptions);
 
           // Destek kanalına hoş geldin mesajı
           const welcomeEmbed = new EmbedBuilder()
             .setColor('#5865f2')
             .setTitle(`${categoryEmoji} ${categoryName} - Destek Talebi`)
             .setDescription(`Merhaba ${user.username}!\n\n**Kategori:** ${categoryName}\n\n**Lütfen sorununuzu detaylı bir şekilde açıklayın.**\nYetkililer en kısa sürede size dönüş yapacaktır.`)
-            .setFooter({ text: 'MCTR Destek Sistemi' })
+            .setFooter({ text: 'SHDW Destek Sistemi' })
             .setTimestamp();
 
           const closeButton = new ButtonBuilder()
