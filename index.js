@@ -61,12 +61,14 @@ const ticketsFile = './tickets.json';
 const invitesFile = './invites.json';
 const levelsFile = './levels.json';
 const invoicesFile = './invoices.json';
+const xpConfigFile = './xp-config.json';
 
 function initFiles() {
   if (!fs.existsSync(ticketsFile)) fs.writeFileSync(ticketsFile, JSON.stringify({}));
   if (!fs.existsSync(invitesFile)) fs.writeFileSync(invitesFile, JSON.stringify({}));
   if (!fs.existsSync(levelsFile)) fs.writeFileSync(levelsFile, JSON.stringify({}));
   if (!fs.existsSync(invoicesFile)) fs.writeFileSync(invoicesFile, JSON.stringify({}));
+  if (!fs.existsSync(xpConfigFile)) fs.writeFileSync(xpConfigFile, JSON.stringify({}));
 }
 
 initFiles();
@@ -101,6 +103,14 @@ function getInvoices() {
 
 function saveInvoices(data) {
   fs.writeFileSync(invoicesFile, JSON.stringify(data, null, 2));
+}
+
+function getXpConfig() {
+  return JSON.parse(fs.readFileSync(xpConfigFile, 'utf8'));
+}
+
+function saveXpConfig(data) {
+  fs.writeFileSync(xpConfigFile, JSON.stringify(data, null, 2));
 }
 
 // BOT READY
@@ -156,10 +166,6 @@ client.once('ready', async () => {
         .setDescription('🗑️ Sunucudaki herkesin davet sayılarını sıfırlar'),
 
       new SlashCommandBuilder()
-        .setName('fatura-oluştur')
-        .setDescription('🧾 Yeni bir fatura oluşturur'),
-
-      new SlashCommandBuilder()
         .setName('kurucu')
         .setDescription('👑 Sunucunun kurucusunu gösterir'),
 
@@ -191,9 +197,141 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.toLowerCase();
 
+  // XP SİSTEMİ - HER MESAJDA XP KAZAN (OwO gibi)
+  if (!content.startsWith('z!')) {
+    const levels = getLevels();
+    const userId = message.author.id;
+    
+    if (!levels[userId]) {
+      levels[userId] = { level: 0, xp: 0, lastMessage: 0 };
+    }
+
+    // Cooldown - 60 saniyede bir XP ver
+    const now = Date.now();
+    if (now - levels[userId].lastMessage < 60000) {
+      // Cooldown aktif, XP verme
+    } else {
+      // Random XP ver (15-25 arası)
+      const xpGained = Math.floor(Math.random() * 11) + 15;
+      levels[userId].xp += xpGained;
+      levels[userId].lastMessage = now;
+
+      // Seviye atladı mı kontrol et
+      const xpNeeded = (levels[userId].level + 1) * 100;
+      
+      if (levels[userId].xp >= xpNeeded) {
+        levels[userId].level++;
+        levels[userId].xp = levels[userId].xp - xpNeeded;
+
+        // XP kanalını kontrol et
+        const xpConfig = getXpConfig();
+        const xpChannelId = xpConfig[message.guild.id]?.channelId;
+        
+        if (xpChannelId) {
+          const xpChannel = message.guild.channels.cache.get(xpChannelId);
+          
+          if (xpChannel) {
+            // Seviye atlama embed'i (fotoğraftaki gibi)
+            const embed = new EmbedBuilder()
+              .setColor('#ff4444')
+              .setTitle('🔥 SEVİYE ATLADI!')
+              .setDescription(`**${message.author.username}**\n\nSeviye ${levels[userId].level - 1} → **Seviye ${levels[userId].level}**`)
+              .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+              .addFields(
+                { name: 'SEVİYE', value: `${levels[userId].level}`, inline: true }
+              )
+              .setFooter({ text: `@${message.author.username}` })
+              .setTimestamp();
+
+            await xpChannel.send({ content: `<@${message.author.id}>`, embeds: [embed] });
+          }
+        }
+      }
+
+      saveLevels(levels);
+    }
+  }
+
   // SA-AS SİSTEMİ
   if (content === 'sa' || content === 'selamünaleyküm' || content === 'selam') {
     await message.reply('**Aleyküm selam** kardeşim! 🙏');
+  }
+
+  // Z!XPYERI AYARLA
+  if (content.startsWith('z!xpyeri ayarla') || content.startsWith('z!xpyeri')) {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    const xpConfig = getXpConfig();
+    xpConfig[message.guild.id] = {
+      channelId: message.channel.id,
+      enabled: true
+    };
+    saveXpConfig(xpConfig);
+
+    const embed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('✅ XP Yeri Ayarlandı')
+      .setDescription(`Seviye atlama bildirimleri bu kanalda gösterilecek!\n\n**Kanal:** ${message.channel}`)
+      .addFields(
+        { name: '📊 Sistem', value: 'OwO tarzı XP sistemi aktif', inline: true },
+        { name: '⏱️ Cooldown', value: '60 saniye', inline: true },
+        { name: '💎 XP/Mesaj', value: '15-25 arası', inline: true }
+      )
+      .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+  }
+
+  // Z!YREKLAMKUR - DESTEK TALEBİ SİSTEMİ
+  if (content === 'z!yreklamkur') {
+    if (message.author.id !== OWNER_ID) {
+      return await message.reply('❌ Sadece owner kullanabilir!');
+    }
+
+    // Butonları oluştur
+    const button1 = new ButtonBuilder()
+      .setCustomId('support_reklam')
+      .setLabel('📦 Reklam paketleri hakkında bilgi alacağım.')
+      .setStyle(ButtonStyle.Secondary);
+
+    const button2 = new ButtonBuilder()
+      .setCustomId('support_ceza')
+      .setLabel('📝 Ceza itirazı yapacağım.')
+      .setStyle(ButtonStyle.Secondary);
+
+    const button3 = new ButtonBuilder()
+      .setCustomId('support_cekilis')
+      .setLabel('🎁 Çekiliş kazandım, ödülümü alacağım.')
+      .setStyle(ButtonStyle.Secondary);
+
+    const button4 = new ButtonBuilder()
+      .setCustomId('support_soru')
+      .setLabel('❓ Soru var, soru soracağım.')
+      .setStyle(ButtonStyle.Secondary);
+
+    const button5 = new ButtonBuilder()
+      .setCustomId('support_discord')
+      .setLabel('🔧 Discord hakkında sorun yaşıyorum.')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row1 = new ActionRowBuilder().addComponents(button1);
+    const row2 = new ActionRowBuilder().addComponents(button2);
+    const row3 = new ActionRowBuilder().addComponents(button3);
+    const row4 = new ActionRowBuilder().addComponents(button4);
+    const row5 = new ActionRowBuilder().addComponents(button5);
+
+    // Embed oluştur
+    const embed = new EmbedBuilder()
+      .setColor('#5865f2')
+      .setTitle('🎫 MCTR Destek Sistemi')
+      .setDescription('Aklınıza takılan ve sormak istediğin her sorunuz/sorununuz için destek talebi açabilirsiniz. Talep kategorilerini doğru seçiniz ve sorunuzu açık bir dil ile ifade ediniz. Yetkililer en kısa süre içerisinde dönüş sağlayacaktır. Bu süre zarfında beklediğiniz için teşekkürler.')
+      .setFooter({ text: 'Talep açmak istediğiniz konuyu seçin.' })
+      .setTimestamp();
+
+    await message.channel.send({ embeds: [embed], components: [row1, row2, row3, row4, row5] });
+    await message.delete().catch(() => {});
   }
 
   // Z!YARDIM - KOMUT LİSTESİ
@@ -205,12 +343,13 @@ client.on('messageCreate', async (message) => {
       .addFields(
         { name: '👤 KULLANICI KOMUTLARI', value: '`/profil` - Kullanıcı istatistikleri\n`/rank` - Seviye göster\n`/davetler` - Davet bilgileri', inline: false },
         { name: '📊 SUNUCU KOMUTLARI', value: '`/sunucu` - Sunucu bilgileri\n`/roller` - Rol listesi\n`/sıralama` - İstatistik sıralaması\n`/leaderboard` - En iyi 10 seviye', inline: false },
-        { name: '🎫 DAVET SİSTEMİ', value: '`/davet-sıralama` - Davet sıralaması\n`/davetleri-sıfırla` - Davetleri sıfırla', inline: false },
-        { name: '🛠️ DİĞER', value: '`/kurucu` - Sunucu kurucusu\n`/fatura-oluştur` - Yeni fatura\n`/ping` - Bot gecikmesi', inline: false },
-        { name: '💬 GENEL KOMUTLAR', value: '`sa` - Selam ver\n`z!yardım` - Bu menüyü göster', inline: false }
+        { name: '🎫 DAVET SİSTEMİ', value: '`/davet-sıralama` - Davet sıralaması\n`/davetleri-sıfırla` - Davetleri sıfırla (Owner)', inline: false },
+        { name: '🛠️ OWNER KOMUTLARI', value: '`z!yreklamkur` - Destek talebi sistemi kur\n`z!xpyeri ayarla` - XP bildirimi kanalı\n`/kurucu` - Sunucu kurucusu', inline: false },
+        { name: '⭐ XP SİSTEMİ', value: 'Her mesajda 15-25 XP kazan\n100 XP = 1 Seviye\nCooldown: 60 saniye', inline: false },
+        { name: '💬 GENEL KOMUTLAR', value: '`sa` - Selam ver\n`z!yardım` - Bu menüyü göster\n`/ping` - Bot gecikmesi', inline: false }
       )
       .setThumbnail(client.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: 'MCTR Bot v10.0' })
+      .setFooter({ text: 'MCTR Bot v10.0 | OwO Tarzı XP Sistemi' })
       .setTimestamp();
 
     await message.reply({ embeds: [embed] });
@@ -423,10 +562,10 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ embeds: [embed] });
       }
 
-      // DAVETLERI SIFIRLA KOMUTU
+      // DAVETLERI SIFIRLA KOMUTU (SADECE OWNER)
       else if (commandName === 'davetleri-sıfırla') {
-        if (user.id !== OWNER_ID && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-          return await interaction.reply({ content: '❌ Bu komutu kullanmak için yönetici olmalısınız!', ephemeral: true });
+        if (user.id !== OWNER_ID) {
+          return await interaction.reply({ content: '❌ Sadece owner kullanabilir!', ephemeral: true });
         }
 
         saveInvites({});
@@ -457,29 +596,100 @@ client.on('interactionCreate', async (interaction) => {
 
         await interaction.reply({ embeds: [embed] });
       }
+    }
 
-      // FATURA OLUŞTUR KOMUTU
-      else if (commandName === 'fatura-oluştur') {
-        if (user.id !== OWNER_ID && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-          return await interaction.reply({ content: '❌ Bu komutu kullanmak için yönetici olmalısınız!', ephemeral: true });
+    // BUTTON HANDLER - DESTEK TALEBİ SİSTEMİ
+    else if (interaction.isButton()) {
+      const { customId } = interaction;
+
+      if (customId.startsWith('support_')) {
+        const category = customId.replace('support_', '');
+        let categoryName = '';
+        let categoryEmoji = '';
+
+        switch(category) {
+          case 'reklam':
+            categoryName = 'Reklam Paketleri';
+            categoryEmoji = '📦';
+            break;
+          case 'ceza':
+            categoryName = 'Ceza İtirazı';
+            categoryEmoji = '📝';
+            break;
+          case 'cekilis':
+            categoryName = 'Çekiliş Ödülü';
+            categoryEmoji = '🎁';
+            break;
+          case 'soru':
+            categoryName = 'Genel Soru';
+            categoryEmoji = '❓';
+            break;
+          case 'discord':
+            categoryName = 'Discord Sorunu';
+            categoryEmoji = '🔧';
+            break;
         }
 
-        const invoiceId = `INV-${Date.now()}`;
-        const invoices = getInvoices();
-        invoices[invoiceId] = {
-          createdBy: user.id,
-          createdAt: new Date().toISOString(),
-          status: 'pending'
-        };
-        saveInvoices(invoices);
+        try {
+          // Destek kanalı oluştur
+          const supportChannel = await interaction.guild.channels.create({
+            name: `${categoryEmoji}-${categoryName.toLowerCase()}-${user.username}`,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              {
+                id: interaction.guild.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              {
+                id: user.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              },
+              {
+                id: OWNER_ID,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+              }
+            ],
+          });
 
-        const embed = new EmbedBuilder()
-          .setColor('#00ff00')
-          .setTitle('🧾 Fatura Oluşturuldu')
-          .setDescription(`**Fatura ID:** ${invoiceId}\n**Oluşturan:** ${user.username}\n**Durum:** Beklemede`)
-          .setTimestamp();
+          // Destek kanalına hoş geldin mesajı
+          const welcomeEmbed = new EmbedBuilder()
+            .setColor('#5865f2')
+            .setTitle(`${categoryEmoji} ${categoryName} - Destek Talebi`)
+            .setDescription(`Merhaba ${user.username}!\n\n**Kategori:** ${categoryName}\n\n**Lütfen sorununuzu detaylı bir şekilde açıklayın.**\nYetkililer en kısa sürede size dönüş yapacaktır.`)
+            .setFooter({ text: 'MCTR Destek Sistemi' })
+            .setTimestamp();
 
-        await interaction.reply({ embeds: [embed] });
+          const closeButton = new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('🗑️ Talebi Kapat')
+            .setStyle(ButtonStyle.Danger);
+
+          const row = new ActionRowBuilder().addComponents(closeButton);
+
+          await supportChannel.send({ content: `${user} <@${OWNER_ID}>`, embeds: [welcomeEmbed], components: [row] });
+
+          await interaction.reply({ 
+            content: `✅ Destek talebiniz oluşturuldu: ${supportChannel}`, 
+            ephemeral: true 
+          });
+
+        } catch (error) {
+          console.error('Destek kanalı oluşturma hatası:', error);
+          await interaction.reply({ content: '❌ Destek kanalı oluşturulamadı!', ephemeral: true });
+        }
+      }
+
+      // Ticket kapatma
+      else if (customId === 'close_ticket') {
+        await interaction.reply({ content: '⏳ Destek talebi 5 saniye içinde kapatılacak...', ephemeral: true });
+        
+        setTimeout(async () => {
+          try {
+            await interaction.channel.delete();
+          } catch (error) {
+            console.error('Kanal silme hatası:', error);
+          }
+        }, 5000);
       }
     }
 
