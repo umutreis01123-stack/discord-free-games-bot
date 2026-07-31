@@ -4,7 +4,7 @@ const {
   PermissionFlagsBits, SlashCommandBuilder, ButtonBuilder,
   ButtonStyle, ActionRowBuilder, ModalBuilder, TextInputBuilder,
   TextInputStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder,
-  AttachmentBuilder
+  AttachmentBuilder, ActivityType
 } = require('discord.js');
 const express = require('express');
 const path = require('path');
@@ -52,17 +52,17 @@ const COLOR = {
 };
 
 // ── JSON Yardımcıları ─────────────────────────────────────────
-const DATA_DIR = './data';
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
+const DATA_DIR = path.join(__dirname, 'data');
+try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 
 function readJSON(file) {
   const fp = path.join(DATA_DIR, file);
-  if (!fs.existsSync(fp)) { fs.writeFileSync(fp, '{}'); return {}; }
+  if (!fs.existsSync(fp)) { try { fs.writeFileSync(fp, '{}'); } catch {} return {}; }
   try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch { return {}; }
 }
 
 function writeJSON(file, data) {
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
+  try { fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2)); } catch (e) { console.error('[writeJSON]', e); }
 }
 
 // data/config.json   → guild ayarları
@@ -141,19 +141,69 @@ async function sendLog(guild, embed, files = []) {
 
 // ── Ticket kanalı oluştur ─────────────────────────────────────
 async function createTicketChannel(guild, user, type, ticketNum, staffRoleId, categoryId) {
+  // Bot'un kendi ID'sini al
+  const botId = guild.members.me?.id || client.user.id;
+
   const overwrites = [
+    // @everyone göremez
     { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-    { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+    // Ticket sahibi görebilir, yazabilir
+    {
+      id: user.id,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+      ],
+    },
+    // Bot her şeyi yapabilmeli
+    {
+      id: botId,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+      ],
+    },
   ];
+
+  // Staff rolü varsa ekle
   if (staffRoleId) {
-    overwrites.push({ id: staffRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ManageMessages] });
+    overwrites.push({
+      id: staffRoleId,
+      allow: [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+      ],
+    });
   }
 
-  const channelName = `ticket-${ticketNum}`;
-  const opts = { name: channelName, type: ChannelType.GuildText, permissionOverwrites: overwrites };
-  if (categoryId) opts.parent = categoryId;
+  const channelOptions = {
+    name: `ticket-${ticketNum}`,
+    type: ChannelType.GuildText,
+    permissionOverwrites: overwrites,
+    topic: `Ticket sahibi: ${user.tag} | Tür: ${type} | ID: ${user.id}`,
+  };
 
-  return guild.channels.create(opts);
+  // Kategori varsa ve geçerliyse ekle
+  if (categoryId) {
+    const cat = guild.channels.cache.get(categoryId);
+    if (cat && cat.type === ChannelType.GuildCategory) {
+      channelOptions.parent = categoryId;
+    }
+  }
+
+  return guild.channels.create(channelOptions);
 }
 
 // ── Ticket içi buton satırı ───────────────────────────────────
@@ -219,7 +269,7 @@ client.once('ready', async () => {
 
   await client.application.commands.set(commands).catch(console.error);
   console.log(`✅ ${commands.length} slash komut yüklendi`);
-  client.user.setActivity('🎫 Ticket Bot | /ticket-kur', { type: 3 });
+  client.user.setActivity('🎫 Ticket Bot | /ticket-kur', { type: ActivityType.Watching });
 });
 
 // ── INTERACTION HANDLER ───────────────────────────────────────
@@ -411,7 +461,7 @@ client.on('interactionCreate', async (interaction) => {
 
       // Diğer türler için direkt ticket aç
       await interaction.deferReply({ ephemeral: true });
-      await openTicket({ guild, user, type, interaction });
+      await openTicket({ guild, user, type, interaction, deferred: true });
     }
 
     // ── Modal Submit — şikayet ────────────────────────────────
@@ -422,7 +472,7 @@ client.on('interactionCreate', async (interaction) => {
       const aciklama  = interaction.fields.getTextInputValue('sikayet_aciklama');
 
       await interaction.deferReply({ ephemeral: true });
-      await openTicket({ guild, user, type: 'sikayet', interaction, extra: { kisi, konu, aciklama } });
+      await openTicket({ guild, user, type: 'sikayet', interaction, extra: { kisi, konu, aciklama }, deferred: true });
     }
 
     // ── Butonlar ──────────────────────────────────────────────
@@ -529,7 +579,11 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ── openTicket ────────────────────────────────────────────────
-async function openTicket({ guild, user, type, interaction, extra = {} }) {
+async function openTicket({ guild, user, type, interaction, extra = {}, deferred = false }) {
+  // Eğer daha önce defer edilmediyse et
+  if (!deferred && !interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  }
   const cfg      = getConfig(guild.id);
   const ticketNum = nextTicketNumber(guild.id);
   const ticketId  = `${guild.id}-${ticketNum}`;
@@ -539,8 +593,9 @@ async function openTicket({ guild, user, type, interaction, extra = {} }) {
   try {
     ch = await createTicketChannel(guild, user, type, ticketNum, cfg.staffRoleId, cfg.categoryId);
   } catch (e) {
-    console.error('[Kanal Oluşturma]', e);
-    return interaction.editReply({ content: '❌ Kanal oluşturulamadı. Bot\'un yeterli yetkisi var mı?' });
+    console.error('[Kanal Oluşturma Hatası]', e.message || e);
+    const errMsg = `❌ Kanal oluşturulamadı.\n\n**Hata:** \`${e.message || 'Bilinmeyen hata'}\`\n\nBotun **Kanalları Yönet** ve **Kanalları Görüntüle** yetkisi var mı kontrol et.`;
+    try { return await interaction.editReply({ content: errMsg }); } catch { return; }
   }
 
   // Ticket verisini kaydet
