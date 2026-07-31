@@ -100,34 +100,84 @@ function nextTicketNumber(guildId) {
 }
 
 // ── Transcript oluştur ────────────────────────────────────────
-async function buildTranscript(channel) {
+async function buildTranscript(channel, ticketData) {
   const messages = await channel.messages.fetch({ limit: 100 });
   const sorted = [...messages.values()].reverse();
-  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Transcript - ${channel.name}</title>
-<style>
-  body{background:#36393f;color:#dcddde;font-family:Whitney,Helvetica Neue,sans-serif;padding:20px}
-  .msg{display:flex;gap:12px;padding:4px 0 4px 0;margin-bottom:2px}
-  .avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0}
-  .meta{font-size:.75rem;color:#72767d;margin-bottom:2px}
-  .username{color:#fff;font-weight:600;margin-right:6px}
-  .content{font-size:.9375rem;line-height:1.375}
-  h2{color:#fff;border-bottom:1px solid #4f545c;padding-bottom:8px}
-</style></head><body>
-<h2>#${channel.name} — Transcript</h2>
-<p style="color:#72767d">Toplam ${sorted.length} mesaj</p>`;
+  const meta = TICKET_TYPES[ticketData?.type] || TICKET_TYPES.diger;
 
+  let html = `<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transcript — ${channel.name}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#313338;color:#dbdee1;font-family:'gg sans','Noto Sans',Helvetica Neue,Helvetica,Arial,sans-serif;font-size:16px}
+  .header{background:#1e1f22;padding:20px 32px;display:flex;align-items:center;gap:16px;border-bottom:2px solid #5865f2}
+  .header img{width:52px;height:52px;border-radius:50%}
+  .header-info h1{font-size:1.2rem;color:#fff;font-weight:700}
+  .header-info p{font-size:.8rem;color:#949ba4;margin-top:3px}
+  .badge{display:inline-block;background:#5865f2;color:#fff;font-size:.7rem;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle}
+  .badge.red{background:#ed4245}
+  .badge.green{background:#2ecc71}
+  .meta-bar{background:#2b2d31;padding:12px 32px;display:flex;gap:24px;flex-wrap:wrap;border-bottom:1px solid #3f4147}
+  .meta-bar .item{font-size:.8rem;color:#949ba4}
+  .meta-bar .item span{color:#dbdee1;font-weight:600}
+  .messages{padding:16px 32px}
+  .msg{display:flex;gap:12px;padding:2px 0;margin-bottom:4px;border-radius:4px}
+  .msg:hover{background:#2e3035}
+  .avatar{width:40px;height:40px;border-radius:50%;flex-shrink:0;margin-top:2px}
+  .msg-body{flex:1;min-width:0}
+  .msg-header{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
+  .author{font-weight:600;color:#fff;font-size:.95rem}
+  .author.bot{color:#5865f2}
+  .timestamp{font-size:.72rem;color:#949ba4}
+  .content{font-size:.9375rem;line-height:1.5;word-break:break-word;color:#dbdee1}
+  .divider{border:none;border-top:1px solid #3f4147;margin:16px 0}
+  .footer{background:#1e1f22;padding:16px 32px;text-align:center;font-size:.75rem;color:#949ba4;border-top:2px solid #3f4147}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-info">
+    <h1>#${channel.name} <span class="badge red">KAPATILDI</span></h1>
+    <p>${meta.label} • Toplam ${sorted.filter(m => !m.author.bot).length} mesaj • Kapatılma: ${new Date().toLocaleString('tr-TR')}</p>
+  </div>
+</div>
+<div class="meta-bar">
+  <div class="item">Ticket ID: <span>${ticketData?.id || channel.name}</span></div>
+  <div class="item">Kategori: <span>${meta.label}</span></div>
+  <div class="item">Toplam Mesaj: <span>${sorted.length}</span></div>
+</div>
+<div class="messages">`;
+
+  let lastAuthor = null;
   for (const msg of sorted) {
-    if (msg.author.bot && msg.embeds.length && !msg.content) continue;
-    const time = msg.createdAt.toLocaleString('tr-TR');
-    html += `<div class="msg">
-  <img class="avatar" src="${msg.author.displayAvatarURL({ size: 64 })}">
-  <div>
-    <div class="meta"><span class="username">${msg.author.username}</span>${time}</div>
-    <div class="content">${msg.content.replace(/</g,'&lt;').replace(/>/g,'&gt;') || '<em>[embed/attachment]</em>'}</div>
-  </div></div>`;
+    const isSameAuthor = lastAuthor === msg.author.id;
+    const time = msg.createdAt.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    if (!isSameAuthor) {
+      html += `<div class="msg">
+  <img class="avatar" src="${msg.author.displayAvatarURL({ size: 64, extension: 'png' })}">
+  <div class="msg-body">
+    <div class="msg-header">
+      <span class="author${msg.author.bot ? ' bot' : ''}">${msg.author.username}${msg.author.bot ? ' [BOT]' : ''}</span>
+      <span class="timestamp">${time}</span>
+    </div>
+    <div class="content">${msg.content ? msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') : msg.embeds.length ? '<em>[Embed]</em>' : '<em>[Dosya/Ekler]</em>'}</div>
+  </div>
+</div>`;
+    } else {
+      html += `<div class="msg" style="padding-left:52px;margin-top:-6px">
+  <div class="content" style="font-size:.9375rem;line-height:1.5;color:#dbdee1">${msg.content ? msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>') : msg.embeds.length ? '<em>[Embed]</em>' : '<em>[Dosya/Ekler]</em>'}</div>
+</div>`;
+    }
+    lastAuthor = msg.author.id;
   }
-  html += '</body></html>';
+
+  html += `</div>
+<div class="footer">Bu transcript otomatik oluşturulmuştur • ${new Date().toLocaleString('tr-TR')}</div>
+</body></html>`;
   return Buffer.from(html, 'utf8');
 }
 
@@ -578,9 +628,9 @@ client.on('interactionCreate', async (interaction) => {
       else if (customId === 'ticket_transcript') {
         await interaction.deferReply({ ephemeral: true });
         try {
-          const buf  = await buildTranscript(channel);
-          const file = new AttachmentBuilder(buf, { name: `transcript-${channel.name}.html` });
-          await interaction.editReply({ content: '📄 Transcript:', files: [file] });
+          const buf  = await buildTranscript(channel, Object.values(getTickets()).find(t => t.channelId === channel.id));
+          const file = new AttachmentBuilder(buf, { name: `yazismalar-${channel.name}.html` });
+          await interaction.editReply({ content: '📄 Transcript hazır, dosyayı indirip tarayıcıda açabilirsin:', files: [file] });
           bumpStat(guild.id, 'transcripts');
         } catch (e) {
           console.error(e);
@@ -704,25 +754,33 @@ async function closeTicket(channel, guild, ticketData, closedBy) {
 
   // Transcript
   let transcriptBuf;
-  try { transcriptBuf = await buildTranscript(channel); } catch {}
+  try { transcriptBuf = await buildTranscript(channel, ticketData); } catch (e) { console.error('[Transcript]', e); }
 
   // Kullanıcıya DM
   const ticketOwner = await client.users.fetch(ticketData.userId).catch(() => null);
   if (ticketOwner) {
     const dmEmbed = new EmbedBuilder()
       .setColor(COLOR.RED)
-      .setTitle('🔒 Ticket Kapatıldı')
+      .setAuthor({ name: guild.name, iconURL: guild.iconURL({ dynamic: true }) ?? undefined })
+      .setTitle('🔒 Ticketınız Kapatıldı')
       .setDescription(
-        `**${guild.name}** sunucusundaki ticket'ın kapatıldı.\n\n` +
-        `**Kategori:** ${meta.label}\n` +
-        `**Kapatıldı:** <t:${Math.floor(Date.now() / 1000)}:R>\n` +
-        `**Kapatan:** ${closedBy.username}\n\n` +
-        `Transcript aşağıda ektedir. Başka sorun için sunucuya dönebilirsin.`
+        `Merhaba **${ticketOwner.username}**,\n\n` +
+        `**${guild.name}** sunucusundaki ticketın kapatıldı.\n\n` +
+        `> 📂 **Kategori:** ${meta.label}\n` +
+        `> 👤 **Kapatan:** ${closedBy.username}\n` +
+        `> 🕐 **Kapatılma:** <t:${Math.floor(Date.now() / 1000)}:F>\n\n` +
+        `📎 Yazışmalarınıza bakmak için aşağıdaki **transcript dosyasını** indirebilirsiniz.\n` +
+        `Dosyayı indirip tarayıcınızda açarak tüm yazışmaları görüntüleyebilirsiniz.\n\n` +
+        `Başka bir sorunuz olursa sunucumuza gelerek yeni ticket açabilirsiniz.`
       )
+      .setThumbnail(guild.iconURL({ dynamic: true }) ?? null)
+      .setFooter({ text: `${guild.name} • Destek Sistemi`, iconURL: guild.iconURL({ dynamic: true }) ?? undefined })
       .setTimestamp();
 
     const dmPayload = { embeds: [dmEmbed] };
-    if (transcriptBuf) dmPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `transcript-${channel.name}.html` })];
+    if (transcriptBuf) {
+      dmPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `yazismalar-${channel.name}.html` })];
+    }
     await ticketOwner.send(dmPayload).catch(() => {});
   }
 
@@ -761,7 +819,7 @@ async function closeTicket(channel, guild, ticketData, closedBy) {
     .setTimestamp();
 
   const logPayload = { embeds: [logEmbed] };
-  if (transcriptBuf) logPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `transcript-${channel.name}.html` })];
+  if (transcriptBuf) logPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `yazismalar-${channel.name}.html` })];
   await sendLog(guild, logEmbed, logPayload.files || []);
 
   // 10 saniye bekle, sonra sil
