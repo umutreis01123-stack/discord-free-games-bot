@@ -23,11 +23,38 @@ const fs = require('fs');
 =================================================================
 */
 
-// ── Web server (Railway keep-alive) ──────────────────────────
+// ── Web server (Railway keep-alive + Transcript viewer) ──────
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Geçici transcript store (memory, bot yeniden başlayınca temizlenir)
+const transcriptStore = new Map();
+
 app.use(express.static('public'));
 app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// Transcript görüntüleme endpoint'i
+app.get('/transcript/:id', (req, res) => {
+  const html = transcriptStore.get(req.params.id);
+  if (!html) {
+    return res.status(404).send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bulunamadı</title>
+    <style>body{background:#313338;color:#dbdee1;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}
+    h2{color:#ed4245}p{color:#949ba4}</style></head><body><h2>❌ Transcript Bulunamadı</h2>
+    <p>Bu transcript süresi dolmuş veya geçersiz.</p></body></html>`);
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// Transcript indirme endpoint'i
+app.get('/transcript/:id/download', (req, res) => {
+  const html = transcriptStore.get(req.params.id);
+  if (!html) return res.status(404).send('Bulunamadı');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="yazismalar-${req.params.id}.html"`);
+  res.send(html);
+});
+
 app.listen(PORT, () => console.log(`🌐 Web server: port ${PORT}`));
 
 // ── Discord Client ────────────────────────────────────────────
@@ -178,7 +205,7 @@ async function buildTranscript(channel, ticketData) {
   html += `</div>
 <div class="footer">Bu transcript otomatik oluşturulmuştur • ${new Date().toLocaleString('tr-TR')}</div>
 </body></html>`;
-  return Buffer.from(html, 'utf8');
+  return html; // string olarak döndür
 }
 
 // ── Log gönder ────────────────────────────────────────────────
@@ -628,9 +655,19 @@ client.on('interactionCreate', async (interaction) => {
       else if (customId === 'ticket_transcript') {
         await interaction.deferReply({ ephemeral: true });
         try {
-          const buf  = await buildTranscript(channel, Object.values(getTickets()).find(t => t.channelId === channel.id));
-          const file = new AttachmentBuilder(buf, { name: `yazismalar-${channel.name}.html` });
-          await interaction.editReply({ content: '📄 Transcript hazır, dosyayı indirip tarayıcıda açabilirsin:', files: [file] });
+          const tData = Object.values(getTickets()).find(t => t.channelId === channel.id);
+          const html  = await buildTranscript(channel, tData);
+          const tid   = `${channel.id}-${Date.now()}`;
+          const buf   = Buffer.from(html, 'utf8');
+          transcriptStore.set(tid, html);
+          setTimeout(() => transcriptStore.delete(tid), 48 * 60 * 60 * 1000);
+
+          const base = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${process.env.PORT || 3000}`;
+          const row  = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setLabel('🔍 Görüntüle').setStyle(ButtonStyle.Link).setURL(`${base}/transcript/${tid}`),
+            new ButtonBuilder().setLabel('⬇️ İndir').setStyle(ButtonStyle.Link).setURL(`${base}/transcript/${tid}/download`),
+          );
+          await interaction.editReply({ content: '📄 Transcript hazır:', files: [new AttachmentBuilder(buf, { name: `yazismalar-${channel.name}.html` })], components: [row] });
           bumpStat(guild.id, 'transcripts');
         } catch (e) {
           console.error(e);
@@ -753,8 +790,21 @@ async function closeTicket(channel, guild, ticketData, closedBy) {
   const meta = TICKET_TYPES[ticketData.type] || TICKET_TYPES.diger;
 
   // Transcript
-  let transcriptBuf;
-  try { transcriptBuf = await buildTranscript(channel, ticketData); } catch (e) { console.error('[Transcript]', e); }
+  let transcriptHtml = null;
+  let transcriptId   = null;
+  let transcriptBuf  = null;
+  try {
+    transcriptHtml = await buildTranscript(channel, ticketData);
+    transcriptId   = `${ticketData.id}-${Date.now()}`;
+    transcriptBuf  = Buffer.from(transcriptHtml, 'utf8');
+    transcriptStore.set(transcriptId, transcriptHtml);
+    setTimeout(() => transcriptStore.delete(transcriptId), 48 * 60 * 60 * 1000);
+  } catch (e) { console.error('[Transcript]', e); }
+
+  // Railway URL'i
+  const baseUrl     = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${process.env.PORT || 3000}`;
+  const viewUrl     = transcriptId ? `${baseUrl}/transcript/${transcriptId}` : null;
+  const downloadUrl = transcriptId ? `${baseUrl}/transcript/${transcriptId}/download` : null;
 
   // Kullanıcıya DM
   const ticketOwner = await client.users.fetch(ticketData.userId).catch(() => null);
@@ -769,18 +819,25 @@ async function closeTicket(channel, guild, ticketData, closedBy) {
         `> 📂 **Kategori:** ${meta.label}\n` +
         `> 👤 **Kapatan:** ${closedBy.username}\n` +
         `> 🕐 **Kapatılma:** <t:${Math.floor(Date.now() / 1000)}:F>\n\n` +
-        `📎 Yazışmalarınıza bakmak için aşağıdaki **transcript dosyasını** indirebilirsiniz.\n` +
-        `Dosyayı indirip tarayıcınızda açarak tüm yazışmaları görüntüleyebilirsiniz.\n\n` +
-        `Başka bir sorunuz olursa sunucumuza gelerek yeni ticket açabilirsiniz.`
+        `📎 Yazışmalarınızı aşağıdaki butonlardan **görüntüleyebilir** veya **indirebilirsiniz**.\n` +
+        `Başka sorunuz olursa sunucumuza gelip yeni ticket açabilirsiniz.`
       )
       .setThumbnail(guild.iconURL({ dynamic: true }) ?? null)
       .setFooter({ text: `${guild.name} • Destek Sistemi`, iconURL: guild.iconURL({ dynamic: true }) ?? undefined })
       .setTimestamp();
 
-    const dmPayload = { embeds: [dmEmbed] };
-    if (transcriptBuf) {
-      dmPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `yazismalar-${channel.name}.html` })];
+    const dmComponents = [];
+    if (viewUrl && downloadUrl) {
+      dmComponents.push(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setLabel('🔍 Yazışmaları Görüntüle').setStyle(ButtonStyle.Link).setURL(viewUrl),
+          new ButtonBuilder().setLabel('⬇️ İndir (.html)').setStyle(ButtonStyle.Link).setURL(downloadUrl),
+        )
+      );
     }
+
+    const dmPayload = { embeds: [dmEmbed], components: dmComponents };
+    if (transcriptBuf) dmPayload.files = [new AttachmentBuilder(transcriptBuf, { name: `yazismalar-${channel.name}.html` })];
     await ticketOwner.send(dmPayload).catch(() => {});
   }
 
