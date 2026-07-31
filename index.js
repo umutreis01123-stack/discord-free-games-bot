@@ -263,6 +263,12 @@ client.once('ready', async () => {
       .addUserOption(o => o.setName('kullanıcı').setDescription('Çıkarılacak kullanıcı').setRequired(true)),
 
     new SlashCommandBuilder()
+      .setName('ticketsorumlusu')
+      .setDescription('👮 Ticket sorumlusu rolünü ayarla')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addRoleOption(o => o.setName('rol').setDescription('Ticket sorumlusu rolü').setRequired(true)),
+
+    new SlashCommandBuilder()
       .setName('ping')
       .setDescription('🏓 Bot gecikmesini gösterir'),
   ];
@@ -288,6 +294,18 @@ client.on('interactionCreate', async (interaction) => {
             { name: 'Bot Gecikmesi', value: `\`${client.ws.ping}ms\``, inline: true },
             { name: 'API Gecikmesi', value: `\`${Date.now() - interaction.createdTimestamp}ms\``, inline: true },
           )
+          .setTimestamp();
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // /ticketsorumlusu
+      if (commandName === 'ticketsorumlusu') {
+        const rol = interaction.options.getRole('rol');
+        setConfig(guild.id, { staffRoleId: rol.id });
+        const embed = new EmbedBuilder()
+          .setColor(COLOR.GREEN)
+          .setTitle('✅ Ticket Sorumlusu Rolü Ayarlandı')
+          .setDescription(`👮 **${rol.name}** rolü artık ticket sorumlusudur.\n\nBu role sahip kişiler:\n- Ticketları üstlenebilir\n- Ticketları kapatabilir\n- Transcript alabilir`)
           .setTimestamp();
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
@@ -485,6 +503,18 @@ client.on('interactionCreate', async (interaction) => {
         const ticketData = Object.values(tickets).find(t => t.channelId === channel.id);
         if (!ticketData) return interaction.reply({ content: '❌ Ticket verisi bulunamadı.', ephemeral: true });
 
+        // Sadece ticket sorumlusu rolüne sahip olanlar üstlenebilir
+        const cfg = getConfig(guild.id);
+        if (cfg.staffRoleId) {
+          const member = await guild.members.fetch(user.id).catch(() => null);
+          if (!member || !member.roles.cache.has(cfg.staffRoleId)) {
+            return interaction.reply({
+              content: `❌ Sadece <@&${cfg.staffRoleId}> rolüne sahip kişiler ticket üstlenebilir.`,
+              ephemeral: true,
+            });
+          }
+        }
+
         if (ticketData.claimedBy) {
           return interaction.reply({
             content: `❌ Bu ticket zaten <@${ticketData.claimedBy}> tarafından üstlenildi.`,
@@ -530,6 +560,15 @@ client.on('interactionCreate', async (interaction) => {
         const tickets = getTickets();
         const ticketData = Object.values(tickets).find(t => t.channelId === channel.id && t.status === 'open');
         if (!ticketData) return interaction.reply({ content: '❌ Bu kanal aktif bir ticket değil.', ephemeral: true });
+
+        // Ticket sahibi veya sorumlu rolü kapatabilir
+        const cfg = getConfig(guild.id);
+        const isOwner = ticketData.userId === user.id;
+        const member = await guild.members.fetch(user.id).catch(() => null);
+        const isStaff = cfg.staffRoleId && member?.roles.cache.has(cfg.staffRoleId);
+        if (!isOwner && !isStaff && !member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+          return interaction.reply({ content: '❌ Ticketı sadece ticket sahibi veya sorumlular kapatabilir.', ephemeral: true });
+        }
 
         await interaction.reply({ content: '⏳ Ticket kapatılıyor, transcript alınıyor...', ephemeral: false });
         await closeTicket(channel, guild, ticketData, user);
