@@ -63,6 +63,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent,
   ],
 });
@@ -346,6 +347,21 @@ client.once('ready', async () => {
       .addRoleOption(o => o.setName('rol').setDescription('Ticket sorumlusu rolü').setRequired(true)),
 
     new SlashCommandBuilder()
+      .setName('kanaloluştur')
+      .setDescription('📢 Belirtilen kategoriye mc-duyurular kanalı oluşturur')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addChannelOption(o =>
+        o.setName('kategori')
+          .setDescription('Kanalın oluşturulacağı kategori')
+          .setRequired(true)
+      )
+      .addStringOption(o =>
+        o.setName('isim')
+          .setDescription('Kanal ismi (varsayılan: mc-duyurular)')
+          .setRequired(false)
+      ),
+
+    new SlashCommandBuilder()
       .setName('ping')
       .setDescription('🏓 Bot gecikmesini gösterir'),
   ];
@@ -385,6 +401,44 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`👮 **${rol.name}** rolü artık ticket sorumlusudur.\n\nBu role sahip kişiler:\n- Ticketları üstlenebilir\n- Ticketları kapatabilir\n- Transcript alabilir`)
           .setTimestamp();
         return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // /kanaloluştur
+      if (commandName === 'kanaloluştur') {
+        const kategori = interaction.options.getChannel('kategori');
+        const isim     = interaction.options.getString('isim') || 'mc-duyurular';
+
+        if (!kategori || kategori.type !== ChannelType.GuildCategory) {
+          return interaction.reply({ content: '❌ Lütfen geçerli bir **kategori** seç.', ephemeral: true });
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        try {
+          const botId = guild.members.me?.id || client.user.id;
+          const yeniKanal = await guild.channels.create({
+            name: isim,
+            type: ChannelType.GuildText,
+            parent: kategori.id,
+            permissionOverwrites: [
+              { id: guild.id,  allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.SendMessages] },
+              { id: botId,     allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
+            ],
+            topic: `📢 ${isim} kanalı — darthcast.xyz`,
+          });
+
+          const embed = new EmbedBuilder()
+            .setColor(COLOR.GREEN)
+            .setTitle('✅ Kanal Oluşturuldu')
+            .addFields(
+              { name: '📢 Kanal',    value: `${yeniKanal}`, inline: true },
+              { name: '📁 Kategori', value: `\`${kategori.name}\``, inline: true },
+            )
+            .setTimestamp();
+          return interaction.editReply({ embeds: [embed] });
+        } catch (e) {
+          return interaction.editReply({ content: `❌ Kanal oluşturulamadı: \`${e.message}\`` });
+        }
       }
 
       // /ticket-ayarlar
@@ -884,6 +938,128 @@ async function closeTicket(channel, guild, ticketData, closedBy) {
     await channel.delete().catch(() => {});
   }, 10_000);
 }
+
+// ── Ses XP verisi ─────────────────────────────────────────────
+function getSesXP() { return readJSON('ses-xp.json'); }
+function saveSesXP(d) { writeJSON('ses-xp.json', d); }
+
+// Sesde olan üyelerin başlangıç zamanı
+const sesBaslangic = new Map(); // userId → timestamp
+
+client.on('voiceStateUpdate', (oldState, newState) => {
+  const userId  = newState.id;
+  const guildId = newState.guild.id;
+
+  // Sese girdi
+  if (!oldState.channelId && newState.channelId) {
+    sesBaslangic.set(`${guildId}-${userId}`, Date.now());
+  }
+
+  // Sesten çıktı
+  if (oldState.channelId && !newState.channelId) {
+    const key   = `${guildId}-${userId}`;
+    const start = sesBaslangic.get(key);
+    if (!start) return;
+    sesBaslangic.delete(key);
+
+    const sure  = Math.floor((Date.now() - start) / 1000); // saniye
+    const xp    = Math.floor(sure / 60) * 10; // dakika başı 10 XP
+    if (xp <= 0) return;
+
+    const data = getSesXP();
+    if (!data[guildId]) data[guildId] = {};
+    if (!data[guildId][userId]) data[guildId][userId] = { xp: 0, sure: 0 };
+    data[guildId][userId].xp   += xp;
+    data[guildId][userId].sure += sure;
+    saveSesXP(data);
+  }
+});
+
+// ── z!sestop komutu ───────────────────────────────────────────
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
+
+  const prefix = 'z!';
+  if (!message.content.startsWith(prefix)) return;
+  const args    = message.content.slice(prefix.length).trim().split(/\s+/);
+  const cmd     = args[0].toLowerCase();
+  const guild   = message.guild;
+
+  if (cmd === 'sestop') {
+    const data    = getSesXP();
+    const gData   = data[guild.id] || {};
+    const PAGE_SIZE = 5;
+
+    // Sıralı liste
+    const sorted = Object.entries(gData)
+      .sort(([,a],[,b]) => b.xp - a.xp)
+      .filter(([,v]) => v.xp > 0);
+
+    if (sorted.length === 0) {
+      return message.reply({ content: '❌ Henüz ses verisi yok.' });
+    }
+
+    let page = 0;
+    const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+
+    const buildEmbed = async (p) => {
+      const start  = p * PAGE_SIZE;
+      const slice  = sorted.slice(start, start + PAGE_SIZE);
+
+      const embed = new EmbedBuilder()
+        .setColor(0x1a1a2e)
+        .setTitle(`**darthcast.xyz — SES LİDERLİK LİSTESİ**`)
+        .setDescription('**EN YÜKSEK SES AKTİVİTESİNE SAHİP ÜYELER**')
+        .setFooter({ text: `Sayfa ${p + 1} / ${totalPages}` })
+        .setTimestamp();
+
+      const fields = [];
+      for (let i = 0; i < slice.length; i++) {
+        const [userId, val] = slice[i];
+        const rank   = start + i + 1;
+        const lvl    = Math.floor(val.xp / 5000);
+        const dakika = Math.floor(val.sure / 60);
+        let member;
+        try { member = await guild.members.fetch(userId); } catch {}
+        const name   = member?.displayName || `Kullanıcı (${userId.slice(-4)})`;
+
+        const medal  = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `**#${rank}**`;
+
+        fields.push({
+          name: `${medal}  ${name}`,
+          value: `> **SES LVL ${lvl}** ┃ SESLİ XP: **${val.xp.toLocaleString()} XP**\n> Ses Süresi: ${dakika} dk ┃ Ses Lvl: ${lvl}`,
+          inline: false,
+        });
+      }
+      embed.addFields(fields);
+      return embed;
+    };
+
+    const buildRow = (p) => new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('ses_prev').setLabel('◄ Geri').setStyle(ButtonStyle.Primary).setDisabled(p === 0),
+      new ButtonBuilder().setCustomId('ses_page').setLabel(`Sayfa ${p + 1} / ${totalPages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId('ses_next').setLabel('İleri ►').setStyle(ButtonStyle.Primary).setDisabled(p >= totalPages - 1),
+    );
+
+    const firstEmbed = await buildEmbed(0);
+    const msg = await message.reply({ embeds: [firstEmbed], components: [buildRow(0)] });
+
+    const collector = msg.createMessageComponentCollector({ time: 120_000 });
+    collector.on('collect', async (btn) => {
+      if (btn.user.id !== message.author.id) {
+        return btn.reply({ content: '❌ Bu listeyi sadece komutu yazan kişi gezebilir.', ephemeral: true });
+      }
+      if (btn.customId === 'ses_prev' && page > 0) page--;
+      if (btn.customId === 'ses_next' && page < totalPages - 1) page++;
+      const newEmbed = await buildEmbed(page);
+      await btn.update({ embeds: [newEmbed], components: [buildRow(page)] });
+    });
+
+    collector.on('end', () => {
+      msg.edit({ components: [] }).catch(() => {});
+    });
+  }
+});
 
 // ── Bot Login ─────────────────────────────────────────────────
 client.login(process.env.DISCORD_TOKEN).catch(err => {
