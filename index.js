@@ -362,6 +362,16 @@ client.once('ready', async () => {
       ),
 
     new SlashCommandBuilder()
+      .setName('kanalsilme')
+      .setDescription('🗑️ Belirtilen kanalı siler')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+      .addChannelOption(o =>
+        o.setName('kanal')
+          .setDescription('Silinecek kanal')
+          .setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
       .setName('ping')
       .setDescription('🏓 Bot gecikmesini gösterir'),
   ];
@@ -401,6 +411,35 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`👮 **${rol.name}** rolü artık ticket sorumlusudur.\n\nBu role sahip kişiler:\n- Ticketları üstlenebilir\n- Ticketları kapatabilir\n- Transcript alabilir`)
           .setTimestamp();
         return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
+      // /kanalsilme
+      if (commandName === 'kanalsilme') {
+        const hedef = interaction.options.getChannel('kanal');
+
+        if (!hedef) return interaction.reply({ content: '❌ Geçerli bir kanal seç.', ephemeral: true });
+
+        // Ticket kanalı silmeye çalışıyorsa engelle
+        const tickets = getTickets();
+        const aktifTicket = Object.values(tickets).find(t => t.channelId === hedef.id && t.status === 'open');
+        if (aktifTicket) {
+          return interaction.reply({ content: `❌ **${hedef.name}** aktif bir ticket kanalı. Önce ticketi kapat.`, ephemeral: true });
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        try {
+          const kanalAdi = hedef.name;
+          await hedef.delete(`/kanalsilme komutu — ${user.tag}`);
+          const embed = new EmbedBuilder()
+            .setColor(COLOR.RED)
+            .setTitle('🗑️ Kanal Silindi')
+            .setDescription(`**\`#${kanalAdi}\`** kanalı başarıyla silindi.\n\n> 👤 **Silen:** ${user}`)
+            .setTimestamp();
+          return interaction.editReply({ embeds: [embed] });
+        } catch (e) {
+          return interaction.editReply({ content: `❌ Kanal silinemedi: \`${e.message}\`` });
+        }
       }
 
       // /kanaloluştur
