@@ -407,6 +407,7 @@ client.on('interactionCreate', async (interaction) => {
       if (commandName === 'kanaloluştur') {
         const kategori = interaction.options.getChannel('kategori');
         const isim     = interaction.options.getString('isim') || 'mc-duyurular';
+        const UMUT_ID  = '1403495996138323989';
 
         if (!kategori || kategori.type !== ChannelType.GuildCategory) {
           return interaction.reply({ content: '❌ Lütfen geçerli bir **kategori** seç.', ephemeral: true });
@@ -416,23 +417,57 @@ client.on('interactionCreate', async (interaction) => {
 
         try {
           const botId = guild.members.me?.id || client.user.id;
+
+          const permOverwrites = [
+            // @everyone yazamaz, sadece görebilir
+            {
+              id: guild.id,
+              allow: [PermissionFlagsBits.ViewChannel],
+              deny:  [PermissionFlagsBits.SendMessages],
+            },
+            // Bot tam yetki
+            {
+              id: botId,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ManageChannels,
+                PermissionFlagsBits.ManageMessages,
+                PermissionFlagsBits.EmbedLinks,
+                PermissionFlagsBits.AttachFiles,
+              ],
+            },
+            // umutpapa123 — tam yazma yetkisi
+            {
+              id: UMUT_ID,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.EmbedLinks,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.MentionEveryone,
+                PermissionFlagsBits.ManageMessages,
+              ],
+            },
+          ];
+
           const yeniKanal = await guild.channels.create({
             name: isim,
             type: ChannelType.GuildText,
             parent: kategori.id,
-            permissionOverwrites: [
-              { id: guild.id,  allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.SendMessages] },
-              { id: botId,     allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels] },
-            ],
-            topic: `📢 ${isim} kanalı — darthcast.xyz`,
+            permissionOverwrites: permOverwrites,
+            topic: `📢 ${isim} — darthcast.xyz`,
           });
 
           const embed = new EmbedBuilder()
             .setColor(COLOR.GREEN)
             .setTitle('✅ Kanal Oluşturuldu')
-            .addFields(
-              { name: '📢 Kanal',    value: `${yeniKanal}`, inline: true },
-              { name: '📁 Kategori', value: `\`${kategori.name}\``, inline: true },
+            .setDescription(
+              `📢 Kanal başarıyla oluşturuldu!\n\n` +
+              `> 📁 **Kategori:** \`${kategori.name}\`\n` +
+              `> 💬 **Kanal:** ${yeniKanal}\n` +
+              `> ✍️ **Yazma yetkisi:** <@${UMUT_ID}> (sadece)\n` +
+              `> 👁️ **Herkes:** Sadece okuyabilir`
             )
             .setTimestamp();
           return interaction.editReply({ embeds: [embed] });
